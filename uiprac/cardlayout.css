@@ -1,0 +1,151 @@
+/*
+/***************************************************************************************
+*    Title: A (mostly complete) guide to theme switching in CSS and JS
+*    Author: Alexander Cerutti
+*    Date: 10-30-2024
+*    Code version: Unknown
+*    Availability: Unknown
+*
+***************************************************************************************/
+/*
+/*body styles affect the whole page*/
+body {
+  font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+  color: white;
+background-color: #000;
+}
+header {
+  border: thin solid black;
+}
+/*sets the navigation list and link styles*/
+nav ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #fff0f5;
+  background-color: #fffaf0;
+}
+
+nav ul li {
+  float: left;
+}
+
+nav ul li a {
+  display: block;
+  color: #000;
+  text-align: center;
+  padding: 14px 16px;
+  text-decoration: none;
+}
+
+nav ul li a:hover:not(.active) {
+  background-color: #fff0f5;
+}
+
+nav ul li a.active {
+  color: white;
+  background-color: #4CAF50;
+}
+/*set the card styles*/
+.card {
+  margin: 5px;
+  border: 1px solid #ccc;
+  float: left;
+  width: 200px;
+}
+
+.card:hover {
+  border: 1px solid #777;
+}
+
+.card img {
+  width: 100%;
+  height: auto;
+}
+
+.card h2 {
+  padding: 15px;
+  text-align: center;
+}
+
+.card p {
+  padding: 10px;
+}
+/*put a border around the footer*/
+footer {
+  clear: both;
+  border: thick dashed silver;
+}}
+
+/*body styles affect the whole page*/
+
+:root[data-theme="dark"] {
+body {
+  font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+  background-color: #000;
+}
+header {
+  border: thin solid black;
+}
+/*sets the navigation list and link styles*/
+nav ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #000;
+  background-color: #000;
+}
+
+nav ul li {
+  float: left;
+}
+
+nav ul li a {
+  display: block;
+  color: #000;
+  text-align: center;
+  padding: 14px 16px;
+  text-decoration: none;
+}
+
+nav ul li a:hover:not(.active) {
+  background-color: #000;
+}
+
+nav ul li a.active {
+  color: white;
+  background-color: #4CAF50;
+}
+/*set the card styles*/
+.card {
+  margin: 5px;
+  border: 1px solid #ccc;
+  float: left;
+  width: 200px;
+}
+
+.card:hover {
+  border: 1px solid #00;
+}
+
+.card img {
+  width: 100%;
+  height: auto;
+}
+
+.card h2 {
+  padding: 15px;
+  text-align: center;
+}
+
+.card p {
+  padding: 10px;
+}
+/*put a border around the footer*/
+footer {
+  clear: both;
+  border: thick dashed silver;
+}
+}
