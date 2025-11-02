@@ -12,56 +12,70 @@
 
 <!--- Clickable Logo ---> 
         <a href="">
-<img src="logo2.png" width="100px" height="100px"
-        style="float:top;"> </a>
+    <div class="row">
+        <div  class="column">
+        <img src="logo2.png" 
+        width="80px" height="80px"> </a> 
+        </div>
 
 <!--- Clickable Profile Picture --->
-        <a href="public.html">
+      <a href="public.html">
+        <div class="column">
         <img src="defaultpicture.png"
-        width="100px" height="100px" border="1"
-        style="float:right;">
-        </a>
-        <hr>
+        width="80px" height="80px" border="1"> </a>
+        </div>
+    </div>
 
-        </header>
-    </head>
+    <hr>
+    
+    </header>
+   
+</head>
 
     <body>
-  
     <h1> Profile </h1>
     <h3> Name </h3>
 
 <!--- HTML Structure for Changing Profile Picture --->
 <div class="ppic-con" id="ppic-con">
+
     <img src="defaultpicture.png" id="ppic"
     class ="ppic" border="1"
     width="250px" height="250px" alt="Profile Picture"> 
-<div class="upload-icon">
-<span></span>
-</div>
+
+    <div class="upload-icon">
+
+    <span></span>
+    </div>
 </div>  
+
     <input type="file" id="actual-btn" accept="image/*" 
     hidden/>
-    <label for="actual-btn">Choose File &#x1F4F7;</label>
+    <label for="actual-btn" id="btn">
+    Choose File &#x1F4F7;</label>
 
 <!--- Navigation Bar --->
     <div class="navbar">
         <div id="profile"> <a href="public.html"> 
         Profile </a></div>
+
         <div id="interests"> <a href="interest.html"> 
         Interests </a></div>
+
         <div id="filter"> <a href="filter.html"> 
         Filter Menu </a></div>
+
         <div id="chat"> <a href="chat.html"> 
         Chat </a>
+
     </div>
     </div>
 
    
-    <p style="text-align:left;">
+    <p style="text-align:left;" background-color:#ededed;>
     To do list for Verification:
     </p>
-        <ul style="text-align:left;">
+        <ul style="text-align:left;" id="ul2">
             <li>Verify .edu email</li>
             <li>2FA with your phone number</li>
             <li>Create a username</li>
