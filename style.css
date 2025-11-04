@@ -2,15 +2,20 @@
  body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background-color: #ffffff;
+      background-color: var(--body-background-color);
+      color: var(--body-color);
       text-align: center;
+    }
+
+ :any-link {
+      color: var(--link-color);
     }
 
     /* Top navigation bar */
     .navbar {
       display: flex;
       justify-content: space-around;
-      background-color: #f2f2f2;
+      background-color: var(--navbar-background-color);
       border-bottom: 1px solid #999;
     }
   .navbar div {
@@ -19,7 +24,7 @@
       border-right: 1px solid #999;
       font-weight: bold;
     }
-
+  
     .navbar div:last-child {
       border-right: none;
     }
@@ -97,7 +102,7 @@
 
  /* Footer */
     footer {
-      background-color: #e6eefc;
+      background-color: var(--footer-background-color;
       border-top: 1px solid #999;
       padding: 8px;
       text-align: left;
