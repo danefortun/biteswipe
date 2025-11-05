@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,36 +7,44 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Activity Dashboard</title>
-  <link rel="stylesheet" href="dark.css">
   <link rel="stylesheet" href="style.css">
+
+<header> 
+<div class="img_container"> 
+<img src="drexelxfizz.png" width="250px" height="250px">
+</a> 
+</div>
+
+<div class="hrbar">
+<hr>
+</div>
+
+</header>
+
 </head>
 <body>
-
-   <img src="logo2.png">
-
-  <!-- Navigation Bar -->
-  <div class="navbar">
-    <div>Profile</div>
-    <div>Interests</div>
-    <div>Filter Menu</div>
-    <div>Chat</div>
-  </div> 
-
+  
   <!-- Main Section -->
   <div class="main">
     <div class="card-container">
       <h3>Activity Card Stack</h3>
-      <div class="cards" id="cards">
+      <div class="cards" id="cards"> 
       <div class="card" style="background-color: #ff7eb3;">Card 1</div>
-      <div class="card" style="background-color: #0000ff;">Card 2>/div>
-      <div class="arrow left" onclick = "swipeLeft()">&#8592;</div>
-      <div class="arrow right" onclick = "swipeRight()">&#8594;</div>
+      <div class="arrow left" onclick="swipeLeft()">←</div>
+      <div class="arrow right" onclick="swipeRight()">→</div>
+      </div>
     </div>
   </div>
 
   <!-- Footer -->
   <footer>
-    About us
+    <!-- Navigation Bar -->
+  <div class="navbar">
+    <div id="profile"> <a href="public.html"> Profile </a></div>
+    <div id="interests"> <a href="interest.html"> Interests </a></div>
+    <div id="filter"> <a href="filter.html"> Filter Menu </a></div>
+    <div id="chat"> <a href="chat.html"> Chat </a></div>
+  </div>
   </footer>
 
 </body>
