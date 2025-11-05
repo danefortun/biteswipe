@@ -5,6 +5,15 @@
   padding: 0px;
 }
 
+/* Move drexelxfizz image pixels in index.html */
+
+.img_container {
+        position: relative;
+        top: -60px;   /* Moves the image 20px down from its original position */
+        left: 0px;  /* Moves the image 50px right from its original position */
+    }
+
+
 .ulred {
    background-color: #FF474C;
    padding: 10px;
@@ -15,9 +24,8 @@
  body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background-color: var(--body-background-color);
+      background-color: #ffffff;
       text-align: center;
-      color: var(--body-color);
     }
 
 :any-link {
@@ -46,8 +54,7 @@
 body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background-color: var(--body-background-color);
-      color: var(--body-color)l
+      background-color: #ffffff;
       text-align: center;
     }
 
@@ -55,7 +62,7 @@ body {
     .navbar {
       display: flex;
       justify-content: space-around;
-      background-color: var(--navbar-background-color);
+      background-color: #f2f2f2;
       border-bottom: 1px solid #999;
     }
 
@@ -126,7 +133,7 @@ body {
 
     /* Sticky Footer */
     footer {
-      background-color: var(--footer-background-color);
+      background-color: #e6eefc;
       border-top: 1px solid #999;
       padding: 8px;
       text-align: left;
