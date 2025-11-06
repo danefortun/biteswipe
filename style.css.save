@@ -1,0 +1,104 @@
+
+ body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: var(--background-color);
+      text-align: center;
+    }
+
+    /* Top navigation bar */
+    .navbar {
+      display: flex;
+      justify-content: space-around;
+      background-color: #f2f2f2;
+      border-bottom: 1px solid #999;
+    }
+  .navbar div {
+      flex: 1;
+      padding: 15px 0;
+      border-right: 1px solid #999;
+      font-weight: bold;
+    }
+
+    .navbar div:last-child {
+      border-right: none;
+    }
+
+    /* Main content area */
+    .main {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 70vh;
+    }
+
+.card-container {
+      position: relative;
+      overflow: hidden;
+      width: 300px;
+      height: 400px;
+      border: 1px solid #999;
+      margin-top: 40px;
+      
+      
+    }
+
+    .card-container h3 {
+      margin-top: 10px;
+      overflow: hidden;
+      position: relative;
+    }
+
+<!example code from https://github.com/madrasacdemy/htmlcss/blob/main/cards/swipeable-card.html -->
+.cards {
+      display: flex;
+      transition: transform 0.5s ease;
+    }
+
+    .card {
+      min-width: 100%;
+      height: 400px;
+      background-color: #00f;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      border-radius: 10px;
+      display: flex;
+      justify-content: center;
+      font-size: 24px;
+      color: #333;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+
+ .arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background-color: #e6eefc;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      border: 1px solid #999;
+      cursor: pointer;
+    }
+
+    .arrow.left {
+      left: -70px;
+    }
+
+    .arrow.right {
+      right: -70px;
+    }
+
+
+ /* Footer */
+    footer {
+      background-color: #e6eefc;
+      border-top: 1px solid #999;
+      padding: 8px;
+      text-align: left;
+    }

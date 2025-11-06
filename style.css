@@ -30,14 +30,8 @@
  body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background-color: #ffffff;
       text-align: center;
     }
-
-:any-link {
-      color: var(--link-color);
-    }
-
 
     /* Picture Button */
     .btn {
@@ -60,7 +54,8 @@
 body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background-color: #ffffff;
+      background-color: var(--body-background-color);
+      color: var(--body-color);
       text-align: center;
     }
 
