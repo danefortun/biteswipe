@@ -2,50 +2,50 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script src="script.js"></script>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Activity Dashboard</title>
+  <!-- Optional dark theme -->
   <link rel="stylesheet" href="dark.css">
-  <link rel="stylesheet" href="style.css">
-
-<header> 
-<div class="img_container"> 
-<img src="drexelxfizz.png" width="250px" height="250px">
-</a> 
-</div>
-
-<div class="hrbar">
-<hr>
-</div>
-
-</header>
-
+  <link rel="stylesheet" href="style.css" />
+  <!-- Defer makes sure the JS runs after HTML loads -->
+  <script src="script.js" defer></script>
 </head>
+
 <body>
-  
-  <!-- Main Section -->
-  <div class="main">
-    <div class="card-container">
-      <h3>Activity Card Stack</h3>
-      <div class="cards" id="cards"> 
-      <div class="card" style="background-color: #ff7eb3;">Card 1</div>
-      <div class="arrow left" onclick="swipeLeft()" style="color:black">←</div>
-      <div class="arrow right" onclick="swipeRight()" style="color:black">→</div>
-      </div>
+  <!-- Header -->
+  <header>
+    <div class="img_container">
+      <img src="drexelxfizz.png" width="250" height="250" alt="Logo" />
     </div>
-  </div>
+
+    <div class="hrbar">
+      <hr />
+    </div>
+  </header>
+
+  <!-- Main Section -->
+  <main class="main">
+    <div class="card-container">
+      
+      <div class="cards" id="cards">
+        <div class="card" style="background-color: #ff7eb3;">Card 1</div>
+        <div class="card" style="background-color: #0000ff;">Card 2</div>
+        <div class="card" style="background-color: #00ffff;">Card 3</div>
+      </div>
+      <div class="arrow left" onclick="swipeLeft()" style="color: black;">←</div>
+      <div class="arrow right" onclick="swipeRight()" style="color: black;">→</div>
+    </div>
+  </main>
 
   <!-- Footer -->
   <footer>
-    <!-- Navigation Bar -->
-  <div class="navbar">
-    <div id="profile"> <a href="public.html"> Profile </a></div>
-    <div id="interests"> <a href="interest.html"> Interests </a></div>
-    <div id="filter"> <a href="filter.html"> Filter Menu </a></div>
-    <div id="chat"> <a href="chat.html"> Chat </a></div>
-  </div>
+    <div class="navbar">
+      <div id="profile"><a href="public.html">Profile</a></div>
+      <div id="interests"><a href="interest.html">Interests</a></div>
+      <div id="filter"><a href="filter.html">Filter Menu</a></div>
+      <div id="chat"><a href="chat.html">Chat</a></div>
+    </div>
   </footer>
-
 </body>
 </html>
