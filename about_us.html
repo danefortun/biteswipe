@@ -3,7 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!---- Header w/ Logo, .css, .js --->
+        <link rel="stylesheet" href="style.css">
+        <link rel="stylesheet" href="dark.css">
+
   <title>About Us</title>
+
   <style>
     body {
       margin: 0;
@@ -40,47 +45,55 @@
     }
     
     .h2benny {
-        position: absolute;
-    	left: 200px;
+        position: relative;
+    	left: -740px;
     }
 
     .h2dean {
-        position: absolute;
-    	left: 650px;
+        position: relative;
+    	left: -370px;
+	top: -90px
     }  
 
     .h2dane {
-        position: absolute;
-    	right: 640px;
+        position: relative;
+    	right: -740px;
+	top: -150px
     }
 
     .h2tyler {
-        position: absolute;
-    	right: 190px;
+        position: relative;
+    	right: -370px;
+	top: -245px;
     }
 
     .bennyprofilepicture {
-        position: absolute;
-    	left: 180px;
-        top: 400px
+        position: relative;
+    	left: -740px;
+        top: -880px;
     }
 
     .deanprofilepicture {
-        position: absolute;
-    	left: 630px;
-        top: 400px;
+        position: relative;
+    	left: -370px;
+        top: -270px;
     }
 
     .daneprofilepicture {
-        position: absolute;
-    	right: 630px;
-        top: 400px;
+        position: relative;
+    	right: -740px;
+        top: -450px;
     }
 
     .tylerprofilepicture {
-        position: absolute;
-    	right: 180px;
-        top: 400px;
+        position: relative;
+    	right: -370px;
+        top: -655px;
+    }
+    .drexelxfizzAU {
+	position: absolute;
+	left: 0px;
+	top: -20px;
     }
 
   </style>
@@ -90,6 +103,10 @@
   <header>About Us</header>
 
   <main>
+    <div class="drexelxfizzAU">
+    <a href="index.html"> 
+    <img src="drexelxfizz.png" width="200px" height="200px"> </a> </div>
+
     <h2>Welcome to the LifeSwipe</h2>
     <p>
       Our platform helps users explore and engage in their interests.
@@ -103,21 +120,23 @@
     <a href="index.html">Back to Home</a>
   </main>
 
-</body>
-
-<div class="h2benny"> <h2> Benny Erskine </h2> 
+<div class="h2benny"> 
+<h2> Benny Erskine </h2> 
 <h3> be385@drexel.edu </h3>
 </div>
 
-<div class="h2dean"> <h2> Dean Iyoun </h2> 
+<div class="h2dean"> 
+<h2> Dean Iyoun </h2> 
 <h3> di326@drexel.edu </h3> 
 </div>
 
-<div class="h2dane"> <h2> Dane Fortun </h2> 
+<div class="h2dane"> 
+<h2> Dane Fortun </h2> 
 <h3> df664@drexel.edu </h3> 
 </div>
 
-<div class="h2tyler"> <h2> Tyler Zebekow </h2> 
+<div class="h2tyler"> 
+<h2> Tyler Zebekow </h2> 
 <h3> taz26@drexel.edu </h3>
 </div>
 
@@ -126,7 +145,8 @@
 </div>
 
 <div class="daneprofilepicture">
-<img src="daneprofilepicture.png" width="200px" height="200px">
+<img src="daneprofilepicture.png" 
+width="200px" height="200px">
 </div>
 
 <div class="tylerprofilepicture">
@@ -137,5 +157,27 @@
 <img src="bennyprofilepicture.png">
 </div>
 
+</body>
+
+<!-- Footer -->
+<footer> 
+
+<!--- Navigation Bar --->
+    <div class="navbar">
+        <div id="profile"> <a href="public.html"> 
+        Profile </a></div>
+
+        <div id="interests"> <a href="interest.html"> 
+        Interests </a></div>
+
+	<div id="aboutus"> <a href="about_us.html"> 
+        About Us </a></div>
+
+        <div id="filter"> <a href="filter.html"> 
+        Filter Menu </a></div>
+
+        <div id="chat"> <a href="chat.html"> 
+        Chat </a>
+</footer>
 
 </html>
