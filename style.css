@@ -1,3 +1,50 @@
+/*
+Title: The Ultimate Theme Toggle™️
+Author: David Waumsley
+Date: April 30th, 2024
+Code version: N/a
+Availability: https://codepen.io/dwaumsley/pen/GRLamdm
+*/
+
+/* ============ DARK AND LIGHT THEMES ============ */
+/* Light theme preference */
+@media (prefers-color-scheme: light) {
+  :root {
+    --body-background-color: #FFFFFF;
+    --body-color: #000000;
+    --navbar-background-color: #27302f;
+    --footer-background-color: #f5e6ba;
+  }
+}
+
+/* Dark theme preference */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --body-background-color: #0d0025;
+    --body-color: #F7FFFF;
+    --navbar-background-color: #27302f;
+    --footer-background-color: #f5e6ba;
+  }
+}
+
+/* Light theme definition */
+[data-theme="light"] {
+  color-scheme: light;  
+  --body-background-color: #FFFFFF;
+  --body-color: #000000;
+  --navbar-background-color: #27302f;
+  --footer-background-color: #f5e6ba;
+}
+
+/* Dark theme definition */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --body-background-color: #0d0025;
+  --body-color: #F7FFFF;
+  --navbar-background-color: #27302f;
+  --footer-background-color: #f5e6ba;
+}
+  
 /* ============ GLOBAL STYLES ============ */
 body {
   margin: 0;
