@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <!-- Defer makes sure the JS runs after HTML loads -->
   
-  <script src="{{ url_for('static', filename='script.js') }}"></script>
+  
 </head>
 
 <body>
@@ -35,6 +35,7 @@
       <div class="arrow left" onclick="swipeLeft()" style="color: black;">X</div>
       <div class="arrow right" onclick="swipeRight()" style="color: black;">✓</div>
     </div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
   </main>
 
   <!-- Footer -->
@@ -62,6 +63,6 @@
   </footer>
 </body>
 
-<script src="{{ url_for('static', filename='script.js') }}"></script>
+<script src="{{ url_for('static', filename='themetoggle.js') }}"></script>
 
 </html>
