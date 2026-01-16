@@ -6,16 +6,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Activity Dashboard</title>
   <!-- Optional dark theme -->
-  <link rel="stylesheet" href="style.css"/>
+  
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <!-- Defer makes sure the JS runs after HTML loads -->
-  <script src="script.js" defer></script>
+  
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
 </head>
 
 <body>
   <!-- Header -->
   <header>
     <div class="img_container">
-      <img src="drexelxfizz.png" width="250" height="250" alt="Logo" />
+      
+      <img src="{{ url_for('static', filename='drexelxfizz.png') }}" alt="Logo">
     </div>
     <div class="hrbar">
       <hr />
@@ -58,5 +61,7 @@
     </div>
   </footer>
 </body>
-<script src=themetoggle.js></script>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+
 </html>
