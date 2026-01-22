@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html data-theme="dark" lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Activity Dashboard</title>
+  <!-- Optional dark theme -->
+  
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <!-- Defer makes sure the JS runs after HTML loads -->
+  
+  
+</head>
+
+<body>
+  <!-- Header -->
+  <header>
+    <div class="img_container">
+      
+      <img src="{{ url_for('static', filename='drexelxfizz.png') }}" alt="Logo">
+    </div>
+    <div class="hrbar">
+      <hr />
+    </div>
+  </header>
+  <!-- Main Section -->
+  <main class="main">
+  {% block content %}{% endblock %}
+  </main>
+  <!-- Footer -->
+  <footer>
+  <!-- Theme Switch button code
+  Title: The Ultimate Theme Toggle™️
+  Author: David Waumsley
+  Date: April 30th, 2024 
+  Code version: N/a
+  Availability: https://codepen.io/dwaumsley/pen/GRLamdm
+  -->
+  <button
+    type="button"
+    data-theme-toggle
+    aria-label="Change to light theme"
+    >Change to light theme
+  </button>
+    <div class="navbar">
+      <div id="profile"><a href= "/profile">Profile</a></div>
+      <div id="interests"><a href="/">Cards</a></div>
+      <div id="aboutus"> <a href="/credits">About Us </a></div>
+      <div id="filter"><a href="filter.html">Filter Menu</a></div>
+      <div id="chat"><a href="chat.html">Chat</a></div>
+    </div>
+  </footer>
+</body>
+
+<script src="{{ url_for('static', filename='themetoggle.js') }}"></script>
+
+</html>
