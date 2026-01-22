@@ -9,7 +9,7 @@ db = SQLAlchemy(app)
 
 class users(db.Model):
     _id = db.Column("id",db.Integer,primary_key = True)
-    name = db.Column(db.String(100))
+    userName = db.Column(db.String(100))
     password = db.Column(db.String(100))
     email = db.Column(db.String(100))
     def __init__(self,name,password,email):
@@ -20,6 +20,8 @@ class users(db.Model):
 @app.route("/index")
 @app.route("/")
 def home():
+    if "user" not in session:
+        return render_template("login.html")
     return render_template("cards.html")
 
 @app.route("/profile")
@@ -30,9 +32,18 @@ def profile():
 def credits():
     return render_template("about_us.html")
 
-@app.route("/login")
+@app.route("/login",methods=["Post","Get"])
 def login():
-    return render_template("login.html")
+    if request.method == "POST":
+        session.permanent = True
+        address = request.form["email"]
+        session["email"] = address
+
+        found_user = users.query.filter_by(email=address).first()
+    if "email" not in session:
+        return render_template("login.html")
+    else:
+        return render_template
 
 if __name__ == "__main__":
     with app.app_context():
