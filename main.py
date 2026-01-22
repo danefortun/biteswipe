@@ -9,7 +9,7 @@ db = SQLAlchemy(app)
 
 class users(db.Model):
     _id = db.Column("id",db.Integer,primary_key = True)
-    userName = db.Column(db.String(100))
+    name = db.Column(db.String(100))
     password = db.Column(db.String(100))
     email = db.Column(db.String(100))
     def __init__(self,name,password,email):
@@ -36,14 +36,23 @@ def credits():
 def login():
     if request.method == "POST":
         session.permanent = True
-        address = request.form["email"]
-        session["email"] = address
+        user = request.form["email"]
+        session["user"] = user
 
-        found_user = users.query.filter_by(email=address).first()
-    if "email" not in session:
-        return render_template("login.html")
+        found_user = users.query.filter_by(name=user).first()
+        if found_user:
+            session["email"] = found_user.email
+        else:
+            usr = users(user,email="",password='')
+            db.session.add(usr)
+            db.session.commit()
+        flash("login Succesful")
+        return redirect(url_for("home"))
     else:
-        return render_template
+        if "user" in session:
+            flash("Already logged in")
+            return redirect(url_for("home"))
+        return render_template("login.html")
 
 if __name__ == "__main__":
     with app.app_context():
