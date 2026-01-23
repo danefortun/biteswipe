@@ -26,16 +26,20 @@ def home():
 
 @app.route("/profile")
 def profile():
+    if "user" not in session:
+        return render_template("login.html")
     return render_template("public.html")
 
 @app.route("/credits")
 def credits():
+    if "user" not in session:
+        return render_template("login.html")
     return render_template("about_us.html")
 
 @app.route("/login",methods=["Post","Get"])
 def login():
     if request.method == "POST":
-        session.permanent = True
+        session.permanent = False
         user = request.form["email"]
         session["user"] = user
 
