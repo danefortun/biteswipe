@@ -66,13 +66,13 @@ header {
 
 .img_container {
   position: relative;
-  top: -75px;
+  top: -20px;
   left: 0;
 }
 
 .hrbar {
   position: relative;
-  top: -150px;
+  top: -40px;
 }
 
 .column-one {
@@ -103,7 +103,7 @@ header {
   height: 400px;
   border: 0px solid #999;
   overflow: hidden; /* Prevent cards from spilling out */
-  margin-top: 40px;
+  margin-top: 120px;
   top: -237px;
 }
 
