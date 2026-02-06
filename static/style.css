@@ -83,7 +83,7 @@ header {
 
 .entirebody {
   position: relative;
-  top: -134px;
+  top: -100px;
   left: 0;
 }
 
@@ -92,19 +92,19 @@ header {
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 70vh;
+  height: 130vh;
   position: relative;
 }
 
 /* Card container for swipe animation */
 .card-container {
-  position: relative;
+  position: sticky; /* Allow card page to be scrollable without being hidden by header */
   width: 300px;
   height: 400px;
   border: 0px solid #999;
   overflow: hidden; /* Prevent cards from spilling out */
-  margin-top: 120px;
-  top: -237px;
+  margin-top: -550px;
+  top: 133px;
 }
 
 .card-container h3 {
