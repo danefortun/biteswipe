@@ -38,7 +38,7 @@ def profile():
     if "user" not in session:
         return redirect(url_for("login"))
 
-    user = users.query.filter_by(name=session['user']).first()
+    user = users.query.filter_by(email=session['user']).first()
     if not user:
         return "User not found"
 
@@ -63,6 +63,11 @@ def profile():
                 if new_bio is not None:
                     user.bio = new_bio
                     db.session.commit()
+            elif action == "update_name":
+                new_name = request.form.get("name")
+                if new_name is not None:
+                    user.name = new_name
+                    db.session.commit()
 
         except Exception as e:
             import traceback
@@ -85,9 +90,9 @@ def login():
         session.permanent = False
         user = request.form["email"]
         password = request.form["pass"]
-        session["user"] = user
+        session['email'] = user.email
 
-        found_user = users.query.filter_by(name=user).first()
+        found_user = users.query.filter_by(email=user).first()
         if found_user:
             session["email"] = found_user.email
         else:

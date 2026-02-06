@@ -3,7 +3,11 @@
 {%block content%}
 <div class="entirebody">
     <h1> Profile </h1>
-    <h3> {{u.name}} </h3>
+    <form method="POST">
+    <input type="hidden" name="action" value="update_name">
+    <textarea name="name">{{ u.name or '' }}</textarea>
+    <input type="submit" value="Update Name">
+</form>
 
 <!--- HTML Structure for Changing Profile Picture --->
 <div class="ppic-con" id="ppic-con">
