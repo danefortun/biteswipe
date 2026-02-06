@@ -17,8 +17,10 @@ class users(db.Model):
     name = db.Column(db.String(100))
     password = db.Column(db.String(100))
     email = db.Column(db.String(100))
+    bio = db.Column(db.String(200))
     pfp_file_path = db.Column(db.String(255))
-    def __init__(self,name,password,email,pfp_file_path=None):
+    def __init__(self,name,password,email,bio='this is a placeholder!',pfp_file_path='transparentnewdefaultpicture.png'):
+        self.bio = bio
         self.name = name
         self.email = email
         self.password = password
@@ -35,40 +37,41 @@ def home():
 def profile():
     if "user" not in session:
         return redirect(url_for("login"))
-    if request.method == "POST":
-        file = request.files["image"]
+
     user = users.query.filter_by(name=session['user']).first()
-    try:
-        # Extract extension
-        extension = ''
-        for i in range(len(file.filename)):
-            if file.filename[i] == '.':
-                extension += file.filename[i:]
-                break
-        
-        # Build filename and path
-        file_name = session['user'] + extension
-        filepath = os.path.join(app.config["UPLOAD_FOLDER"], file_name)
+    if not user:
+        return "User not found"
 
-        # Save file to disk
-        file.save(filepath)
+    if request.method == "POST":
+        try:
+            action = request.form.get("action")  # hidden field in form
 
-        # Update user in database
-        
-        if user:
-            user.pfp_file_path = file_name   
-            db.session.commit()
+            # ----------------- Upload profile picture -----------------
+            if action == "upload_pic":
+                file = request.files.get("image")  # safe: won't raise KeyError
+                if file:
+                    extension = os.path.splitext(file.filename)[1]
+                    file_name = session['user'] + extension
+                    filepath = os.path.join(app.config["UPLOAD_FOLDER"], file_name)
+                    file.save(filepath)
+                    user.pfp_file_path = file_name
+                    db.session.commit()
 
-    except Exception as e:
-        import traceback
-        print("Error uploading file:", e)
-        traceback.print_exc()
+            # ----------------- Update bio -----------------
+            elif action == "update_bio":
+                new_bio = request.form.get("bio")
+                if new_bio is not None:
+                    user.bio = new_bio
+                    db.session.commit()
 
-        
-        
+        except Exception as e:
+            import traceback
+            print("Error in POST:", e)
+            traceback.print_exc()
 
     
-    return render_template("public.html",pfp=user.pfp_file_path,name=user.name)
+    return render_template("public.html",u=user,interests=["this is a placeholder!"])
+
 
 @app.route("/credits")
 def credits():

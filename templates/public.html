@@ -3,12 +3,12 @@
 {%block content%}
 <div class="entirebody">
     <h1> Profile </h1>
-    <h3> {{name}} </h3>
+    <h3> {{u.name}} </h3>
 
 <!--- HTML Structure for Changing Profile Picture --->
 <div class="ppic-con" id="ppic-con">
 
-    <img src="{{ url_for('static', filename='uploads/'+pfp) }}" id="ppic"
+    <img src="{{ url_for('static', filename='uploads/'+u.pfp_file_path) }}" id="ppic"
    
     class ="ppic" border="1"
     width="250px" height="250px" alt="Profile Picture"> 
@@ -20,6 +20,7 @@
 </div>  
 
 <form method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="action" value="upload_pic">
     <input type="file" name="image">
     <button type="submit">Upload</button>
 </form>
@@ -42,10 +43,18 @@
 
     <!--- Biography Section --->
     <h3> About me </h3>
-    <p> Bio Placeholder </p>
+    <form method="POST">
+    <input type="hidden" name="action" value="update_bio">
+    <textarea name="bio">{{ u.bio or '' }}</textarea>
+    <input type="submit" value="Update Bio">
+</form>
     <hr>
 
     <h3> Interests </h3>
-    <p> Interest Placeholder </p>
+    <ol style="list-style-type: none; padding-left: 0;">
+    {% for interest in interests %}
+        <li>{{ interest }}</li>
+    {% endfor %}
+</ol>
     </div>
 {%endblock%}
