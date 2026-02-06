@@ -34,9 +34,10 @@ def home():
 @app.route("/profile", methods=["GET", "POST"])
 def profile():
     if "user" not in session:
-        return render_template("login.html")
+        return redirect(url_for("login"))
     if request.method == "POST":
         file = request.files["image"]
+    user = users.query.filter_by(name=session['user']).first()
     try:
         # Extract extension
         extension = ''
@@ -53,9 +54,9 @@ def profile():
         file.save(filepath)
 
         # Update user in database
-        user = users.query.filter_by(name=session['user']).first()
+        
         if user:
-            user.pfp_file_path = file_name   # ✅ store only the filename
+            user.pfp_file_path = file_name   
             db.session.commit()
 
     except Exception as e:
