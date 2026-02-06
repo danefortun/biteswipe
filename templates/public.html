@@ -3,12 +3,12 @@
 {%block content%}
 <div class="entirebody">
     <h1> Profile </h1>
-    <h3> Name </h3>
+    <h3> {{name}} </h3>
 
 <!--- HTML Structure for Changing Profile Picture --->
 <div class="ppic-con" id="ppic-con">
 
-    <img src="{{ url_for('static', filename='defaultpicture.png') }}" id="ppic"
+    <img src="{{ url_for('static', filename='uploads/'+pfp) }}" id="ppic"
    
     class ="ppic" border="1"
     width="250px" height="250px" alt="Profile Picture"> 
@@ -19,10 +19,11 @@
     </div>
 </div>  
 
-    <input type="file" id="actual-btn" accept="image/*" 
-    hidden/>
-    <label for="actual-btn" id="btn">
-    Choose File &#x1F4F7;</label>
+<form method="POST" enctype="multipart/form-data">
+    <input type="file" name="image">
+    <button type="submit">Upload</button>
+</form>
+    
 
     <br> <br> <br> <br>
     <hr>
