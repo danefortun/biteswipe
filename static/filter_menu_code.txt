@@ -1,4 +1,6 @@
-/* Container for the entire menu (button + content) */
+<html>
+<head>
+<style> /* Container for the entire menu (button + content) */
 
 .dropup {
   position: relative; /* Essential for positioning the content relative to this container */
@@ -7,8 +9,6 @@
 
 /* The actual button that triggers the menu */
 .dropbtn {
-  background-color: #04AA6D;
-  color: white;
   padding: 16px;
   font-size: 16px;
   border: none;
