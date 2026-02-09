@@ -1,0 +1,65 @@
+/* Container for the entire menu (button + content) */
+
+.dropup {
+  position: relative; /* Essential for positioning the content relative to this container */
+  display: inline-block;
+}
+
+/* The actual button that triggers the menu */
+.dropbtn {
+  background-color: #04AA6D;
+  color: white;
+  padding: 16px;
+  font-size: 16px;
+  border: none;
+  cursor: pointer;
+}
+
+/* The hidden content (the links) */
+.dropup-content {
+  display: none;
+  position: absolute;
+  background-color: #f9f9f9;
+  min-width: 160px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 1;
+
+  /* --- KEY STYLES FOR "UP" DIRECTION --- */
+  bottom: 100%; /* Positions the content above the button */
+  left: 0;      /* Aligns the left edge of the menu with the button */
+  /* --- KEY STYLES FOR "UP" DIRECTION --- */
+}
+
+/* Links inside the dropdown */
+.dropup-content a {
+  color: black;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+}
+
+/* Change color of links on hover */
+.dropup-content a:hover {
+  background-color: #f1f1f1
+}
+
+/* Show the dropdown menu on hover */
+.dropup:hover .dropup-content {
+  display: block;
+}
+
+</style>
+</head>
+
+      <div class="dropup">
+ 	 <button class="dropbtn"
+	 	onclick="myFunction()">Filter Menu
+    	 	<i class="fa fa-caret-down"></i>
+      </button>
+
+     <div class="dropup-content" id="myDropup">
+     <a href="#">Celiac</a>
+     <a href="#">Peanuts</a>
+     <a href="#">Milk</a>
+	</div>
+     </div>
