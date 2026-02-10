@@ -4,8 +4,9 @@ This program creates the class for the user dataBase
 It will hold tables of a the users user id, their name, their email, their password, their bio, and the image path of their pfp
 '''
 from flask_sqlalchemy import SQLAlchemy
-db = SQLAlchemy()
-class users(db.Model):
+from db import db
+
+class Users(db.Model):
     id = db.Column("id",db.Integer,primary_key = True)
     name = db.Column(db.String(100))
     password = db.Column(db.String(100))
