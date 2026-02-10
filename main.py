@@ -29,16 +29,16 @@ class users(db.Model):
 @app.route("/index")
 @app.route("/")
 def home():
-    if "user" not in session:
+    if "email" not in session:
         return render_template("login.html")
     return render_template("cards.html")
 
 @app.route("/profile", methods=["GET", "POST"])
 def profile():
-    if "user" not in session:
+    if "email" not in session:
         return redirect(url_for("login"))
 
-    user = users.query.filter_by(email=session['user']).first()
+    user = users.query.filter_by(email=session['email']).first()
     if not user:
         return "User not found"
 
@@ -51,7 +51,7 @@ def profile():
                 file = request.files.get("image")  # safe: won't raise KeyError
                 if file:
                     extension = os.path.splitext(file.filename)[1]
-                    file_name = session['user'] + extension
+                    file_name = session['email'] + extension
                     filepath = os.path.join(app.config["UPLOAD_FOLDER"], file_name)
                     file.save(filepath)
                     user.pfp_file_path = file_name
@@ -80,7 +80,7 @@ def profile():
 
 @app.route("/credits")
 def credits():
-    if "user" not in session:
+    if "email" not in session:
         return render_template("login.html")
     return render_template("about_us.html")
 
@@ -90,7 +90,7 @@ def login():
         session.permanent = False
         user = request.form["email"]
         password = request.form["pass"]
-        session['email'] = user.email
+        session['email'] = user
 
         found_user = users.query.filter_by(email=user).first()
         if found_user:
@@ -102,14 +102,14 @@ def login():
         flash("login Succesful")
         return redirect(url_for("home"))
     else:
-        if "user" in session:
+        if "email" in session:
             flash("Already logged in")
             return redirect(url_for("home"))
         return render_template("login.html")
 
 @app.route('/logout')
 def logout():
-    if 'user' in session:
+    if 'email' in session:
         session.clear()
         return redirect(url_for("login"))
         
