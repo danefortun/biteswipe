@@ -2,16 +2,16 @@ from flask import Flask, redirect, url_for, render_template, request,session,fla
 from flask_sqlalchemy import SQLAlchemy
 from blog_db import *
 from users_db import *
+from config import Config
+from db import db
 import os
 
 app = Flask(__name__)
-app.secret_key = "key"
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.sqlite3'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+app.config.from_object(Config)
+db.init_app(app)
 
-UPLOAD_FOLDER = "static/uploads"
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+
+
 
 
 
@@ -27,7 +27,7 @@ def profile():
     if "email" not in session:
         return redirect(url_for("login"))
 
-    user = users.query.filter_by(email=session['email']).first()
+    user = Users.query.filter_by(email=session['email']).first()
     if not user:
         return "User not found"
 
@@ -81,11 +81,11 @@ def login():
         password = request.form["pass"]
         session['email'] = user
 
-        found_user = users.query.filter_by(email=user).first()
+        found_user = Users.query.filter_by(email=user).first()
         if found_user:
             session["email"] = found_user.email
         else:
-            usr = users(user,email=user,password=password)
+            usr = Users(user,email=user,password=password)
             db.session.add(usr)
             db.session.commit()
         flash("login Succesful")
