@@ -1,6 +1,7 @@
 from flask import Flask, redirect, url_for, render_template, request,session,flash
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.utils import secure_filename
+from blog_db import *
+from users_db import *
 import os
 
 app = Flask(__name__)
@@ -12,19 +13,7 @@ db = SQLAlchemy(app)
 UPLOAD_FOLDER = "static/uploads"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-class users(db.Model):
-    id = db.Column("id",db.Integer,primary_key = True)
-    name = db.Column(db.String(100))
-    password = db.Column(db.String(100))
-    email = db.Column(db.String(100))
-    bio = db.Column(db.String(200))
-    pfp_file_path = db.Column(db.String(255))
-    def __init__(self,name,password,email,bio='this is a placeholder!',pfp_file_path='transparentnewdefaultpicture.png'):
-        self.bio = bio
-        self.name = name
-        self.email = email
-        self.password = password
-        self.pfp_file_path = pfp_file_path
+
 
 @app.route("/index")
 @app.route("/")
