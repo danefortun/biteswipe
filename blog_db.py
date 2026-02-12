@@ -8,10 +8,12 @@ from db import db
 class BlogPosts(db.Model):
     __bind_key__ = "posts"
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100))
-    content = db.Column(db.Text)
-
+    message = db.Column(db.Text)
     user_id = db.Column(db.Integer)
+
+    def __init__(self,message,user_id):
+        self.message = message
+        self.user_id = user_id
 
 if __name__ == "__main__":
     pass

@@ -1,0 +1,15 @@
+{% extends "base.html"%}
+
+{%block content%}
+
+
+
+
+    <form method="POST">
+    <input type="hidden" name="action">
+    <textarea name="message">{{ '' }}</textarea>
+    <input type="submit" value="Send">
+</form>
+
+
+{%endblock%}

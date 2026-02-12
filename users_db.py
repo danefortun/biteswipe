@@ -4,7 +4,10 @@ This program creates the class for the user dataBase
 It will hold tables of a the users user id, their name, their email, their password, their bio, and the image path of their pfp
 '''
 from flask_sqlalchemy import SQLAlchemy
+from flask import Flask
 from db import db
+import sqlite3
+import os
 
 class Users(db.Model):
     id = db.Column("id",db.Integer,primary_key = True)
@@ -19,7 +22,19 @@ class Users(db.Model):
         self.email = email
         self.password = password
         self.pfp_file_path = pfp_file_path
+    def __repr__(self):
+        return f"<User id={self.id}, name={self.name}, email={self.email}>"
 
 
 if __name__ == "__main__":
-    pass
+    from db import db
+    from config import Config
+
+    app = Flask(__name__)
+    app.config.from_object(Config)
+    db.init_app(app)
+    with app.app_context():
+        users = Users.query.all()
+        print("\n--- DATABASE CONTENTS ---")
+        for user in users:
+            print(user)

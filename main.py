@@ -96,6 +96,17 @@ def login():
             return redirect(url_for("home"))
         return render_template("login.html")
 
+@app.route('/chat',methods = ["Post","Get"])
+def blog():
+    if not 'email' in session:
+        return redirect(url_for("login"))
+    
+    if request.method == "POST":
+        message = request.form["message"]
+        if message != '':
+            print(message)
+    return render_template("blog.html")
+
 @app.route('/logout')
 def logout():
     if 'email' in session:
