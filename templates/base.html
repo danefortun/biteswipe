@@ -8,7 +8,7 @@
   
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <!-- Defer makes sure the JS runs after HTML loads -->
-  
+  <link rel="stylesheet" href="{{ url_for('static', filename='filterjavascript.js') }}">
   
 </head>
 
@@ -46,7 +46,64 @@
       <div id="profile"><a href= "/profile">Profile</a></div>
       <div id="Cards"><a href="/">Cards</a></div>
       <div id="aboutus"> <a href="/credits">About Us </a></div>
-      <div id="filter"><a href="filter.html">Filter Menu</a></div>
+      <div class="dropup"><a href=#>Filter Menu
+          <button class="dropbtn"
+          onclick="myFunction()">
+          <i class="fa fa-caret-down"></i>
+        </button> 
+      </a>
+      
+      <div class="dropup-content" id="myDropup">
+        <p>Distance (miles) </p>
+        <p><span id="distanceValue">50</span></p>
+          <div class="slidecontainer">
+            <p style="display: inline; text-align: left;"> 1 </p>
+  <input type="range" min="1" max="100" value="50" class="slider" id="myRange">
+  <p style="display: inline; text-align: right;"> 100 </p>
+</div>
+        </label>
+        <label>
+          <input type="checkbox" id="celiac" onchange="updateFilters()">
+          Celiac
+        </label>
+
+    <label>
+      <input type="checkbox" id="peanuts" onchange="updateFilters()">
+      Peanuts
+    </label>
+ 
+    <label>
+      <input type="checkbox" id="milk" onchange="updateFilters()">
+      Milk
+    </label>
+
+    <label>
+      <input type="checkbox" id="soy" onchange="updateFilters()">
+      Soy
+    </label>
+
+    <label>
+      <input type="checkbox" id="shellfish" onchange="updateFilters()">
+      Shell Fish
+    </label>
+    
+    <label>
+      <input type="checkbox" id="sesame" onchange="updateFilters()">
+      Sesame
+    </label>
+
+    <label>
+      <input type="checkbox" id="treenuts" onchange="updateFilters()">
+      Treenuts
+    </label>
+
+      <label>
+        <input type="checkbox" id="Eggs" onchange="updateFilters()">
+        Eggs
+      </label>
+      </div>
+      </div>
+
       <div id="chat"><a href="/chat">Chat</a></div>
     </div>
   </footer>
