@@ -84,6 +84,7 @@ def login():
         found_user = Users.query.filter_by(email=user).first()
         if found_user:
             session["email"] = found_user.email
+            session['id']=found_user.id
         else:
             usr = Users(user,email=user,password=password)
             db.session.add(usr)
@@ -98,14 +99,38 @@ def login():
 
 @app.route('/chat',methods = ["Post","Get"])
 def blog():
-    if not 'email' in session:
+    #this function will show the last 20 messages sent
+    if not 'email' in session and not 'id' in session:
         return redirect(url_for("login"))
     
+    
     if request.method == "POST":
+            
         message = request.form["message"]
         if message != '':
-            print(message)
+            new_msg = BlogPosts(message,session.get("id"))
+            db.session.add(new_msg)
+            db.session.commit()
+            print("hello world")
+            return redirect(url_for("blog"))
+        
+    
+
     return render_template("blog.html")
+
+@app.route("/get_posts")
+def get_posts():
+    posts = BlogPosts.query.order_by(BlogPosts.id.desc()).limit(10).all()
+    
+    return {
+        "posts": [
+            {
+                
+                "message": p.message,
+                "user_id": Users.query.get(p.user_id).name if Users.query.get(p.user_id) else "Unknown"
+            } for p in posts
+        ]
+    }
 
 @app.route('/logout')
 def logout():
