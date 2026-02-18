@@ -5,7 +5,13 @@
     <h1> Profile </h1>
     <form method="POST">
     <input type="hidden" name="action" value="update_name">
-    <textarea name="name">{{ u.name or '' }}</textarea>
+    <textarea name="name"
+    style=
+    "max-width:fit-content;
+    max-height: 4vh;
+    min-width: 5vh; min-height:fit-content;">
+    {{ u.name or '' }}</textarea>
+    <br>
     <input type="submit" value="Update Name">
 </form>
 
@@ -22,25 +28,36 @@
     <span></span>
     </div>
 </div>  
+<br>
 
 <form method="POST" enctype="multipart/form-data">
     <input type="hidden" name="action" value="upload_pic">
     <input type="file" name="image">
     <button type="submit">Upload</button>
 </form>
-    
+<br>
 
-    <br> <br> <br> <br>
     <hr>
 
     <p style="text-align:center;">
     <strong> To do list for Verification: </strong>
     </p>
-        <ul style="text-align:center;" class="ulred">
-            <li>Verify .edu email</li>
-            <li>2FA with your phone number</li>
-            <li>Create a username</li>
-            <li>xxx</li>
+        <ul style="text-align:start; margin-left:20%; padding-top: 5px;" class="ulred">
+            <li style="padding-bottom: 15px;">
+                Verify .edu email
+            </li>
+            
+            <li style="padding-bottom: 15px;">
+                2FA with your phone number
+            </li>
+
+            <li style="padding-bottom: 15px;">
+                Create a username
+            </li>
+
+            <li>
+                xxx
+            </li>
         </ul>
     <hr>
 
@@ -49,7 +66,8 @@
     <h3> About me </h3>
     <form method="POST">
     <input type="hidden" name="action" value="update_bio">
-    <textarea name="bio">{{ u.bio or '' }}</textarea>
+    <textarea name="bio" style="max-width: fit-content; min-height: 5vh;">{{ u.bio or '' }}</textarea>
+    <br>
     <input type="submit" value="Update Bio">
 </form>
     <hr>
