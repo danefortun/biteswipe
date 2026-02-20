@@ -27,15 +27,25 @@ What can I do?
 
 - Check out recommended interests on the Cards page
 [gif of clicking on Cards, then swiping through several]
-
-- Filter recommendations to suit you
-[gif demoing filter menu]
+1. Click on Cards in the bottom footer
+2. Hover over "Filter Menu" to see a list of settings to personalize your feed
+3. Swipe or click on the buttons for the recommendations you like or dislike
+4. Check out My Stuff to see what you liked later
 
 - Personalize your profile
 [gif of setting up profile]
+1. Click on Profile in the bottom footer
+2. Upload a profile picture
+    - Click "Browse", select a picture, then click "Upload"
+3. Write a bio under "About Me"
 
 - Make new friends and connect with them
 [gif demoing chat features]
+1. Click Chat in the bottom footer
+2. Say hi to your peers and make friends!
 
 - Go out and experience everything you've swiped on!
 [gif/screenshot showing My Stuff page]
+1. Click My Stuff in the bottom footer
+2. See everything you've liked that caught your eye
+3. Go out and make some new memories!
