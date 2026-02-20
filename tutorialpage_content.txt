@@ -1,0 +1,41 @@
+reference notes:
+
+- Outline core features and common user workflows
+- Write step-by-step instructions for using the software
+- Make the User Guide easily accessible to users
+- Use clear, non-technical language suitable for end users
+
+Pitch (for reference):
+Do you find yourself wondering where you want to eat, what you want to play,
+what music you want to listen to? I walk around campus as a new transfer 
+and have to trial-and-error new places to eat, study, and relax. What I
+think is that people should have a way to know what places they might like 
+to visit and explore around campus without doing as much legwork. 
+LifeSwipe is the perfect solution for that problem, so that you can know 
+ahead of time what places will make your campus life great!
+
+---- Content ----
+
+Welcome to LifeSwipe!
+
+Thank you for joining us! Here, you have a place to:
+- Discover new interests
+- Make new connections
+- Express yourself and what you love
+
+What can I do?
+
+- Check out recommended interests on the Cards page
+[gif of clicking on Cards, then swiping through several]
+
+- Filter recommendations to suit you
+[gif demoing filter menu]
+
+- Personalize your profile
+[gif of setting up profile]
+
+- Make new friends and connect with them
+[gif demoing chat features]
+
+- Go out and experience everything you've swiped on!
+[gif/screenshot showing My Stuff page]
