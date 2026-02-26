@@ -138,6 +138,16 @@ def logout():
         session.clear()
         return redirect(url_for("login"))
         
+@app.route('/location',methods = ['POST'])
+def getLocation():
+    lat = request.form().get('lat')
+    long = request.form().get('long')
+    user.latitude = lat
+    user.longitude = long
+    db.session.commit()
+    flash('location retrieval successful')
+    
+
 
 if __name__ == "__main__":
     with app.app_context():
