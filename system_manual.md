@@ -1,6 +1,15 @@
-# BiteSwipe
+# LifeSwipe
 
-BiteSwipe is a social media website for interest discovery. Use this manual for installation to a web server.
+LifeSwipe is a social media website for interest discovery. Use this manual for installation to a web server.
+
+## Contact Us!
+
+In case of any questions, concerns, or undocumented issues when deploying LifeSwipe, please send an email to one of our developers:
+
+- Benny Erskine: be385@drexel.edu
+- Dane Fortun: df664@drexel.edu
+- Dean Iyoun: di326@drexel.edu
+- Tyler Zebekow: taz27@drexel.edu
 
 ## Minimum Hardware Requirements
 
@@ -16,3 +25,15 @@ BiteSwipe is a social media website for interest discovery. Use this manual for 
     - Debian 10+
     - openSUSE 15.5+
     - Fedora Linux 39+
+
+## Minimum Software Requirements
+
+- Python 3.9 or newer
+- Flask WSGI web application framework and its dependencies     (should automatically be installed with Flask)
+  - Werkzeug
+  - Jinja
+  - MarkupSafe
+  - ItsDangerous
+  - Click
+  - Blinker
+- Latest compatible version of web browser of choice for testing

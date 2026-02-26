@@ -4,12 +4,13 @@
 <style>
 
 </style>
-<div style="max-width: 600px; margin: auto; padding: 20px; height: 100vh;">
+<div style="max-width: 600px; margin: auto; padding: 20px;">
 
     <h1>Messages</h1>
 
     <!-- Messages list -->
-    <ul style="list-style: none; padding: 0; margin-bottom: 20px;">
+    <ul style="list-style: none;
+    padding: 0; margin-bottom: 20px;">
         <div id="posts"></div>
     </ul>
 
@@ -18,18 +19,15 @@
     style="display: flex;
     flex-direction: column;
     gap: 10px;">
-    
+
         <input type="hidden" name="action" value="send">
-        <textarea name="message"
-        placeholder="Type your message here..."
-        style="padding: 10px;
-        border-radius: 5px;
-        border: 1px solid #ccc;
-        resize: vertical;
-        min-height: 80px;
-        max-width:fit-content;
-        max-height: fit-content;">
-        </textarea>
+        <textarea name="message" placeholder="Type your message here..."
+    placeholder="Type your message here..."
+    style="padding: 10px;
+           border-radius: 5px;
+           border: 1px solid #ccc;
+           resize: vertical;
+           min-height: 80px;"></textarea>
 
         <input type="submit" value="Send"
         style="padding: 10px;

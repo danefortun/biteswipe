@@ -1,7 +1,12 @@
 {% extends "base.html"%}
 
 {%block content%}
-<div class="entirebody">
+<style>
+  .main {
+    padding-top: 40px;
+  }
+</style>
+<div class="entirebody" style="bottom: 10px;">
     <h1> Profile </h1>
     <form method="POST">
     <input type="hidden" name="action" value="update_name">
@@ -12,19 +17,34 @@
     style="
     max-width:fit-content;
     max-height: 4vh;
-    min-width: 5vh; min-height:fit-content;">
-    {{ u.name or '' }}</textarea>
-    <br>
-    <input type="submit" value="Update Name">
+    min-width: 5vh; min-height:fit-content;">{{ u.name or '' }}</textarea> 
+
+    <!-- Keep the "u.name" in the same line as the line it is in to prevent spaces in the names-->
+
+    <br> 
+    <!-- space between the profile picture and the upload button -->
+
+    <input type="submit" value="Update Name" style="margin-top: 5px; margin-bottom: 5px;">
 </form>
 
 <!--- HTML Structure for Changing Profile Picture --->
 <div class="ppic-con" id="ppic-con">
 
+    <div>
+
     <img src="{{ url_for('static', filename='uploads/'+u.pfp_file_path) }}" id="ppic"
+    style="
+    width: fit-content; 
+    min-width: 250px;
+    max-height: 250px;
+    height: fit-content;
+    max-width: 500px;
+    max-height: 250px;
+    "
    
     class ="ppic" border="1"
-    width="250px" height="250px" alt="Profile Picture"> 
+    alt="Profile Picture"> 
+    </div>
 
     <div class="upload-icon">
 
