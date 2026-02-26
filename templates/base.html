@@ -9,8 +9,17 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="{{ url_for('static', filename='filterjavascript.js') }}" defer></script>
   
+  
 </head>
-
+<style>
+  .main {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh; /* Pushes the content down */
+  position: relative;
+}
+</style>
 <body>
   <!-- Header -->
   <header>
@@ -26,6 +35,20 @@
   <main class="main">
   {% block content %}{% endblock %}
   </main>
+  <div style= "position: fixed;
+  padding-top: 5px; padding-left: 5px; padding-right: 5px;
+  bottom: 7vh; left: 45%; z-index: 1000; 
+  border: 1vh solid #e6eefc;
+  border-left: 1px solid #999;
+  border-right: 1px solid #999;
+  border-top: 1px solid #999;">
+  <button
+    type="button"
+    data-theme-toggle
+    aria-label="Change to light theme">
+    Change to light theme
+  </button>
+  </div>
   <!-- Footer -->
   <footer>
   <!-- Theme Switch button code
@@ -35,16 +58,10 @@
   Code version: N/a
   Availability: https://codepen.io/dwaumsley/pen/GRLamdm
   -->
-  <button
-    type="button"
-    data-theme-toggle
-    aria-label="Change to light theme"
-    >Change to light theme
-  </button>
     <div class="navbar">
       <div id="profile"><a href= "/profile">Profile</a></div>
       <div id="Cards"><a href="/">Cards</a></div>
-      <div id="aboutus"> <a href="/credits">About Us </a></div>
+      <div id="aboutus"> <a href="/credits">My Stuff</a></div>
       <div class="dropup"><a href=#>Filter Menu
           <button class="dropbtn"
           onclick="myFunction()">
@@ -53,14 +70,18 @@
       </a>
       
       <div class="dropup-content" id="myDropup">
-        <p>Distance (miles) </p>
-        <p><span id="distanceValue">50</span></p>
+        <p id="distance-label" style="padding-left:10px;"><span id="distanceValue">50</span> miles</p>
           <div class="slidecontainer">
             <p style="display: inline; text-align: left;"> 1 </p>
   <input type="range" min="1" max="100" value="50" class="slider" id="myRange">
   <p style="display: inline; text-align: right;"> 100 </p>
 </div>
         </label>
+
+        <hr> <!-- Line to visually separate the filters -->
+
+        <p style="text-align: center;">Allergens</p>
+        <div style="max-width:300px;">
         <label>
           <input type="checkbox" id="celiac" onchange="updateFilters()">
           Celiac
@@ -77,13 +98,13 @@
     </label>
 
     <label>
-      <input type="checkbox" id="soy" onchange="updateFilters()">
+      <input type="checkbox"id="soy" onchange="updateFilters()">
       Soy
     </label>
 
     <label>
-      <input type="checkbox" id="shellfish" onchange="updateFilters()">
-      Shell Fish
+      <input type="checkbox" id="shellFish" onchange="updateFilters()">
+      ShellFish
     </label>
     
     <label>
@@ -99,6 +120,25 @@
       <label>
         <input type="checkbox" id="Eggs" onchange="updateFilters()">
         Eggs
+      </label>
+    </div>
+
+      <hr> <!-- Line to visually separate the filters -->
+
+      <p style="text-align: center;">Price</p>
+
+      <label>
+        <input type="checkbox" id="cheapPrice" onchange="updateFilters()">
+        $5 - $20
+      </label>
+      <label>
+        <input type="checkbox" id="mediumPrice" onchange="updateFilters()">
+        $25 - $40
+      </label>
+      <label>
+        <input type="checkbox" id="expensivePrice" onchange="updateFilters()">
+        $40+
+      </label>
       </label>
       </div>
       </div>
