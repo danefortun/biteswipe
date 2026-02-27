@@ -8,24 +8,27 @@
 </style>
 <div class="entirebody" style="bottom: 10px;">
     <h1> Profile </h1>
-    <form method="POST">
-    <input type="hidden" name="action" value="update_name">
-    <textarea name="name"
-     minlength="4"
-     maxlength="16"
-     required
-    style="
-    max-width:fit-content;
-    max-height: 4vh;
-    min-width: 5vh; min-height:fit-content;">{{ u.name or '' }}</textarea> 
+  <!-- Username Display -->
+<div id="username-container">
+    <strong id="username-display">{{ u.name or 'Your Name' }}</strong>
+    <button type="button" id="edit-name-btn" style="margin-left: 150px;">Edit</button>
 
-    <!-- Keep the "u.name" in the same line as the line it is in to prevent spaces in the names-->
+    <!-- Hidden input box initially -->
+    <form id="username-form" method="POST" style="display:none; margin-top:5px;">
+        <input type="hidden" name="action" value="update_name">
+        <input type="text" name="name" 
+               value="{{ u.name or '' }}"
+               minlength="4" maxlength="16"
+               required
+               style="font-weight:bold;">
 
-    <br> 
-    <!-- space between the profile picture and the upload button -->
+        <br>
 
-    <input type="submit" value="Update Name" style="margin-top: 5px; margin-bottom: 5px;">
-</form>
+        <input type="submit" value="Update Name" style="margin-right: 30px;">
+
+        <button type="button" id="cancel-name-btn">Cancel</button>
+    </form>
+</div>
 
 <!--- HTML Structure for Changing Profile Picture --->
 <div class="ppic-con" id="ppic-con">
@@ -38,7 +41,7 @@
     min-width: 250px;
     max-height: 250px;
     height: fit-content;
-    max-width: 500px;
+    max-width: 250px;
     max-height: 250px;
     "
    
@@ -85,14 +88,25 @@
     <hr>
 
 
-    <!--- Biography Section --->
-    <h3> About me </h3>
-    <form method="POST">
-    <input type="hidden" name="action" value="update_bio">
-    <textarea name="bio" style="max-width: fit-content; min-height: 5vh;">{{ u.bio or '' }}</textarea>
-    <br>
-    <input type="submit" value="Update Bio">
-</form>
+<!-- Bio Display -->
+ <h3> About Me </h3>
+<div id="bio-container">
+    <p id="bio-display">{{ u.bio or 'Your bio goes here...' }}</p>
+    <button type="button" id="edit-bio-btn">Edit</button>
+
+    <!-- Hidden input box initially -->
+    <form id="bio-form" method="POST" style="display:none; margin-top:5px;">
+        <input type="hidden" name="action" value="update_bio">
+        <textarea name="bio" 
+                  minlength="0" maxlength="256" 
+                  required
+                  style="width:100%; min-height: 5vh; max-width: fit-content; min-width: none;">{{ u.bio or '' }}</textarea>
+        <br>
+        <input type="submit" value="Update Bio">
+        <button type="button" id="cancel-bio-btn">Cancel</button>
+    </form>
+</div>
+
     <hr>
 
     <h3> Interests </h3>
@@ -102,4 +116,45 @@
     {% endfor %}
 </ol>
     </div>
+
+    <!-- CHANGE NAME W/ JAVASCRIPT-->
+    <script>
+    const editBtn = document.getElementById('edit-name-btn');
+    const cancelBtn = document.getElementById('cancel-name-btn');
+    const displayName = document.getElementById('username-display');
+    const form = document.getElementById('username-form');
+
+    editBtn.addEventListener('click', () => {
+        displayName.style.display = 'none';
+        editBtn.style.display = 'none';
+        form.style.display = 'block';
+    });
+
+    cancelBtn.addEventListener('click', () => {
+        form.style.display = 'none';
+        displayName.style.display = 'inline';
+        editBtn.style.display = 'inline';
+    });
+</script>
+
+<!-- CHANGE BIO W/ JAVASCRIPT -->
+
+<script>
+    const editBioBtn = document.getElementById('edit-bio-btn');
+    const cancelBioBtn = document.getElementById('cancel-bio-btn');
+    const bioDisplay = document.getElementById('bio-display');
+    const bioForm = document.getElementById('bio-form');
+
+    editBioBtn.addEventListener('click', () => {
+        bioDisplay.style.display = 'none';
+        editBioBtn.style.display = 'none';
+        bioForm.style.display = 'block';
+    });
+
+    cancelBioBtn.addEventListener('click', () => {
+        bioForm.style.display = 'none';
+        bioDisplay.style.display = 'block';
+        editBioBtn.style.display = 'inline';
+    });
+</script>
 {%endblock%}
