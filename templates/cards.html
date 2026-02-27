@@ -1,6 +1,30 @@
 {%extends "base.html"%}
 {%block content%}
+<form id="locationForm" action="/" method="POST">
+    <input type="hidden" name="latitude" id="lat_input">
+    <input type="hidden" name="longitude" id="lng_input">
+    
+    <button type="button" onclick="getAndSend()">Save My Current Location</button>
+</form>
+
+<script>
+function getAndSend() {
+    // 1. Ask the browser for coordinates
+    navigator.geolocation.getCurrentPosition((position) => {
+        // 2. Put coordinates into the hidden inputs
+        document.getElementById('lat_input').value = position.coords.latitude;
+        document.getElementById('lng_input').value = position.coords.longitude;
+        
+        // 3. Immediately submit the form to your Flask route
+        document.getElementById('locationForm').submit();
+    }, (error) => {
+        alert("Please enable location services in your browser.");
+    });
+}
+</script>
 <div class="card-container">
+     
+
       <div class="cards" id="cards">
         <div class="card" style="background-color: #ff7eb3;">Card 1</div>
         <div class="card" style="background-color: #0000ff;">Card 2</div>

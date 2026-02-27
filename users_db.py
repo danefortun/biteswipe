@@ -25,7 +25,7 @@ class Users(db.Model):
         self.password = password
         self.pfp_file_path = pfp_file_path
     def __repr__(self):
-        return f"<User id={self.id}, name={self.name}, email={self.email}>"
+        return f"<User id={self.id}, name={self.name}, email={self.email}, location={self.latitude},{self.latitude}"
 
 
 if __name__ == "__main__":
