@@ -18,6 +18,8 @@ db.init_app(app)
 @app.route("/index",methods = ["POST","GET"])
 @app.route("/",methods = ["POST","GET"])
 def home():
+    if "email" not in session:
+        return render_template("login.html")
     user = Users.query.filter_by(email=session['email']).first()
     # 1. Capture the data from the HTML 'name' attributes
     raw_lat = request.form.get('latitude')
@@ -46,8 +48,7 @@ def home():
     
     else:
         flash("Failed to get coordinates.")
-    if "email" not in session:
-        return render_template("login.html")
+    
     return render_template("cards.html")
 
 @app.route("/profile", methods=["GET", "POST"])
