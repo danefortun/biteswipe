@@ -15,9 +15,37 @@ db.init_app(app)
 
 
 
-@app.route("/index")
-@app.route("/")
+@app.route("/index",methods = ["POST","GET"])
+@app.route("/",methods = ["POST","GET"])
 def home():
+    user = Users.query.filter_by(email=session['email']).first()
+    # 1. Capture the data from the HTML 'name' attributes
+    raw_lat = request.form.get('latitude')
+    raw_lng = request.form.get('longitude')
+
+    if raw_lat and raw_lng:
+        # 2. Convert to float and save to the database
+        
+        latitude=float(raw_lat) 
+        longitude=float(raw_lng)
+        
+        try:
+            user.latitude = latitude
+            user.longitude = longitude
+            db.session.commit()
+            flash("saved coordinates succesfuly")
+            print("saved coordinates succesfuly")
+        except Exception as e:
+            flash("Error saving to dataBase")
+            print("Error saving to dataBase2")
+            print(e)
+
+        
+        flash("Location saved successfully!")
+        return redirect('/')
+    
+    else:
+        flash("Failed to get coordinates.")
     if "email" not in session:
         return render_template("login.html")
     return render_template("cards.html")
@@ -138,6 +166,9 @@ def logout():
         session.clear()
         return redirect(url_for("login"))
         
+
+    
+
 
 if __name__ == "__main__":
     with app.app_context():

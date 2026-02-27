@@ -16,6 +16,8 @@ class Users(db.Model):
     email = db.Column(db.String(100))
     bio = db.Column(db.String(200))
     pfp_file_path = db.Column(db.String(255))
+    latitude = db.Column(db.Float())
+    longitude = db.Column(db.Float())
     def __init__(self,name,password,email,bio='this is a placeholder!',pfp_file_path='transparentnewdefaultpicture.png'):
         self.bio = bio
         self.name = name
@@ -23,7 +25,7 @@ class Users(db.Model):
         self.password = password
         self.pfp_file_path = pfp_file_path
     def __repr__(self):
-        return f"<User id={self.id}, name={self.name}, email={self.email}>"
+        return f"<User id={self.id}, name={self.name}, email={self.email}, location={self.latitude},{self.latitude}"
 
 
 if __name__ == "__main__":
