@@ -1,53 +1,78 @@
-let celiac = false;
-let peanuts = false;
-let milk = false;
-let soy = false;
-let fish = false;
-let sesame = false;
-let treeNuts = false;      // FIXED
-let shellFish = false;     // FIXED
-let eggs = false;
+function getFilters() {
+  return {
+    celiac: document.getElementById("celiac").checked,
+    peanuts: document.getElementById("peanuts").checked,
+    milk: document.getElementById("milk").checked,
+    soy: document.getElementById("soy").checked,
+    shellFish: document.getElementById("shellFish").checked,
+    sesame: document.getElementById("sesame").checked,
+    treenuts: document.getElementById("treenuts").checked,
+    eggs: document.getElementById("Eggs").checked,
+
+    cheapPrice: document.getElementById("cheapPrice").checked,
+    mediumPrice: document.getElementById("mediumPrice").checked,
+    expensivePrice: document.getElementById("expensivePrice").checked,
+
+    distance: document.getElementById("myRange").value
+  };
+}
 
 function updateFilters() {
-  const checkboxes = document.querySelectorAll(
-    '.dropup-content input[type="checkbox"]'
-  );
+  const filters = getFilters();
+  console.log(filters);
+  saveFilters(filters);
+}
 
-  celiac   = checkboxes[0].checked;
-  peanuts  = checkboxes[1].checked;
-  milk     = checkboxes[2].checked;
-  soy      = checkboxes[3].checked;
-  fish     = checkboxes[4].checked;
-  sesame   = checkboxes[5].checked;
-  treeNuts = checkboxes[6].checked;   // FIXED
-  shellFish= checkboxes[7].checked;   // FIXED
-  eggs     = checkboxes[8].checked;
-
-  console.log("Celiac:", celiac);
-  console.log("Peanuts:", peanuts);
-  console.log("Milk:", milk);
-  console.log("Soy:", soy);
-  console.log("Fish:", fish);
-  console.log("Sesame:", sesame);
-  console.log("Tree nuts:", treeNuts);
-  console.log("Shell-Fish:", shellFish);
-  console.log("Eggs:", eggs);
+function saveFilters(filters) {
+  fetch("/save_filters", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(filters)
+  })
+  .then(res => res.json())
+  .then(data => console.log("Saved:", data))
+  .catch(err => console.error("Error:", err));
 }
 
 document.addEventListener("DOMContentLoaded", function () {
 
-    const slider = document.getElementById("myRange");
-    const distanceValue = document.getElementById("distanceValue");
+  const inputs = document.querySelectorAll('.dropup-content input');
 
-    if (!slider || !distanceValue) {
-        console.log("Slider or span not found.");
-        return;
-    }
+  inputs.forEach(input => {
+    input.addEventListener("change", updateFilters);
+  });
 
+  const slider = document.getElementById("myRange");
+  const distanceValue = document.getElementById("distanceValue");
+
+  if (slider && distanceValue) {
     distanceValue.textContent = slider.value;
 
     slider.addEventListener("input", function () {
-        distanceValue.textContent = this.value;
+      distanceValue.textContent = this.value;
+      updateFilters();
+    });
+  }
+
+  fetch("/get_filters")
+    .then(res => res.json())
+    .then(saved => {
+      if (!saved) return;
+
+      for (let key in saved) {
+        const element = document.getElementById(key);
+        if (element) {
+          if (element.type === "checkbox") {
+            element.checked = saved[key];
+          }
+          if (element.type === "range") {
+            element.value = saved[key];
+            distanceValue.textContent = saved[key];
+          }
+        }
+      }
     });
 
 });
