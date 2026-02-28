@@ -5,64 +5,149 @@
   .main {
     padding-top: 40px;
   }
+
+.name-form {
+    display: none;
+    margin-top: 10px;
+}
+
+.name-input {
+    width: fit-content;
+    font-size: 20px;
+    box-sizing: border-box;
+}
+
+.form-buttons {
+    margin-top: 8px;
+    display: flex;
+    gap: 10px;
+}
+
+.profile-pic-wrapper {
+    width: 250px;
+    height: 250px;
+    overflow: hidden;
+    transform: scale(1);
+    transform-origin: center;
+}
+
+.profile-pic {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
 </style>
-<div class="entirebody" style="bottom: 10px;">
+
+<div class="entirebody"
+    style="bottom: 10px;
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 30px;             
+    border: 2px solid #ccc;  
+    border-radius: 14px;
+    text-shadow: 1px 0px 0px rgba(0,0,0,0.2)">
+
     <h1> Profile </h1>
   <!-- Username Display -->
-<div id="username-container">
-    <strong id="username-display">{{ u.name or 'Your Name' }}</strong>
-    <button type="button" id="edit-name-btn" style="margin-left: 150px;">Edit</button>
+   
 
-    <!-- Hidden input box initially -->
-    <form id="username-form" method="POST" style="display:none; margin-top:5px;">
-        <input type="hidden" name="action" value="update_name">
-        <input type="text" name="name" 
-               value="{{ u.name or '' }}"
-               minlength="4" maxlength="16"
-               required
-               style="font-weight:bold;">
+<!-- PROFILE HEADER -->
+<div class="profile-section"
+    style="display: inline-block;
+    border: 2px solid #ccc;
+    padding: 20px;            
+    border-radius: 12px;">
 
-        <br>
+    <!-- Username Section -->
+    <div class="profile-info">
 
-        <input type="submit" value="Update Name" style="margin-right: 30px;">
+        <!-- Display Mode -->
+        <div class="name-display"
+        style="display: flex;
+        justify-content: space-between;">
+            <strong id="username-display" style="font-size: 20px;">{{ u.name or 'Your Name' }}
+            </strong>
+            <button type="button" id="edit-name-btn" class="edit-btn">
+                Edit
+            </button>
+        </div>
 
-        <button type="button" id="cancel-name-btn">Cancel</button>
-    </form>
+        <!-- Edit Mode -->
+        <form id="username-form" method="POST" class="name-form">
+            <input type="hidden" name="action" value="update_name">
+
+            <input type="text"
+                   name="name"
+                   value="{{ u.name or '' }}"
+                   minlength="4"
+                   maxlength="16"
+                   required
+                   class="name-input"
+                   style="max-width: 200px;">
+
+            <div class="form-buttons">
+                <button type="submit">Update</button>
+                <button type="button" id="cancel-name-btn">Cancel</button>
+            </div>
+        </form>
+
+    </div>
+  <!-- Profile Picture -->
+    <div class="profile-pic-wrapper">
+        <img src="{{ url_for('static', filename='uploads/' + u.pfp_file_path) }}"
+             alt="Profile Picture"
+             class="profile-pic"
+             style="
+             object-position: {{ u.crop_x or 50 }}% {{ u.crop_y or 50 }}%;
+             transform: scale({{ u.zoom_level or 1 }});">
+    </div>
+<!-- PROFILE PICTURE CROP -->
+
+{% if session.get('email') == u.email %}
+    <div class="crop-controls">
+        <!-- PROFILE PICTURE SLIDER HORIZONTAL -->
+
+    <label style="display: flex; justify-content: flex-start;">Horizontal</label>
+    <input type="range"
+    min="0" max="100" value="50" id="xPos"
+    style="display: flex; justify-content: flex-start;">
+
+    <br>
+
+    <!-- PROFILE PICTURE SLIDER VERTICAL -->
+
+    <label style="display: flex; justify-content: flex-start;">Vertical</label>
+    <input type="range" min="0" max="100" value="50" id="yPos"
+    style="display: flex; justify-content: flex-start;">
+
+    <label style="display: flex; justify-content: flex-start;">Zoom</label>
+    <input type="range"
+       min="1"
+       max="3"
+       step="0.1"
+       value="{{ u.zoom_level or 1 }}"
+       id="zoomSlider"
+       name="zoom_level"
+       style="display: flex; justify-content: flex-start;">
+
+</div>
+{% endif %}
+
 </div>
 
-<!--- HTML Structure for Changing Profile Picture --->
-<div class="ppic-con" id="ppic-con">
 
-    <div>
-
-    <img src="{{ url_for('static', filename='uploads/'+u.pfp_file_path) }}" id="ppic"
-    style="
-    width: fit-content; 
-    min-width: 250px;
-    max-height: 250px;
-    height: fit-content;
-    max-width: 250px;
-    max-height: 250px;
-    "
-   
-    class ="ppic" border="1"
-    alt="Profile Picture"> 
-    </div>
-
-    <div class="upload-icon">
-
-    <span></span>
-    </div>
-</div>  
-<br>
-
-<form method="POST" enctype="multipart/form-data">
+<!-- Upload Picture -->
+<form method="POST" enctype="multipart/form-data" class="upload-form">
     <input type="hidden" name="action" value="upload_pic">
-    <input type="file" name="image">
-    <button type="submit">Upload</button>
+    <input type="file" name="image" required>
+    <button type="submit" style="margin-top: 15px;">Upload</button>
 </form>
+
 <br>
 
+<!-- TO DO LIST FOR VERIFICATION -->
     <hr>
 
     <p style="text-align:center;">
@@ -91,7 +176,7 @@
 <!-- Bio Display -->
  <h3> About Me </h3>
 <div id="bio-container">
-    <p id="bio-display">{{ u.bio or 'Your bio goes here...' }}</p>
+    <p id="bio-display" style="max-width: 700px;">{{ u.bio or 'Your bio goes here...' }}</p>
     <button type="button" id="edit-bio-btn">Edit</button>
 
     <!-- Hidden input box initially -->
@@ -157,4 +242,28 @@
         editBioBtn.style.display = 'inline';
     });
 </script>
+
+<!-- X,Y AND ZOOM SLIDER JAVASCRIPT-->
+
+<script>
+const img = document.querySelector(".profile-pic");
+const xSlider = document.getElementById("xPos");
+const ySlider = document.getElementById("yPos");
+const zoomSlider = document.getElementById("zoomSlider");
+
+if (img && xSlider && ySlider && zoomSlider) {
+
+    function updateImage() {
+        img.style.objectPosition = `${xSlider.value}% ${ySlider.value}%`;
+        img.style.transform = `scale(${zoomSlider.value})`;
+    }
+
+    xSlider.addEventListener("input", updateImage);
+    ySlider.addEventListener("input", updateImage);
+    zoomSlider.addEventListener("input", updateImage);
+
+    updateImage();
+}
+</script>
+
 {%endblock%}
