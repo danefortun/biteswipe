@@ -21,15 +21,7 @@ os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 @app.route("/index",methods = ["POST","GET"])
 @app.route("/", methods = ["POST", "GET"])
 def home():
-    email = session.get('email')
-
-    if not email:
-        return redirect(url_for('login'))
-
-    user = Users.query.filter_by(email=email).first()
-
-    return render_template("cards.html", user=user)
-
+    user = Users.query.filter_by(email=session['email']).first()
     # 1. Capture the data from the HTML 'name' attributes
     raw_lat = request.form.get('latitude')
     raw_lng = request.form.get('longitude')
@@ -57,8 +49,7 @@ def home():
     
     else:
         flash("Failed to get coordinates.")
-    if "email" not in session:
-        return render_template("login.html")
+    
     return render_template("cards.html")
 
 @app.route("/profile", methods=["GET", "POST"])
