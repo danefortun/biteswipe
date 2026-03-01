@@ -8,7 +8,7 @@
   
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="{{ url_for('static', filename='filterjavascript.js') }}" defer></script>
-  
+  <link href="https://fonts.googleapis.com/css2?family=Satoshi:wght@300;400;500;700&display=swap" rel="stylesheet">
   
 </head>
 <style>
@@ -24,7 +24,6 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding-top: 20px;
 }
 
 
@@ -34,11 +33,26 @@ body {
   <header>
     <div class="img_container">
       
-      <img src="{{ url_for('static', filename='drexelxfizz.png') }}"  width="auto" height="140" alt="Logo">
-    </div>
+      <div style="display:flex; justify-content: flex-start;">
+      <img src="{{ url_for('static', filename='drexelxfizz.png') }}"
+      width="auto" height="140" alt="Logo">
+            <p style="
+      font-family:'Satoshi', sans-serif;
+      display:inline-flex;
+      z-index: 1000;
+      margin-bottom: 4px;
+      font-size: 50px;">
+      BiteSwipe</p>
+      </div>
+      
     <div class="hrbar">
       <hr />
     </div>
+
+      <!-- BiteSwipe Logo Text Image -->
+      <!-- <img src="{{ url_for('static', filename='biteswipeTEXT.png') }}"
+       width="auto" height="auto" alt="Logo"> -->
+
   </header>
   <!-- Main Section -->
   <main class="main">
