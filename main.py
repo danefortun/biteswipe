@@ -5,6 +5,12 @@ from users_db import *
 from config import Config
 from db import db
 import os
+#for the below to work, make sure you make a file called apiKey.py and make a variable called key
+try:
+    from apiKey import key
+    import requests
+except:
+    print("NO API KEY FOUND, PLEASE LOOK AT LINE 8 OF MAIN.PY")
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -21,7 +27,9 @@ os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 @app.route("/index",methods = ["POST","GET"])
 @app.route("/", methods = ["POST", "GET"])
 def home():
-    user = Users.query.filter_by(email=session['email']).first()
+    if 'email' in session:
+        user = Users.query.filter_by(email=session['email']).first()
+    else: redirect(url_for("login"))
     # 1. Capture the data from the HTML 'name' attributes
     raw_lat = request.form.get('latitude')
     raw_lng = request.form.get('longitude')
@@ -166,10 +174,45 @@ def get_posts():
 def logout():
     if 'email' in session:
         session.clear()
-        return redirect(url_for("login"))
+    return redirect(url_for("login"))
         
-
-    
+@app.route('/get_restaurant')
+def get_info():
+    user= Users.query.filter_by(email=session['email']).first()
+    if user.latitude != None and 'email' in session:
+        
+        url = "https://places.googleapis.com/v1/places:searchText"
+        search_headers = {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": key,
+            "X-Goog-FieldMask": "places.id,places.displayName"
+        }
+        payload = {
+            "textQuery": "restaurant", 
+            "locationBias": {
+                "circle": {
+                    "center": {
+                        "latitude": user.latitude,
+                        "longitude": user.longitude
+                    },
+                    "radius": 2000.0 # Floats are safer
+                }
+            }
+        }
+        response = requests.post(url, json=payload, headers=search_headers)
+        data = response.json()
+        results = data.get('places', [])
+        print(results)
+        return {
+        "places": [
+            {
+                
+                "name":r['displayName'],
+                "place":r['id']
+                
+            } for r in results
+        ]
+    }
 
 
 if __name__ == "__main__":
@@ -178,5 +221,3 @@ if __name__ == "__main__":
         
     app.run(debug = True)
 
-if __name__ == "__main__":
-    app.run(debug=True)
