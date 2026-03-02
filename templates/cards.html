@@ -9,12 +9,69 @@
   
 </style>
 
+<form id="locationForm" action="/" method="POST">
+    <input type="hidden" name="latitude" id="lat_input">
+    <input type="hidden" name="longitude" id="lng_input">
+    
+    <button type="button" onclick="getAndSend()">Get location</button>
+</form>
+
+<button type="button" onclick ="get_restaurant()">refresh cards</button>
+
+<script>
+function getAndSend() {
+    // 1. Ask the browser for coordinates
+    navigator.geolocation.getCurrentPosition((position) => {
+        // 2. Put coordinates into the hidden inputs
+        document.getElementById('lat_input').value = position.coords.latitude;
+        document.getElementById('lng_input').value = position.coords.longitude;
+        
+        // 3. Immediately submit the form to your Flask route
+        document.getElementById('locationForm').submit();
+    }, (error) => {
+        alert("Please enable location services in your browser.");
+    });
+}
+</script>
+
+<script>
+    function get_restaurant(){
+        fetch('/get_restaurant')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById("cards");
+            container.innerHTML = "";
+
+            data.places.forEach(result => {
+                console.log(result);
+
+const card = document.createElement("div");  
+card.classList.add("card");
+
+// Image
+const img = document.createElement("img");
+img.src = result.photo;
+img.style.width = "100%";
+img.style.height = "auto";   // keeps aspect ratio
+card.appendChild(img);
+
+// Name
+const txt = document.createElement("p");
+txt.textContent = result.name['text'];  // bracket notation for dictionary
+txt.style.textAlign = "center";         // optional styling
+card.appendChild(txt);
+
+// Append card to container
+container.appendChild(card);
+            });
+        });
+    }
+</script>
+
 <div class="card-container">
     
       <div class="cards" id="cards">
-        <div class="card" style="background-color: #ff7eb3;">Card 1</div>
-        <div class="card" style="background-color: #0000ff;">Card 2</div>
-        <div class="card" style="background-color: #00ffff;">Card 3</div>
+        
       </div>
       <div class="arrow left" onclick="swipeLeft()" style="color: black;">X</div>
       <div class="arrow right" onclick="swipeRight()" style="color: black;">✓</div>

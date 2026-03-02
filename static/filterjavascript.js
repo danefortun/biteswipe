@@ -34,6 +34,22 @@ function saveFilters(filters) {
   .then(res => res.json())
   .then(data => console.log("Saved:", data))
   .catch(err => console.error("Error:", err));
+  const filters = getFilters();
+  console.log(filters);
+  saveFilters(filters);
+}
+
+function saveFilters(filters) {
+  fetch("/save_filters", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(filters)
+  })
+  .then(res => res.json())
+  .then(data => console.log("Saved:", data))
+  .catch(err => console.error("Error:", err));
 }
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -44,13 +60,44 @@ document.addEventListener("DOMContentLoaded", function () {
     input.addEventListener("change", updateFilters);
   });
 
+  const inputs = document.querySelectorAll('.dropup-content input');
+
+  inputs.forEach(input => {
+    input.addEventListener("change", updateFilters);
+  });
+
+  const slider = document.getElementById("myRange");
+  const distanceValue = document.getElementById("distanceValue");
   const slider = document.getElementById("myRange");
   const distanceValue = document.getElementById("distanceValue");
 
   if (slider && distanceValue) {
+  if (slider && distanceValue) {
     distanceValue.textContent = slider.value;
 
     slider.addEventListener("input", function () {
+      distanceValue.textContent = this.value;
+      updateFilters();
+    });
+  }
+
+  fetch("/get_filters")
+    .then(res => res.json())
+    .then(saved => {
+      if (!saved) return;
+
+      for (let key in saved) {
+        const element = document.getElementById(key);
+        if (element) {
+          if (element.type === "checkbox") {
+            element.checked = saved[key];
+          }
+          if (element.type === "range") {
+            element.value = saved[key];
+            distanceValue.textContent = saved[key];
+          }
+        }
+      }
       distanceValue.textContent = this.value;
       updateFilters();
     });

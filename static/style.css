@@ -127,6 +127,7 @@ header {
   color: #333;
   text-transform: uppercase;
   letter-spacing: 1px;
+  flex-direction: column;
 }
 
 /* ============ ABOUT US ============ */

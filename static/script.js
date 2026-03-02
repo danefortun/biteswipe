@@ -3,12 +3,12 @@ const cards = document.getElementById('cards');
 const totalCards = document.querySelectorAll('.card').length;
 
 function swipeLeft() {
-  currentIndex = (currentIndex + 1) % totalCards;
+  currentIndex = (currentIndex + 1) ;
   updateCardPosition();
 }
 
 function swipeRight() {
-  currentIndex = (currentIndex + 1) % totalCards;
+  currentIndex = (currentIndex + 1) ;
   updateCardPosition();
 }
 
