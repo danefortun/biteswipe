@@ -43,11 +43,26 @@ function getAndSend() {
             container.innerHTML = "";
 
             data.places.forEach(result => {
-                console.log(result)
-                const card = document.createElement("div");  // 1. create element
-                card.classList.add("card");                  // 2. add class
-                card.textContent = result.name['text'];               // 3. add content
-                container.appendChild(card); 
+                console.log(result);
+
+const card = document.createElement("div");  
+card.classList.add("card");
+
+// Image
+const img = document.createElement("img");
+img.src = result.photo;
+img.style.width = "100%";
+img.style.height = "auto";   // keeps aspect ratio
+card.appendChild(img);
+
+// Name
+const txt = document.createElement("p");
+txt.textContent = result.name['text'];  // bracket notation for dictionary
+txt.style.textAlign = "center";         // optional styling
+card.appendChild(txt);
+
+// Append card to container
+container.appendChild(card);
             });
         });
     }
@@ -57,9 +72,7 @@ function getAndSend() {
      
 
       <div class="cards" id="cards">
-        <div class="card" style="background-color: #ff7eb3;">Card 1</div>
-        <div class="card" style="background-color: #0000ff;">Card 2</div>
-        <div class="card" style="background-color: #00ffff;">Card 3</div>
+        
       </div>
       <div class="arrow left" onclick="swipeLeft()" style="color: black;">X</div>
       <div class="arrow right" onclick="swipeRight()" style="color: black;">✓</div>

@@ -185,7 +185,7 @@ def get_info():
         search_headers = {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": key,
-            "X-Goog-FieldMask": "places.id,places.displayName"
+            "X-Goog-FieldMask": "places.id,places.displayName,places.photos"
         }
         payload = {
             "textQuery": "restaurant", 
@@ -208,7 +208,9 @@ def get_info():
             {
                 
                 "name":r['displayName'],
-                "place":r['id']
+                "place":r['id'],
+                "photo":f"https://places.googleapis.com/v1/{r['photos'][0]['name']}/media?maxHeightPx=500&key={key}"
+                
                 
             } for r in results
         ]
