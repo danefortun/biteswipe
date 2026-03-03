@@ -97,6 +97,13 @@ def profile():
                     user.name = new_name
                     db.session.commit()
 
+            # ----------------- Update crop & zoom -----------------
+            elif action == "update_crop":
+                user.crop_x = request.form.get("crop_x")
+                user.crop_y = request.form.get("crop_y")
+                user.zoom_level = request.form.get("zoom_level")
+                db.session.commit()
+
         except Exception as e:
             import traceback
             print("Error in POST:", e)
