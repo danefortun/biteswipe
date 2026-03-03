@@ -29,6 +29,7 @@
     overflow: hidden;
     transform: scale(1);
     transform-origin: center;
+    justify-content: center;
 }
 
 .profile-pic {
@@ -60,10 +61,11 @@
 
 <!-- PROFILE HEADER -->
 <div class="profile-section"
-    style="display: inline-block;
+    style="display: inline-block; justify-content: center;
     border: 2px solid #ccc;
     padding: 20px;            
-    border-radius: 12px; margin-top: 10px">
+    border-radius: 12px; margin-top: 10px;
+    flex-direction: column;">
 
     <!-- Username Section -->
     <div class="profile-info">
@@ -94,7 +96,10 @@
             <div class="form-buttons" style="justify-content: center;">
                 <button type="submit">Update</button>
                 <button type="button" id="cancel-name-btn">Cancel</button>
+                
             </div>
+            <hr>
+
         </form>
 
     </div>
@@ -102,7 +107,11 @@
 
   <!-- Profile Picture -->
    
-    <div class="profile-pic-wrapper">
+    <div class="profile-pic-wrapper" style="
+    border: solid 3px #ccc;
+    display: inline-block; justify-content: center;         
+    border-radius: 12px;
+    flex-direction: column;">
         <img src="{{ url_for('static', filename='uploads/' + u.pfp_file_path) }}"
              alt="Profile Picture"
              class="profile-pic"
@@ -111,13 +120,20 @@
              transform: scale({{ u.zoom_level or 1 }});">
     </div>
 
-
     <!-- PROFILE PICTURE CROP -->
 
 {% if session.get('email') == u.email %}
 
-
 <div id="crop-section" style="display:none;">
+<!-- UPLOAD PROFILE PICTURE -->
+
+    <form method="POST" enctype="multipart/form-data" class="upload-form">
+    <input type="hidden" name="action" value="upload_pic">
+    <input type="file" name="image" required>
+    <button type="submit" style="margin-top: 15px;">Upload</button>
+</form>
+
+    <hr>
 
 <form method="POST" id="crop-form">
     <input type="hidden" name="action" value="update_crop">
@@ -167,14 +183,6 @@
 {% endif %}
 
 </div>
-
-
-<!-- UPLOAD PROFILE PICTURE -->
-<form method="POST" enctype="multipart/form-data" class="upload-form">
-    <input type="hidden" name="action" value="upload_pic">
-    <input type="file" name="image" required>
-    <button type="submit" style="margin-top: 15px;">Upload</button>
-</form>
 
 <br>
 
