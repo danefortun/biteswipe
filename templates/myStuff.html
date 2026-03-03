@@ -1,0 +1,68 @@
+{%extends "base.html"%}
+
+{%block content%}
+<style>
+
+</style>
+
+<!-- KEEP ALL TEXT, H1, P TAGS, IN THE DIV CLASS -->
+
+<div id="test" style="height: 100vh;"> <h1>My Stuff</h1> 
+  <hr>
+  <!-- <hr style="height: 10px; border-color: black;"> Was just for testing,
+  but it makes the HR line bigger and black-->
+
+  <!-- Height: xxx (%, vh, px) are to push the content down or up
+   VH = Vertical height
+   px= pixels
+   % = percentage of the page
+   -->
+
+<p style="max-width: 700px;"> Lorem ipsum dolor sit amet, consectetur adipiscing elit,
+  sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+  Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi
+   ut aliquip ex ea commodo consequat. Duis aute irure dolor in 
+   reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla 
+   pariatur. Excepteur sint occaecat cupidatat non proident, sunt in 
+   culpa qui officia deserunt mollit anim id est laborum. </p>
+
+<!-- Max-width is the amount of pixels the paragraph tags can be,
+ and therefore will create a new line -->
+
+   <p style="max-width: 700px;">
+    At animi obcaecati ad sapiente debitis et officiis ipsa qui 
+    veniam illum aut enim beatae vel accusantium rerum quo ipsam 
+    dolorum? Aut dolore veritatis vel mollitia incidunt quo quia 
+    voluptatem eum nostrum nisi.
+    </p>
+
+<p style="max-width: 700px;">
+Vel sequi dolor vel voluptatem magni et exercitationem dolore
+et eveniet nemo sed sint consequatur ut voluptas accusantium.
+Est doloremque omnis qui cupiditate doloribus aut reprehenderit
+tempora a praesentium veritatis ut necessitatibus soluta qui
+temporibus culpa. Aut repellat quidem sit libero dicta sed
+officia reiciendis et recusandae minima ex laudantium repellat
+ad debitis corporis.
+</p>
+
+<div>
+<h1 style="font-size: 20px;">
+  <span style="float:left">Example Left (20px)</span>
+</h1>
+  <h1 style="font-size: 23px;">
+    <span style="float:right">Example Right (23px) </span>
+  </h1>
+  <h1 style="font-size: 15px;">
+    Example Center (15px)
+  </h1>
+
+<hr style="margin-top: 3vh;"> 
+<!-- Lets the text have room to break, 
+ creating space between the hr and the text -->
+</div>
+</div>
+
+</body>
+
+{%endblock%}

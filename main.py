@@ -105,11 +105,11 @@ def profile():
     return render_template("public.html",u=user,interests=["this is a placeholder!"])
 
 
-@app.route("/credits")
+@app.route("/my-stuff")
 def credits():
     if "email" not in session:
         return render_template("login.html")
-    return render_template("about_us.html")
+    return render_template("myStuff.html")
 
 @app.route("/login",methods=["Post","Get"])
 def login():
