@@ -1,26 +1,18 @@
 function getFilters() {
   return {
-    celiac: document.getElementById("celiac").checked,
-    peanuts: document.getElementById("peanuts").checked,
-    milk: document.getElementById("milk").checked,
-    soy: document.getElementById("soy").checked,
-    shellFish: document.getElementById("shellFish").checked,
-    sesame: document.getElementById("sesame").checked,
-    treenuts: document.getElementById("treenuts").checked,
-    eggs: document.getElementById("Eggs").checked,
-
-    cheapPrice: document.getElementById("cheapPrice").checked,
-    mediumPrice: document.getElementById("mediumPrice").checked,
-    expensivePrice: document.getElementById("expensivePrice").checked,
-
-    distance: document.getElementById("myRange").value
+    celiac: document.getElementById("celiac")?.checked,
+    peanuts: document.getElementById("peanuts")?.checked,
+    milk: document.getElementById("milk")?.checked,
+    soy: document.getElementById("soy")?.checked,
+    shellFish: document.getElementById("shellFish")?.checked,
+    sesame: document.getElementById("sesame")?.checked,
+    treenuts: document.getElementById("treenuts")?.checked,
+    eggs: document.getElementById("Eggs")?.checked,
+    cheapPrice: document.getElementById("cheapPrice")?.checked,
+    mediumPrice: document.getElementById("mediumPrice")?.checked,
+    expensivePrice: document.getElementById("expensivePrice")?.checked,
+    distance: document.getElementById("myRange")?.value
   };
-}
-
-function updateFilters() {
-  const filters = getFilters();
-  console.log(filters);
-  saveFilters(filters);
 }
 
 function saveFilters(filters) {
@@ -36,10 +28,15 @@ function saveFilters(filters) {
   .catch(err => console.error("Error:", err));
 }
 
+function updateFilters() {
+  const filters = getFilters();
+  console.log(filters);
+  saveFilters(filters);
+}
+
 document.addEventListener("DOMContentLoaded", function () {
 
   const inputs = document.querySelectorAll('.dropup-content input');
-
   inputs.forEach(input => {
     input.addEventListener("change", updateFilters);
   });
@@ -74,5 +71,4 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       }
     });
-
 });

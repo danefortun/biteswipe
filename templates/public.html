@@ -29,6 +29,7 @@
     overflow: hidden;
     transform: scale(1);
     transform-origin: center;
+    justify-content: center;
 }
 
 .profile-pic {
@@ -49,32 +50,37 @@
     border-radius: 14px;
     text-shadow: 1px 0px 0px rgba(0,0,0,0.2)">
 
-    <h1> Profile </h1>
-  <!-- Username Display -->
-   
+    <div>
+
+    <h1 style="margin-bottom:10px;">
+         Profile </h1>
+        <button type="button" id="edit-name-btn" class="edit-btn" style="margin-bottom: -10px">
+            Edit </button>
+
+            </div>
 
 <!-- PROFILE HEADER -->
 <div class="profile-section"
-    style="display: inline-block;
+    style="display: inline-block; justify-content: center;
     border: 2px solid #ccc;
     padding: 20px;            
-    border-radius: 12px;">
+    border-radius: 12px; margin-top: 10px;
+    flex-direction: column;">
 
     <!-- Username Section -->
     <div class="profile-info">
 
         <!-- Display Mode -->
+
         <div class="name-display"
         style="display: flex;
         justify-content: space-between;">
             <strong id="username-display" style="font-size: 20px;">{{ u.name or 'Your Name' }}
             </strong>
-            <button type="button" id="edit-name-btn" class="edit-btn">
-                Edit
-            </button>
         </div>
 
         <!-- Edit Mode -->
+
         <form id="username-form" method="POST" class="name-form">
             <input type="hidden" name="action" value="update_name">
 
@@ -87,15 +93,25 @@
                    class="name-input"
                    style="max-width: 200px;">
 
-            <div class="form-buttons">
+            <div class="form-buttons" style="justify-content: center;">
                 <button type="submit">Update</button>
                 <button type="button" id="cancel-name-btn">Cancel</button>
+                
             </div>
+            <hr>
+
         </form>
 
     </div>
+
+
   <!-- Profile Picture -->
-    <div class="profile-pic-wrapper">
+   
+    <div class="profile-pic-wrapper" style="
+    border: solid 3px #ccc;
+    display: inline-block; justify-content: center;         
+    border-radius: 12px;
+    flex-direction: column;">
         <img src="{{ url_for('static', filename='uploads/' + u.pfp_file_path) }}"
              alt="Profile Picture"
              class="profile-pic"
@@ -103,23 +119,51 @@
              object-position: {{ u.crop_x or 50 }}% {{ u.crop_y or 50 }}%;
              transform: scale({{ u.zoom_level or 1 }});">
     </div>
-<!-- PROFILE PICTURE CROP -->
+
+    <!-- PROFILE PICTURE CROP -->
 
 {% if session.get('email') == u.email %}
+
+<div id="crop-section" style="display:none;">
+<!-- UPLOAD PROFILE PICTURE -->
+
+    <form method="POST" enctype="multipart/form-data" class="upload-form">
+    <input type="hidden" name="action" value="upload_pic">
+    <input type="file" name="image" required>
+    <button type="submit" style="margin-top: 15px;">Upload</button>
+</form>
+
+    <hr>
+
+<form method="POST" id="crop-form">
+    <input type="hidden" name="action" value="update_crop">
+
+    <input type="hidden" name="crop_x" id="hiddenX">
+    <input type="hidden" name="crop_y" id="hiddenY">
+    <input type="hidden" name="zoom_level" id="hiddenZoom">
+
+    <button type="submit" style="margin-top:10px;">
+        Save Crop</button>
+</form>
+
     <div class="crop-controls">
-        <!-- PROFILE PICTURE SLIDER HORIZONTAL -->
+
+  <!-- PROFILE PICTURE SLIDER HORIZONTAL (X) -->
 
     <label style="display: flex; justify-content: flex-start;">Horizontal</label>
     <input type="range"
-    min="0" max="100" value="50" id="xPos"
+           value="{{ u.crop_x or 50 }}"
+           id="xPos"
     style="display: flex; justify-content: flex-start;">
 
     <br>
 
-    <!-- PROFILE PICTURE SLIDER VERTICAL -->
+    <!-- PROFILE PICTURE SLIDER VERTICAL (Y) -->
 
     <label style="display: flex; justify-content: flex-start;">Vertical</label>
-    <input type="range" min="0" max="100" value="50" id="yPos"
+    <input type="range"
+           value="{{ u.crop_y or 50 }}"
+           id="yPos"
     style="display: flex; justify-content: flex-start;">
 
     <label style="display: flex; justify-content: flex-start;">Zoom</label>
@@ -132,18 +176,13 @@
        name="zoom_level"
        style="display: flex; justify-content: flex-start;">
 
+
+
+</div>
 </div>
 {% endif %}
 
 </div>
-
-
-<!-- Upload Picture -->
-<form method="POST" enctype="multipart/form-data" class="upload-form">
-    <input type="hidden" name="action" value="upload_pic">
-    <input type="file" name="image" required>
-    <button type="submit" style="margin-top: 15px;">Upload</button>
-</form>
 
 <br>
 
@@ -203,23 +242,43 @@
     </div>
 
     <!-- CHANGE NAME W/ JAVASCRIPT-->
-    <script>
-    const editBtn = document.getElementById('edit-name-btn');
-    const cancelBtn = document.getElementById('cancel-name-btn');
-    const displayName = document.getElementById('username-display');
-    const form = document.getElementById('username-form');
+<script>
+const editBtn = document.getElementById('edit-name-btn');
+const cancelBtn = document.getElementById('cancel-name-btn');
+const displayName = document.getElementById('username-display');
+const form = document.getElementById('username-form');
 
-    editBtn.addEventListener('click', () => {
-        displayName.style.display = 'none';
-        editBtn.style.display = 'none';
-        form.style.display = 'block';
-    });
+const cropSection = document.getElementById('crop-section');
+const cancelCropBtn = document.getElementById('cancel-crop-btn');
 
-    cancelBtn.addEventListener('click', () => {
-        form.style.display = 'none';
-        displayName.style.display = 'inline';
-        editBtn.style.display = 'inline';
+editBtn.addEventListener('click', () => {
+    // Username edit
+    displayName.style.display = 'none';
+    editBtn.style.display = 'none';
+    form.style.display = 'block';
+
+    // Show crop sliders
+    if (cropSection) {
+        cropSection.style.display = 'block';
+    }
+});
+
+cancelBtn.addEventListener('click', () => {
+    form.style.display = 'none';
+    displayName.style.display = 'inline';
+    editBtn.style.display = 'inline';
+
+    // Hide crop sliders
+    if (cropSection) {
+        cropSection.style.display = 'none';
+    }
+});
+
+if (cancelCropBtn) {
+    cancelCropBtn.addEventListener('click', () => {
+        cropSection.style.display = 'none';
     });
+}
 </script>
 
 <!-- CHANGE BIO W/ JAVASCRIPT -->
@@ -251,11 +310,19 @@ const xSlider = document.getElementById("xPos");
 const ySlider = document.getElementById("yPos");
 const zoomSlider = document.getElementById("zoomSlider");
 
+const hiddenX = document.getElementById("hiddenX");
+const hiddenY = document.getElementById("hiddenY");
+const hiddenZoom = document.getElementById("hiddenZoom");
+
 if (img && xSlider && ySlider && zoomSlider) {
 
     function updateImage() {
         img.style.objectPosition = `${xSlider.value}% ${ySlider.value}%`;
         img.style.transform = `scale(${zoomSlider.value})`;
+
+        hiddenX.value = xSlider.value;
+        hiddenY.value = ySlider.value;
+        hiddenZoom.value = zoomSlider.value;
     }
 
     xSlider.addEventListener("input", updateImage);
@@ -264,6 +331,8 @@ if (img && xSlider && ySlider && zoomSlider) {
 
     updateImage();
 }
+
+
 </script>
 
 {%endblock%}

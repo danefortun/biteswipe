@@ -1,4 +1,4 @@
-from flask import Flask, redirect, url_for, render_template, request,session,flash
+from flask import Flask, redirect, url_for, render_template, request,session,flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from blog_db import *
 from users_db import *
@@ -24,8 +24,8 @@ os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
 
 
-@app.route("/index",methods = ["POST","GET"])
-@app.route("/", methods = ["POST", "GET"])
+@app.route("/index", methods=["POST", "GET"])
+@app.route("/", methods=["POST", "GET"])
 def home():
     if 'email' in session:
         user = Users.query.filter_by(email=session['email']).first()
@@ -33,32 +33,33 @@ def home():
     # 1. Capture the data from the HTML 'name' attributes
     raw_lat = request.form.get('latitude')
     raw_lng = request.form.get('longitude')
+    if "email" not in session:
+        return redirect(url_for("login"))
 
-    if raw_lat and raw_lng:
-        # 2. Convert to float and save to the database
-        
-        latitude=float(raw_lat) 
-        longitude=float(raw_lng)
-        
-        try:
-            user.latitude = latitude
-            user.longitude = longitude
-            db.session.commit()
-            flash("saved coordinates succesfuly")
-            print("saved coordinates succesfuly")
-        except Exception as e:
-            flash("Error saving to dataBase")
-            print("Error saving to dataBase2")
-            print(e)
+    user = Users.query.filter_by(email=session["email"]).first()
 
-        
-        flash("Location saved successfully!")
-        return redirect('/')
-    
-    else:
-        flash("Failed to get coordinates.")
-    
-    return render_template("cards.html")
+    # Handle location POST
+    if request.method == "POST":
+        raw_lat = request.form.get("latitude")
+        raw_lng = request.form.get("longitude")
+
+        if raw_lat and raw_lng:
+            try:
+                user.latitude = float(raw_lat)
+                user.longitude = float(raw_lng)
+                db.session.commit()
+                flash("Location saved successfully!")
+            except Exception as e:
+                flash("Error saving to database")
+                print(e)
+
+            return redirect(url_for("home"))
+
+    filters = session.get("filters", {})
+
+    print("Current filters:", filters)
+
+    return render_template("cards.html", filters=filters)
 
 @app.route("/profile", methods=["GET", "POST"])
 def profile():
@@ -95,6 +96,13 @@ def profile():
                 if new_name is not None:
                     user.name = new_name
                     db.session.commit()
+
+            # ----------------- Update crop & zoom -----------------
+            elif action == "update_crop":
+                user.crop_x = request.form.get("crop_x")
+                user.crop_y = request.form.get("crop_y")
+                user.zoom_level = request.form.get("zoom_level")
+                db.session.commit()
 
         except Exception as e:
             import traceback
@@ -216,6 +224,26 @@ def get_info():
         ]
     }
 
+        return redirect(url_for("login"))
+
+@app.route("/save_filters", methods=["POST"])
+def save_filters():
+    if "email" not in session:
+        return jsonify({"error": "Not logged in"}), 401
+
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "No data received"}), 400
+
+    session["filters"] = data
+    session.modified = True
+
+    return jsonify({"status": "success"})
+
+@app.route("/get_filters")
+def get_filters():
+    return jsonify(session.get("filters", {}))
 
 if __name__ == "__main__":
     with app.app_context():
