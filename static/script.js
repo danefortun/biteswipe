@@ -79,5 +79,6 @@ function getAndSend() {
 }
 
 function saveFavorites(){
+    //This function sends a json of the saved restaurants to the database
     fetch("/get_favorites",{method: "POST",headers: {"content-Type":"application/json"},body:JSON.stringify(saved)})
 }
