@@ -224,7 +224,7 @@ def get_info():
         ]
     }
 
-        return redirect(url_for("login"))
+    return redirect(url_for("login"))
 
 @app.route("/save_filters", methods=["POST"])
 def save_filters():

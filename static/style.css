@@ -162,7 +162,7 @@ header {
 .arrow.right {
   right: 0px;
   top: 375px;
-  position: relative;
+  position: absolute;
   background-color: #39FF14;
 }
 
