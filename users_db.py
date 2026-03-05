@@ -18,6 +18,7 @@ class Users(db.Model):
     pfp_file_path = db.Column(db.String(255))
     latitude = db.Column(db.Float())
     longitude = db.Column(db.Float())
+    saved = db.Column(db.String())
     def __init__(self,name,password,email,bio='this is a placeholder!',pfp_file_path='transparentnewdefaultpicture.png'):
         self.bio = bio
         self.name = name
@@ -27,6 +28,8 @@ class Users(db.Model):
     def __repr__(self):
         return f"<User id={self.id}, name={self.name}, email={self.email}, location={self.latitude},{self.latitude}"
 
+    def get_saved_restaurants(self):
+        return  f"<User id={self.id}, saved={self.saved}"
 
 if __name__ == "__main__":
     from db import db
@@ -40,3 +43,5 @@ if __name__ == "__main__":
         print("\n--- DATABASE CONTENTS ---")
         for user in users:
             print(user)
+        for user in users:
+            print(user.get_saved_restaurants())

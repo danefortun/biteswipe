@@ -1,5 +1,5 @@
 let currentIndex = 0;
-let saved = []
+let saved = ''
 let restuarants = []
 const cards = document.getElementById('cards');
 const totalCards = document.querySelectorAll('.card').length;
@@ -11,12 +11,13 @@ function swipeLeft() {
 }
 
 function swipeRight() {
-  saved.push(restuarants[currentIndex])
+  saved += restuarants[currentIndex].name['text']
+  saved +=','
   console.log("saved!" + restuarants[currentIndex])
   console.log(saved)
   currentIndex = (currentIndex + 1) ;
   updateCardPosition();
-  
+  saveFavorites()
   
 }
 
@@ -75,4 +76,8 @@ function getAndSend() {
         alert("Please enable location services in your browser.");
     });
     console.log("found location")
+}
+
+function saveFavorites(){
+    fetch("/get_favorites",{method: "POST",headers: {"content-Type":"application/json"},body:JSON.stringify(saved)})
 }

@@ -210,7 +210,7 @@ def get_info():
         response = requests.post(url, json=payload, headers=search_headers)
         data = response.json()
         results = data.get('places', [])
-        print(results)
+        #print(results)
         return {
         "places": [
             {
@@ -244,6 +244,21 @@ def save_filters():
 @app.route("/get_filters")
 def get_filters():
     return jsonify(session.get("filters", {}))
+
+@app.route("/get_favorites",methods=['POST'])
+def get_favorites():
+    try:
+        if 'email' in session:
+            user = Users.query.filter_by(email=session['email']).first()
+        favorites = request.json
+        print(favorites)
+        user.saved = favorites
+        db.session.commit()
+        return jsonify({"status": "received"})
+    except:
+        return redirect(url_for(logout))
+
+
 
 if __name__ == "__main__":
     with app.app_context():
