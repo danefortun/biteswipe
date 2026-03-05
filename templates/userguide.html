@@ -1,0 +1,92 @@
+{%extends "base.html"%}
+
+{%block content%}
+
+<style>
+
+</style>
+
+<!--
+HTML code below uses modified code from myStuff.html file
+  Title: myStuff.html
+  Author: Dane Fortun
+  Date: March 3rd 2026
+  Code version: N/a
+  Availability: https://gitlab.cci.drexel.edu/cid/2526/fw1023/b5/lifeswipe/-/blob/main/templates/myStuff.html?ref_type=heads
+-->
+<!-- KEEP ALL TEXT, H1, P TAGS, IN THE DIV CLASS -->
+
+<div id="test" style="height: 150vh;"> <h1>Getting Started with BiteSwipe</h1> 
+  <hr>
+  <!-- <hr style="height: 10px; border-color: black;"> Was just for testing,
+  but it makes the HR line bigger and black-->
+
+  <!-- Height: xxx (%, vh, px) are to push the content down or up
+   VH = Vertical height
+   px= pixels
+   % = percentage of the page
+   -->
+
+<p style="max-width: 700px;">Thank you for joining us! Here, you have a place to:
+<ul style="
+    text-align: center;
+    padding-left: 0px;
+    list-style-position: inside;">
+  <li>Discover new interests</li>
+  <li>Make new connections</li>
+  <li>Express yourself and what you love</li>
+</ul>
+</p>
+<h3 style="text-align: center"><i>So what can I do?</i></h3>
+<!-- Max-width is the amount of pixels the paragraph tags can be,
+ and therefore will create a new line -->
+
+<p style="max-width: 700px;">
+   <h2>Check out recommended interests on the Cards page</h2>
+  <ol style="
+    text-align: left;
+    list-style-position: inside;">
+    <li>Click on Cards in the bottom footer</li>
+    <li>Hover over "Filter Menu" to see a list of settings to personalize your feed</li>
+    <li>Swipe or click on the buttons for the recommendations you like or dislike</li>
+    <li>Check out My Stuff to see what you liked later</li>
+  </ol>
+</p>
+<p style="max-width: 700px;">
+   <h2>Personalize your profile</h2>
+  <ol style="
+    text-align: left;
+    list-style-position: inside;">
+    <li>Click on Profile in the bottom footer</li>
+    <li>Upload a profile picture
+      <ul>
+        <li><small>Click "Browse", select a picture, then click "Upload"</small></li>
+      </ul
+    </li>
+    <li>Write a bio under "About Me"</li>
+  </ol>
+</p>
+<p style="max-width: 700px;">
+   <h2>Make new friends and connect with them</h2>
+  <ol style="
+    text-align: left;
+    list-style-position: inside;">
+    <li>Click Chat in the bottom footer</li>
+    <li>Say hi to your peers and make friends!</li>
+  </ol>
+</p>
+<p style="max-width: 700px;">
+   <h2>Go out and experience everything you've swiped on!</h2>
+  <ol style="
+    text-align: left;
+    list-style-position: inside;">
+    <li>Click My Stuff in the bottom footer</li>
+    <li>See everything you've liked that caught your eye</li>
+    <li>Go out and make some new memories!</li>
+  </ol>
+</p>
+</div>
+
+</body>
+
+{%endblock%}
