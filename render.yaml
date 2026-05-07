@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: lifeswipe
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app
+    healthCheckPath: /health
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: RESTAURANT_PROVIDER
+        value: auto
+      - key: OSM_OVERPASS_URL
+        value: https://overpass-api.de/api/interpreter
+      - key: AUTO_CREATE_DB
+        value: "true"

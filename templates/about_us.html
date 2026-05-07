@@ -1,0 +1,63 @@
+{%extends "base.html"%}
+
+{%block content%}
+<section class="my-stuff-shell">
+  <div class="my-stuff-hero">
+    <div>
+      <p class="my-stuff-kicker">Your BiteSwipe board</p>
+      <h1>My Stuff</h1>
+      <p class="my-stuff-copy">
+        Restaurants you tap OK on from the card stack land here, ready for the next snack run, study break, or group vote.
+      </p>
+    </div>
+    <div class="my-stuff-count">
+      <strong>{{ saved_restaurants|length }}</strong>
+      <span>saved pick{% if saved_restaurants|length != 1 %}s{% endif %}</span>
+    </div>
+  </div>
+
+  {% if saved_restaurants %}
+    <div class="saved-grid">
+      {% for restaurant in saved_restaurants %}
+        <article class="saved-card">
+          <div class="saved-card-image">
+            <img
+              src="{{ restaurant.photo or url_for('static', filename='biteswipe.png') }}"
+              alt="{{ restaurant.name }}">
+          </div>
+          <div class="saved-card-body">
+            <div class="saved-card-heading">
+              <h2>{{ restaurant.name }}</h2>
+              <span>{{ restaurant.source or 'saved' }}</span>
+            </div>
+
+            {% if restaurant.address %}
+              <p class="saved-address">{{ restaurant.address }}</p>
+            {% endif %}
+
+            <div class="saved-meta">
+              {% if restaurant.distance_meters is not none %}
+                <span>{{ "%.1f"|format(restaurant.distance_meters / 1609.344) }} mi away</span>
+              {% else %}
+                <span>Distance pending</span>
+              {% endif %}
+              <span>Saved pick</span>
+            </div>
+
+            <form method="POST" action="{{ url_for('remove_restaurant', restaurant_id=restaurant.id) }}">
+              <button type="submit" class="saved-remove">Remove</button>
+            </form>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-stuff">
+      <img src="{{ url_for('static', filename='biteswipe.png') }}" alt="BiteSwipe">
+      <h2>No saved bites yet</h2>
+      <p>Head back to Cards and press OK on a restaurant. Your picks will show up here.</p>
+      <a href="{{ url_for('home') }}">Browse cards</a>
+    </div>
+  {% endif %}
+</section>
+{%endblock%}

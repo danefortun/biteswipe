@@ -1,34 +1,456 @@
-{%extends "base.html"%}
-{%block content%}
+{% extends "base.html" %}
+{% block content %}
 
-<style>
+<script>
+const RESTAURANT_STACK_STORAGE_VERSION = 2;
+const restaurantCardStorageUser = {{ session.get("id", "guest") | tojson }};
+window.restaurantCardStorageKey = `biteswipe.restaurantStack.${restaurantCardStorageUser}`;
+window.restaurantRatingStorageKey = `biteswipe.userRatings.${restaurantCardStorageUser}`;
+window.currentRestaurantCards = [];
 
- .main {
-  padding-top: 20px;
- }
-  
-</style>
+function setRestaurantStatus(message) {
+    const status = document.getElementById("restaurantStatus");
+    if (status) {
+        status.textContent = message || "";
+    }
+}
 
+function readRestaurantCardStack() {
+    try {
+        const rawStack = localStorage.getItem(window.restaurantCardStorageKey);
+        const stack = rawStack ? JSON.parse(rawStack) : null;
 
+        if (
+            !stack ||
+            stack.version !== RESTAURANT_STACK_STORAGE_VERSION ||
+            !Array.isArray(stack.places)
+        ) {
+            return null;
+        }
 
+        return stack;
+    } catch (error) {
+        return null;
+    }
+}
 
+function persistRestaurantCardStack() {
+    try {
+        localStorage.setItem(
+            window.restaurantCardStorageKey,
+            JSON.stringify({
+                version: RESTAURANT_STACK_STORAGE_VERSION,
+                places: window.currentRestaurantCards || [],
+                currentIndex: getPersistableCardIndex(),
+            })
+        );
+    } catch (error) {
+        setRestaurantStatus("Your browser could not save this card stack.");
+    }
+}
 
+function getPersistableCardIndex() {
+    const cards = window.currentRestaurantCards || [];
+    const maxIndex = Math.max(cards.length - 1, 0);
 
+    if (typeof currentIndex !== "number") {
+        return 0;
+    }
 
+    return Math.min(Math.max(currentIndex, 0), maxIndex);
+}
 
+function restoreRestaurantCardStack() {
+    const stack = readRestaurantCardStack();
 
+    if (!stack || stack.places.length === 0) {
+        setRestaurantStatus("Press Refresh cards to load nearby restaurants.");
+        return false;
+    }
 
+    renderRestaurantCards(stack.places, {
+        currentIndex: stack.currentIndex || 0,
+        persist: false,
+    });
+    setRestaurantStatus("");
+    return true;
+}
 
+function getBrowserPosition() {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+            reject(new Error("Location is not supported by this browser."));
+            return;
+        }
 
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            maximumAge: 300000,
+            timeout: 10000,
+        });
+    });
+}
 
+async function saveBrowserLocation(options = {}) {
+    try {
+        setRestaurantStatus("Getting your location...");
+        const position = await getBrowserPosition();
+        const response = await fetch("/save_location", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+            }),
+        });
+        const data = await response.json();
 
-<div class="card-container">
-    
-      <div class="cards" id="cards">
-        
-      </div>
-      <div class="arrow left" onclick="swipeLeft()" style="color: black;">X</div>
-      <div class="arrow right" onclick="swipeRight()" style="color: black;">✓</div>
-    </div>
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-{%endblock%}
+        if (!response.ok) {
+            setRestaurantStatus(data.message || "Unable to save location.");
+            return;
+        }
+
+        setRestaurantStatus(
+            options.reloadAfterSave
+                ? "Location saved. Loading nearby restaurants..."
+                : "Location saved. Press Refresh cards when you want a new stack."
+        );
+
+        if (options.reloadAfterSave) {
+            await get_restaurant({ autoLocate: false });
+        }
+    } catch (error) {
+        setRestaurantStatus("Please allow location access to load nearby restaurants.");
+    }
+}
+
+async function refreshRestaurantCards() {
+    await get_restaurant({ autoLocate: true });
+}
+
+async function get_restaurant(options = {}) {
+    try {
+        setRestaurantStatus("Loading nearby restaurants...");
+        const response = await fetch("/get_restaurant");
+        const data = await response.json();
+
+        if (!response.ok) {
+            if (response.status === 400 && options.autoLocate !== false) {
+                await saveBrowserLocation({ reloadAfterSave: true });
+                return;
+            }
+
+            setRestaurantStatus(data.error || "Unable to load restaurants right now.");
+            return;
+        }
+
+        renderRestaurantCards(data.places || []);
+        setRestaurantStatus(
+            data.message || (data.places && data.places.length ? "" : "No nearby restaurants found.")
+        );
+    } catch (error) {
+        setRestaurantStatus("Unable to load restaurants right now.");
+    }
+}
+
+function renderRestaurantCards(places, options = {}) {
+    const container = document.getElementById("cards");
+    const stage = document.querySelector(".card-stage");
+    const cards = Array.isArray(places) ? places : [];
+
+    if (!container || !stage) {
+        return;
+    }
+
+    window.currentRestaurantCards = cards;
+    container.innerHTML = "";
+    currentIndex = Math.min(
+        Math.max(Number(options.currentIndex) || 0, 0),
+        Math.max(cards.length - 1, 0)
+    );
+    stage.classList.toggle("has-cards", cards.length > 0);
+
+    cards.forEach((result, index) => {
+        const card = document.createElement("div");
+        card.classList.add("card");
+        card.dataset.cardIndex = String(index);
+        card.tabIndex = 0;
+        card.setAttribute("role", "button");
+        card.setAttribute("aria-label", `${result.name || "Restaurant"} details`);
+        card.addEventListener("click", () => toggleCardFlip(card));
+        card.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                toggleCardFlip(card);
+            }
+        });
+
+        const inner = document.createElement("div");
+        inner.classList.add("card-inner");
+
+        const front = document.createElement("div");
+        front.classList.add("card-face", "card-front");
+
+        const img = document.createElement("img");
+        img.classList.add("card-image");
+        img.src = result.photo;
+        img.alt = result.name || "Restaurant photo";
+        front.appendChild(img);
+
+        const title = document.createElement("p");
+        title.classList.add("card-title");
+        title.textContent = result.name || "Unknown restaurant";
+        front.appendChild(title);
+
+        if (result.address) {
+            const address = document.createElement("small");
+            address.classList.add("card-address");
+            address.textContent = result.address;
+            front.appendChild(address);
+        }
+
+        inner.appendChild(front);
+        inner.appendChild(buildCardBack(result));
+        card.appendChild(inner);
+
+        container.appendChild(card);
+    });
+
+    updateCardPosition();
+
+    if (options.persist !== false) {
+        persistRestaurantCardStack();
+    }
+}
+
+function toggleCardFlip(card) {
+    card.classList.toggle("is-flipped");
+}
+
+function buildCardBack(result) {
+    const back = document.createElement("div");
+    back.classList.add("card-face", "card-back");
+
+    back.appendChild(buildRatingPanel(result));
+
+    const title = document.createElement("h2");
+    title.textContent = result.name || "Restaurant details";
+    back.appendChild(title);
+
+    const detailList = document.createElement("dl");
+    detailList.classList.add("restaurant-details");
+    addDetail(detailList, "Food", formatCuisine(result.cuisine));
+    addDetail(detailList, "Cost", result.price_text || formatPriceLevel(result.price_level));
+    addDetail(detailList, "Address", result.address);
+    addDetail(detailList, "Distance", formatDistance(result.distance_meters));
+    back.appendChild(detailList);
+
+    const summary = document.createElement("p");
+    summary.classList.add("restaurant-summary");
+    summary.textContent = buildRestaurantSummary(result);
+    back.appendChild(summary);
+
+    const website = document.createElement(result.website ? "a" : "span");
+    website.classList.add("restaurant-website-link");
+    website.textContent = result.website ? "Restaurant website" : "Website unavailable";
+
+    if (result.website) {
+        website.href = result.website;
+        website.target = "_blank";
+        website.rel = "noopener noreferrer";
+        website.addEventListener("click", (event) => event.stopPropagation());
+    }
+
+    back.appendChild(website);
+    return back;
+}
+
+function buildRatingPanel(result) {
+    const panel = document.createElement("div");
+    panel.classList.add("rating-panel");
+
+    const online = document.createElement("div");
+    online.classList.add("online-rating");
+    online.innerHTML = `<span aria-hidden="true">★</span> ${formatOnlineRating(result)}`;
+    panel.appendChild(online);
+
+    const userRating = document.createElement("div");
+    userRating.classList.add("user-rating");
+    userRating.setAttribute("aria-label", "Your rating");
+
+    const currentRating = getUserRating(result);
+    for (let rating = 1; rating <= 5; rating += 1) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.classList.add("star-button");
+        button.classList.toggle("is-selected", rating <= currentRating);
+        button.textContent = "★";
+        button.setAttribute("aria-label", `Rate ${rating} stars`);
+        button.addEventListener("click", (event) => {
+            event.stopPropagation();
+            saveUserRating(result, rating);
+            updateRatingButtons(userRating, rating);
+        });
+        userRating.appendChild(button);
+    }
+
+    panel.appendChild(userRating);
+    return panel;
+}
+
+function updateRatingButtons(container, rating) {
+    container.querySelectorAll(".star-button").forEach((button, index) => {
+        button.classList.toggle("is-selected", index < rating);
+    });
+}
+
+function getUserRating(result) {
+    const ratings = readUserRatings();
+    return Number(ratings[getRestaurantRatingKey(result)] || 0);
+}
+
+function saveUserRating(result, rating) {
+    const ratings = readUserRatings();
+    ratings[getRestaurantRatingKey(result)] = rating;
+    localStorage.setItem(window.restaurantRatingStorageKey, JSON.stringify(ratings));
+}
+
+function readUserRatings() {
+    try {
+        return JSON.parse(localStorage.getItem(window.restaurantRatingStorageKey) || "{}");
+    } catch (error) {
+        return {};
+    }
+}
+
+function getRestaurantRatingKey(result) {
+    return result.place || result.name || "unknown";
+}
+
+function addDetail(list, label, value) {
+    if (!value) {
+        return;
+    }
+
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const description = document.createElement("dd");
+    description.textContent = value;
+    list.appendChild(term);
+    list.appendChild(description);
+}
+
+function formatCuisine(value) {
+    if (!value) {
+        return null;
+    }
+
+    return String(value)
+        .replaceAll("_", " ")
+        .split(";")
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join(", ");
+}
+
+function formatPriceLevel(value) {
+    const level = Number(value);
+
+    if (!Number.isFinite(level)) {
+        return "Price not listed";
+    }
+
+    if (level <= 0) {
+        return "Free";
+    }
+
+    return "$".repeat(Math.min(level, 4));
+}
+
+function formatDistance(value) {
+    const meters = Number(value);
+
+    if (!Number.isFinite(meters)) {
+        return null;
+    }
+
+    return `${(meters / 1609.344).toFixed(1)} mi away`;
+}
+
+function formatOnlineRating(result) {
+    const rating = Number(result.rating);
+    const reviewCount = Number(result.review_count);
+
+    if (!Number.isFinite(rating)) {
+        return "Online rating unavailable";
+    }
+
+    if (Number.isFinite(reviewCount) && reviewCount > 0) {
+        return `${rating.toFixed(1)} from ${reviewCount} reviews`;
+    }
+
+    return rating.toFixed(1);
+}
+
+function buildRestaurantSummary(result) {
+    const parts = [];
+    const cuisine = formatCuisine(result.cuisine);
+
+    if (cuisine) {
+        parts.push(`Serves ${cuisine}.`);
+    }
+
+    if (result.price_text || Number.isFinite(Number(result.price_level))) {
+        parts.push(`Typical cost: ${result.price_text || formatPriceLevel(result.price_level)}.`);
+    }
+
+    if (result.rating) {
+        parts.push(`Online rating: ${formatOnlineRating(result)}.`);
+    }
+
+    return parts.join(" ") || "More restaurant details will appear here when the provider has them.";
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    restoreRestaurantCardStack();
+});
+</script>
+
+<div class="card-stage">
+  <div class="card-container">
+    <div class="cards" id="cards"></div>
+  </div>
+  <div class="card-actions">
+    <button
+      type="button"
+      class="card-action-button card-action-location"
+      onclick="saveBrowserLocation()">
+      Use my location
+    </button>
+    <button
+      type="button"
+      class="arrow left swipe-action"
+      onclick="swipeLeft()"
+      aria-label="Skip restaurant">
+      X
+    </button>
+    <button
+      type="button"
+      class="arrow right swipe-action"
+      onclick="swipeRight()"
+      aria-label="Choose restaurant">
+      OK
+    </button>
+    <button
+      type="button"
+      class="card-action-button card-action-refresh"
+      onclick="refreshRestaurantCards()">
+      Refresh cards
+    </button>
+  </div>
+  <p id="restaurantStatus"></p>
+</div>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+{% endblock %}

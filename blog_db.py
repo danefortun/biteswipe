@@ -1,42 +1,31 @@
-'''
-Docstring for blog_dp
-This program creates the class for the posting dataBase
-It will hold tables of a string attached to a users name
-'''
-from flask_sqlalchemy import SQLAlchemy
-from flask import Flask
-from db import db
-from datetime import datetime
-from users_db import Users
-from db import db
-from config import Config
+from __future__ import annotations
 
-app = Flask(__name__)
-app.config.from_object(Config)
-db.init_app(app)
+from datetime import datetime, timezone
+
+from db import db
+from users_db import Users
+
 
 class BlogPosts(db.Model):
     __bind_key__ = "posts"
-    id = db.Column(db.Integer, primary_key=True)
-    message = db.Column(db.Text)
-    user_id = db.Column(db.Integer)
-    time = db.Column(db.Text)
 
-    def __init__(self,message,user_id=0):
+    id = db.Column(db.Integer, primary_key=True)
+    message = db.Column(db.Text, nullable=False)
+    user_id = db.Column(db.Integer, index=True)
+    time = db.Column(db.String(40), nullable=False, index=True)
+
+    def __init__(self, message: str, user_id: int | None = None) -> None:
         self.message = message
         self.user_id = user_id
-        self.time = datetime.now()
+        self.time = datetime.now(timezone.utc).isoformat()
 
-    def __repr__(self):
-        return f"message_id = {self.id}, user_id = {self.user_id}, message content = {self.message}, time sent = {self.time}"
-    
-    def message_content(self):
+    def __repr__(self) -> str:
+        return (
+            f"message_id={self.id}, user_id={self.user_id}, "
+            f"message={self.message}, time={self.time}"
+        )
+
+    def message_content(self) -> str:
         user = Users.query.filter_by(id=self.user_id).first()
-        return f"{user.name}: {self.message}"
-if __name__ == "__main__":
-    
-    with app.app_context():
-        posts = BlogPosts.query.all()
-        print("\n--- DATABASE CONTENTS ---")
-        for post in posts:
-            print(post.message_content())
+        user_name = user.name if user else "Unknown"
+        return f"{user_name}: {self.message}"
