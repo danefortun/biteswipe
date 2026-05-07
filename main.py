@@ -262,6 +262,7 @@ def register_routes(app: Flask) -> None:
         return render_template(
             "public.html",
             u=user,
+            saved_restaurant_count=len(user.saved_restaurants),
             allergen_interests=user.get_interest_list("allergen_interests_json"),
             food_preferences=user.get_interest_list("food_preferences_json"),
             hobby_interests=user.get_interest_list("hobby_interests_json"),

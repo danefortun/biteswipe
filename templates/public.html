@@ -1,343 +1,244 @@
-{% extends "base.html"%}
+{% extends "base.html" %}
 
-{%block content%}
-<style>
-  .main {
-    padding-top: 40px;
-  }
+{% block content %}
+<section class="profile-shell">
+  <header class="profile-hero">
+    <div class="profile-avatar-panel">
+      <div class="profile-avatar-frame">
+        <img
+          src="{{ url_for('static', filename='uploads/' + (u.pfp_file_path or 'transparentnewdefaultpicture.png')) }}"
+          alt="{{ u.name or 'Profile' }} picture"
+          class="profile-pic">
+      </div>
 
-.name-form {
-    display: none;
-    margin-top: 10px;
-}
+      <form method="POST" enctype="multipart/form-data" class="upload-form">
+        <input type="hidden" name="action" value="upload_pic">
+        <label class="file-upload-label" for="profile-image">Update photo</label>
+        <input
+          id="profile-image"
+          type="file"
+          name="image"
+          accept=".gif,.jpeg,.jpg,.png,.webp,image/*"
+          required>
+        <button type="submit">Upload</button>
+      </form>
+    </div>
 
-.name-input {
-    width: fit-content;
-    font-size: 20px;
-    box-sizing: border-box;
-}
+    <div class="profile-identity">
+      <p class="profile-kicker">BiteSwipe profile</p>
 
-.form-buttons {
-    margin-top: 8px;
-    display: flex;
-    gap: 10px;
-}
+      <div class="name-display">
+        <h1 id="username-display">{{ u.name or 'Your Name' }}</h1>
+        <button type="button" id="edit-name-btn" class="profile-small-button">Edit</button>
+      </div>
 
-.profile-pic-wrapper {
-    width: 250px;
-    height: 250px;
-    overflow: hidden;
-    transform: scale(1);
-    transform-origin: center;
-}
+      <form id="username-form" method="POST" class="profile-inline-form" hidden>
+        <input type="hidden" name="action" value="update_name">
+        <input
+          type="text"
+          name="name"
+          value="{{ u.name or '' }}"
+          minlength="2"
+          maxlength="32"
+          required
+          aria-label="Profile name">
+        <button type="submit">Save</button>
+        <button type="button" id="cancel-name-btn">Cancel</button>
+      </form>
 
-.profile-pic {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center;
-}
+      <p class="profile-email">{{ u.email }}</p>
 
-</style>
-
-<div class="entirebody"
-    style="bottom: 10px;
-    max-width: 900px;
-    margin: 40px auto;
-    padding: 30px;             
-    border: 2px solid #ccc;  
-    border-radius: 14px;
-    text-shadow: 1px 0px 0px rgba(0,0,0,0.2)">
-
-    <h1> Profile </h1>
-  <!-- Username Display -->
-   
-
-<!-- PROFILE HEADER -->
-<div class="profile-section"
-    style="display: inline-block;
-    border: 2px solid #ccc;
-    padding: 20px;            
-    border-radius: 12px;">
-
-    <!-- Username Section -->
-    <div class="profile-info">
-
-        <!-- Display Mode -->
-        <div class="name-display"
-        style="display: flex;
-        justify-content: space-between;">
-            <strong id="username-display" style="font-size: 20px;">{{ u.name or 'Your Name' }}
-            </strong>
-            <button type="button" id="edit-name-btn" class="edit-btn">
-                Edit
-            </button>
+      <div class="profile-stats" aria-label="Profile stats">
+        <div>
+          <strong>{{ saved_restaurant_count }}</strong>
+          <span>saved pick{% if saved_restaurant_count != 1 %}s{% endif %}</span>
         </div>
-
-        <!-- Edit Mode -->
-        <form id="username-form" method="POST" class="name-form">
-            <input type="hidden" name="action" value="update_name">
-
-            <input type="text"
-                   name="name"
-                   value="{{ u.name or '' }}"
-                   minlength="4"
-                   maxlength="16"
-                   required
-                   class="name-input"
-                   style="max-width: 200px;">
-
-            <div class="form-buttons">
-                <button type="submit">Update</button>
-                <button type="button" id="cancel-name-btn">Cancel</button>
-            </div>
-        </form>
-
+        <div>
+          <strong>{{ food_preferences|length }}</strong>
+          <span>food preference{% if food_preferences|length != 1 %}s{% endif %}</span>
+        </div>
+        <div>
+          <strong>{{ hobby_interests|length }}</strong>
+          <span>profile interest{% if hobby_interests|length != 1 %}s{% endif %}</span>
+        </div>
+      </div>
     </div>
-  <!-- Profile Picture -->
-    <div class="profile-pic-wrapper">
-        <img src="{{ url_for('static', filename='uploads/' + (u.pfp_file_path or 'transparentnewdefaultpicture.png')) }}"
-             alt="Profile Picture"
-             class="profile-pic"
-             style="
-             object-position: {{ u.crop_x or 50 }}% {{ u.crop_y or 50 }}%;
-             transform: scale({{ u.zoom_level or 1 }});">
-    </div>
-<!-- PROFILE PICTURE CROP -->
+  </header>
 
-{% if session.get('email') == u.email %}
-    <div class="crop-controls">
-        <!-- PROFILE PICTURE SLIDER HORIZONTAL -->
+  <div class="profile-layout">
+    <section class="profile-panel about-panel" aria-labelledby="about-title">
+      <div class="section-heading-row">
+        <div>
+          <p class="profile-section-kicker">About</p>
+          <h2 id="about-title">About Me</h2>
+        </div>
+        <button type="button" id="edit-bio-btn" class="profile-small-button">Edit</button>
+      </div>
 
-    <label style="display: flex; justify-content: flex-start;">Horizontal</label>
-    <input type="range"
-    min="0" max="100" value="50" id="xPos"
-    style="display: flex; justify-content: flex-start;">
+      <p id="bio-display" class="bio-copy">{{ u.bio or 'Add a quick note about what you like to eat, study, or do around campus.' }}</p>
 
-    <br>
-
-    <!-- PROFILE PICTURE SLIDER VERTICAL -->
-
-    <label style="display: flex; justify-content: flex-start;">Vertical</label>
-    <input type="range" min="0" max="100" value="50" id="yPos"
-    style="display: flex; justify-content: flex-start;">
-
-    <label style="display: flex; justify-content: flex-start;">Zoom</label>
-    <input type="range"
-       min="1"
-       max="3"
-       step="0.1"
-       value="{{ u.zoom_level or 1 }}"
-       id="zoomSlider"
-       name="zoom_level"
-       style="display: flex; justify-content: flex-start;">
-
-</div>
-{% endif %}
-
-</div>
-
-
-<!-- Upload Picture -->
-<form method="POST" enctype="multipart/form-data" class="upload-form">
-    <input type="hidden" name="action" value="upload_pic">
-    <input type="file" name="image" accept=".gif,.jpeg,.jpg,.png,.webp,image/*" required>
-    <button type="submit" style="margin-top: 15px;">Upload</button>
-</form>
-
-<br>
-
-<!-- TO DO LIST FOR VERIFICATION -->
-    <hr>
-
-    <p style="text-align:center;">
-    <strong> To do list for Verification: </strong>
-    </p>
-        <ul style="text-align:start; margin-left:20%; padding-top: 5px;" class="ulred">
-            <li style="padding-bottom: 15px;">
-                Verify .edu email
-            </li>
-
-            <li style="padding-bottom: 15px;">
-                2FA with your phone number
-            </li>
-
-            <li style="padding-bottom: 15px;">
-                Create a username
-            </li>
-
-            <li>
-                xxx
-            </li>
-        </ul>
-    <hr>
-
-
-<!-- Bio Display -->
- <h3> About Me </h3>
-<div id="bio-container">
-    <p id="bio-display" style="max-width: 700px;">{{ u.bio or 'Your bio goes here...' }}</p>
-    <button type="button" id="edit-bio-btn">Edit</button>
-
-    <!-- Hidden input box initially -->
-    <form id="bio-form" method="POST" style="display:none; margin-top:5px;">
+      <form id="bio-form" method="POST" class="bio-form" hidden>
         <input type="hidden" name="action" value="update_bio">
-        <textarea name="bio" 
-                  minlength="0" maxlength="256" 
-                  required
-                  style="width:100%; min-height: 5vh; max-width: fit-content;">{{ u.bio or '' }}</textarea>
-        <br>
-        <input type="submit" value="Update Bio">
-        <button type="button" id="cancel-bio-btn">Cancel</button>
-    </form>
-</div>
-
-    <hr>
-
-    <section class="profile-interests">
-        <div class="profile-interests-header">
-            <h3>Interests</h3>
-            <form method="POST" class="food-preference-form">
-                <input type="hidden" name="action" value="add_food_preference">
-                <input
-                    type="text"
-                    name="food_preference"
-                    placeholder="Add food preference"
-                    maxlength="64"
-                    list="food-preference-options"
-                    aria-label="Add food preference">
-                <datalist id="food-preference-options">
-                    {% for preference in food_preference_presets %}
-                        <option value="{{ preference }}"></option>
-                    {% endfor %}
-                </datalist>
-                <button type="submit">Add</button>
-            </form>
+        <textarea
+          name="bio"
+          maxlength="256"
+          aria-label="Profile bio">{{ u.bio or '' }}</textarea>
+        <div class="form-buttons">
+          <button type="submit">Save bio</button>
+          <button type="button" id="cancel-bio-btn">Cancel</button>
         </div>
-
-        <div class="interest-groups">
-            <article class="interest-group">
-                <h4>Allergens</h4>
-                {% if allergen_interests %}
-                    <div class="interest-chip-list">
-                        {% for interest in allergen_interests %}
-                            <form method="POST" class="interest-chip">
-                                <input type="hidden" name="action" value="remove_interest">
-                                <input type="hidden" name="category" value="allergen">
-                                <input type="hidden" name="value" value="{{ interest }}">
-                                <span>{{ interest }}</span>
-                                <button type="submit" aria-label="Remove {{ interest }}">x</button>
-                            </form>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <p class="interest-empty">Select allergens in the footer filters.</p>
-                {% endif %}
-            </article>
-
-            <article class="interest-group">
-                <h4>Food Preferences</h4>
-                {% if food_preferences %}
-                    <div class="interest-chip-list">
-                        {% for interest in food_preferences %}
-                            <form method="POST" class="interest-chip">
-                                <input type="hidden" name="action" value="remove_interest">
-                                <input type="hidden" name="category" value="food">
-                                <input type="hidden" name="value" value="{{ interest }}">
-                                <span>{{ interest }}</span>
-                                <button type="submit" aria-label="Remove {{ interest }}">x</button>
-                            </form>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <p class="interest-empty">Add one above or choose food filters in the footer.</p>
-                {% endif %}
-            </article>
-
-            <article class="interest-group">
-                <h4>Other Interests</h4>
-                {% if hobby_interests %}
-                    <div class="interest-chip-list">
-                        {% for interest in hobby_interests %}
-                            <form method="POST" class="interest-chip">
-                                <input type="hidden" name="action" value="remove_interest">
-                                <input type="hidden" name="category" value="hobby">
-                                <input type="hidden" name="value" value="{{ interest }}">
-                                <span>{{ interest }}</span>
-                                <button type="submit" aria-label="Remove {{ interest }}">x</button>
-                            </form>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <p class="interest-empty">Pick hobbies from the Interests footer menu.</p>
-                {% endif %}
-            </article>
-        </div>
+      </form>
     </section>
+
+    <section class="profile-panel verification-panel" aria-labelledby="verification-title">
+      <p class="profile-section-kicker">Account</p>
+      <h2 id="verification-title">Verification</h2>
+      <div class="verification-list">
+        <div class="verification-item is-complete">
+          <span aria-hidden="true">1</span>
+          <div>
+            <strong>Profile created</strong>
+            <p>Your account is ready to use.</p>
+          </div>
+        </div>
+        <div class="verification-item">
+          <span aria-hidden="true">2</span>
+          <div>
+            <strong>Verify .edu email</strong>
+            <p>Confirm your student email when verification is available.</p>
+          </div>
+        </div>
+        <div class="verification-item">
+          <span aria-hidden="true">3</span>
+          <div>
+            <strong>Add phone security</strong>
+            <p>Optional two-factor setup for future account protection.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="profile-panel profile-interests" aria-labelledby="interests-title">
+    <div class="profile-interests-header">
+      <div>
+        <p class="profile-section-kicker">Taste & profile</p>
+        <h2 id="interests-title">Interests</h2>
+      </div>
+      <form method="POST" class="food-preference-form">
+        <input type="hidden" name="action" value="add_food_preference">
+        <input
+          type="text"
+          name="food_preference"
+          placeholder="Add food preference"
+          maxlength="64"
+          list="food-preference-options"
+          aria-label="Add food preference">
+        <datalist id="food-preference-options">
+          {% for preference in food_preference_presets %}
+            <option value="{{ preference }}"></option>
+          {% endfor %}
+        </datalist>
+        <button type="submit">Add</button>
+      </form>
     </div>
 
-    <!-- CHANGE NAME W/ JAVASCRIPT-->
-    <script>
-    const editBtn = document.getElementById('edit-name-btn');
-    const cancelBtn = document.getElementById('cancel-name-btn');
-    const displayName = document.getElementById('username-display');
-    const form = document.getElementById('username-form');
+    <div class="interest-groups">
+      <article class="interest-group">
+        <h3>Allergens</h3>
+        {% if allergen_interests %}
+          <div class="interest-chip-list">
+            {% for interest in allergen_interests %}
+              <form method="POST" class="interest-chip">
+                <input type="hidden" name="action" value="remove_interest">
+                <input type="hidden" name="category" value="allergen">
+                <input type="hidden" name="value" value="{{ interest }}">
+                <span>{{ interest }}</span>
+                <button type="submit" aria-label="Remove {{ interest }}">x</button>
+              </form>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="interest-empty">Choose allergens in the footer Filters menu.</p>
+        {% endif %}
+      </article>
 
-    editBtn.addEventListener('click', () => {
-        displayName.style.display = 'none';
-        editBtn.style.display = 'none';
-        form.style.display = 'block';
-    });
+      <article class="interest-group">
+        <h3>Food Preferences</h3>
+        {% if food_preferences %}
+          <div class="interest-chip-list">
+            {% for interest in food_preferences %}
+              <form method="POST" class="interest-chip">
+                <input type="hidden" name="action" value="remove_interest">
+                <input type="hidden" name="category" value="food">
+                <input type="hidden" name="value" value="{{ interest }}">
+                <span>{{ interest }}</span>
+                <button type="submit" aria-label="Remove {{ interest }}">x</button>
+              </form>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="interest-empty">Add one above or pick cuisines in the footer Filters menu.</p>
+        {% endif %}
+      </article>
 
-    cancelBtn.addEventListener('click', () => {
-        form.style.display = 'none';
-        displayName.style.display = 'inline';
-        editBtn.style.display = 'inline';
-    });
-</script>
-
-<!-- CHANGE BIO W/ JAVASCRIPT -->
+      <article class="interest-group">
+        <h3>Other Interests</h3>
+        {% if hobby_interests %}
+          <div class="interest-chip-list">
+            {% for interest in hobby_interests %}
+              <form method="POST" class="interest-chip">
+                <input type="hidden" name="action" value="remove_interest">
+                <input type="hidden" name="category" value="hobby">
+                <input type="hidden" name="value" value="{{ interest }}">
+                <span>{{ interest }}</span>
+                <button type="submit" aria-label="Remove {{ interest }}">x</button>
+              </form>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="interest-empty">Pick hobbies from the footer Interests menu.</p>
+        {% endif %}
+      </article>
+    </div>
+  </section>
+</section>
 
 <script>
-    const editBioBtn = document.getElementById('edit-bio-btn');
-    const cancelBioBtn = document.getElementById('cancel-bio-btn');
-    const bioDisplay = document.getElementById('bio-display');
-    const bioForm = document.getElementById('bio-form');
+const editNameButton = document.getElementById("edit-name-btn");
+const cancelNameButton = document.getElementById("cancel-name-btn");
+const displayName = document.getElementById("username-display");
+const nameForm = document.getElementById("username-form");
 
-    editBioBtn.addEventListener('click', () => {
-        bioDisplay.style.display = 'none';
-        editBioBtn.style.display = 'none';
-        bioForm.style.display = 'block';
-    });
+editNameButton.addEventListener("click", () => {
+  displayName.hidden = true;
+  editNameButton.hidden = true;
+  nameForm.hidden = false;
+  nameForm.querySelector("input[name='name']").focus();
+});
 
-    cancelBioBtn.addEventListener('click', () => {
-        bioForm.style.display = 'none';
-        bioDisplay.style.display = 'block';
-        editBioBtn.style.display = 'inline';
-    });
+cancelNameButton.addEventListener("click", () => {
+  nameForm.hidden = true;
+  displayName.hidden = false;
+  editNameButton.hidden = false;
+});
+
+const editBioButton = document.getElementById("edit-bio-btn");
+const cancelBioButton = document.getElementById("cancel-bio-btn");
+const bioDisplay = document.getElementById("bio-display");
+const bioForm = document.getElementById("bio-form");
+
+editBioButton.addEventListener("click", () => {
+  bioDisplay.hidden = true;
+  editBioButton.hidden = true;
+  bioForm.hidden = false;
+  bioForm.querySelector("textarea").focus();
+});
+
+cancelBioButton.addEventListener("click", () => {
+  bioForm.hidden = true;
+  bioDisplay.hidden = false;
+  editBioButton.hidden = false;
+});
 </script>
-
-<!-- X,Y AND ZOOM SLIDER JAVASCRIPT-->
-
-<script>
-const img = document.querySelector(".profile-pic");
-const xSlider = document.getElementById("xPos");
-const ySlider = document.getElementById("yPos");
-const zoomSlider = document.getElementById("zoomSlider");
-
-if (img && xSlider && ySlider && zoomSlider) {
-
-    function updateImage() {
-        img.style.objectPosition = `${xSlider.value}% ${ySlider.value}%`;
-        img.style.transform = `scale(${zoomSlider.value})`;
-    }
-
-    xSlider.addEventListener("input", updateImage);
-    ySlider.addEventListener("input", updateImage);
-    zoomSlider.addEventListener("input", updateImage);
-
-    updateImage();
-}
-</script>
-
-{%endblock%}
+{% endblock %}

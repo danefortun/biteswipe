@@ -615,12 +615,118 @@ span.restaurant-website-link {
   }
 }
 
-/* ============ PROFILE INTERESTS ============ */
-.profile-interests {
-  margin-top: 18px;
+/* ============ PROFILE PAGE ============ */
+.profile-shell {
+  width: min(1100px, 94vw);
+  margin: 18px auto 96px;
+  color: var(--body-color, #000000);
   text-align: left;
 }
 
+.profile-hero {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 28px;
+  align-items: stretch;
+  width: 100%;
+  padding: 26px 0 30px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.profile-avatar-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-avatar-frame {
+  width: 220px;
+  height: 220px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 42%, transparent);
+  border-radius: 50%;
+  background: linear-gradient(145deg, #e9fff9, #ffffff);
+  box-shadow: 0 18px 44px rgba(16, 185, 129, 0.16);
+}
+
+.profile-pic {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #e9fff9;
+}
+
+.upload-form {
+  width: min(260px, 100%);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.file-upload-label,
+.upload-form button,
+.profile-small-button,
+.profile-inline-form button,
+.bio-form button,
+.food-preference-form button,
+.interest-chip button {
+  border: 1px solid var(--accent-color);
+  border-radius: 8px;
+  background: var(--accent-soft-color);
+  color: var(--accent-color);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.file-upload-label {
+  min-height: 36px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.upload-form input[type="file"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  color: var(--surface-muted-color);
+  font-size: 12px;
+}
+
+.upload-form button,
+.profile-small-button,
+.profile-inline-form button,
+.bio-form button,
+.food-preference-form button {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.profile-identity {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.profile-kicker,
+.profile-section-kicker {
+  margin: 0 0 8px;
+  color: var(--accent-color);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.name-display,
+.section-heading-row,
 .profile-interests-header {
   display: flex;
   align-items: center;
@@ -629,48 +735,60 @@ span.restaurant-website-link {
   flex-wrap: wrap;
 }
 
-.profile-interests-header h3 {
+.name-display h1 {
   margin: 0;
+  font-size: clamp(42px, 6vw, 72px);
+  line-height: 0.95;
+  overflow-wrap: anywhere;
 }
 
+.profile-email {
+  margin: 10px 0 0;
+  color: var(--surface-muted-color);
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.profile-inline-form,
+.bio-form,
 .food-preference-form {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
+.profile-inline-form[hidden],
+.bio-form[hidden] {
+  display: none;
+}
+
+.profile-inline-form input,
+.bio-form textarea,
 .food-preference-form input {
-  min-height: 36px;
-  padding: 0 10px;
+  min-height: 38px;
+  padding: 0 12px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: var(--surface-color);
   color: var(--surface-text-color);
+  font: inherit;
 }
 
-.food-preference-form button,
-.interest-chip button {
-  border: 1px solid var(--accent-color);
-  border-radius: 8px;
-  background: var(--accent-soft-color);
-  color: var(--accent-color);
+.profile-inline-form input {
+  min-width: min(320px, 100%);
+  font-size: 22px;
   font-weight: 700;
-  cursor: pointer;
 }
 
-.food-preference-form button {
-  min-height: 36px;
-  padding: 0 12px;
-}
-
-.interest-groups {
+.profile-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 14px;
+  gap: 10px;
+  width: min(640px, 100%);
+  margin-top: 24px;
 }
 
-.interest-group {
-  min-height: 122px;
+.profile-stats div {
   padding: 14px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
@@ -678,7 +796,146 @@ span.restaurant-website-link {
   color: var(--surface-text-color);
 }
 
-.interest-group h4 {
+.profile-stats strong {
+  display: block;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.profile-stats span {
+  display: block;
+  margin-top: 5px;
+  color: var(--surface-muted-color);
+  font-size: 13px;
+}
+
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.profile-panel {
+  padding: 20px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+  color: var(--surface-text-color);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
+}
+
+.profile-panel h2 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.bio-copy {
+  max-width: 680px;
+  margin: 18px 0 0;
+  color: var(--surface-muted-color);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.bio-form {
+  margin-top: 16px;
+}
+
+.bio-form textarea {
+  width: 100%;
+  min-height: 130px;
+  padding: 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.form-buttons {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+}
+
+.verification-panel h2 {
+  margin-bottom: 16px;
+}
+
+.verification-list {
+  display: grid;
+  gap: 10px;
+}
+
+.verification-item {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-color) 86%, var(--accent-soft-color));
+}
+
+.verification-item > span {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--surface-muted-color);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.verification-item.is-complete > span {
+  border-color: var(--accent-color);
+  background: var(--accent-soft-color);
+  color: var(--accent-color);
+}
+
+.verification-item strong {
+  display: block;
+  line-height: 1.2;
+}
+
+.verification-item p {
+  margin: 4px 0 0;
+  color: var(--surface-muted-color);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.profile-interests {
+  margin-top: 18px;
+}
+
+.food-preference-form {
+  align-items: center;
+}
+
+.food-preference-form input {
+  min-width: min(280px, 100%);
+}
+
+.interest-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.interest-group {
+  min-height: 128px;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-color) 90%, var(--accent-soft-color));
+}
+
+.interest-group h3 {
   margin: 0 0 10px;
   color: var(--surface-muted-color);
   font-size: 13px;
@@ -699,7 +956,7 @@ span.restaurant-website-link {
   padding: 6px 7px 6px 10px;
   border: 1px solid var(--border-color);
   border-radius: 999px;
-  background: var(--accent-soft-color);
+  background: var(--surface-color);
   color: var(--surface-text-color);
 }
 
@@ -718,18 +975,24 @@ span.restaurant-website-link {
   line-height: 1.4;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 860px) {
+  .profile-hero,
+  .profile-layout,
   .interest-groups {
     grid-template-columns: 1fr;
   }
 
-  .food-preference-form {
-    width: 100%;
+  .profile-avatar-panel {
+    align-items: flex-start;
   }
 
+  .profile-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .food-preference-form,
   .food-preference-form input {
-    flex: 1;
-    min-width: 0;
+    width: 100%;
   }
 }
 
