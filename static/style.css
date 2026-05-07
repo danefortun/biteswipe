@@ -91,6 +91,10 @@ header {
   padding-top: 20px;
 }
 
+body.profile-page > header {
+  position: static;
+}
+
 .img_container {
   position: relative;
   top: -20px;
