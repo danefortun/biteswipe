@@ -1,226 +1,215 @@
 <!DOCTYPE html>
 <html data-theme="dark" lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Activity Dashboard</title>
-  <!-- Optional dark theme -->
-  
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BiteSwipe</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <script src="{{ url_for('static', filename='filterjavascript.js') }}" defer></script>
   <link href="https://fonts.googleapis.com/css2?family=Satoshi:wght@300;400;500;700&display=swap" rel="stylesheet">
-  
+  <script src="{{ url_for('static', filename='filterjavascript.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='themetoggle.js') }}" defer></script>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .flash-messages {
+      width: min(90vw, 720px);
+      margin: 16px auto;
+    }
+
+    .flash-message {
+      padding: 10px 14px;
+      border: 1px solid #93c5fd;
+      border-radius: 8px;
+      background: #eff6ff;
+      color: #1e3a8a;
+      font-family: "Satoshi", sans-serif;
+    }
+  </style>
 </head>
-<style>
-body {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
-
-.main {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-
-</style>
 <body>
-  <!-- Header -->
   <header>
     <div class="img_container">
-      
-      <div style="display:flex; justify-content: flex-start;">
-      <img src="{{ url_for('static', filename='drexelxfizz.png') }}"
-      width="auto" height="140" alt="Logo">
-            <p style="
-      font-family:'Satoshi', sans-serif;
-      display:inline-flex;
-      z-index: 1000;
-      margin-bottom: 4px;
-      font-size: 50px;">
-      BiteSwipe</p>
+      <div class="brand-row">
+        <img
+          class="brand-logo"
+          src="{{ url_for('static', filename='drexelxfizz.png') }}"
+          alt="Drexel Fizz logo">
+        <p class="brand-title">BiteSwipe</p>
       </div>
-      
-    <div class="hrbar">
-      <hr />
+      <div class="hrbar">
+        <hr>
+      </div>
     </div>
-
-      <!-- BiteSwipe Logo Text Image -->
-      <!-- <img src="{{ url_for('static', filename='biteswipeTEXT.png') }}"
-       width="auto" height="auto" alt="Logo"> -->
-
   </header>
-  <!-- Main Section -->
+
   <main class="main">
-  {% block content %}{% endblock %}
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flash-messages">
+          {% for message in messages %}
+            <div class="flash-message">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
   </main>
-  <div style= "position: fixed;
-  padding-top: 5px; padding-left: 5px; padding-right: 5px;
-  bottom: 7vh; left: 45%; z-index: 1000; 
-  border: 1vh solid #e6eefc;
-  border-left: 1px solid #999;
-  border-right: 1px solid #999;
-  border-top: 1px solid #999;
-  background-color: #e6eefc;
-  min-height: 10px;">
-  <button
-    type="button"
-    data-theme-toggle
-    aria-label="Change to light theme">
-    Change to light theme
-  </button>
-  </div>
-  <!-- Footer -->
-  <footer>
-  <!-- Theme Switch button code
-  Title: The Ultimate Theme Toggle™️
-  Author: David Waumsley
-  Date: April 30th, 2024 
-  Code version: N/a
-  Availability: https://codepen.io/dwaumsley/pen/GRLamdm
-  -->
-    <div class="navbar">
-      <div id="profile"><a href= "/profile">Profile</a></div>
-      <div id="Cards"><a href="/">Cards</a></div>
-      <div id="aboutus"> <a href="/my-stuff">My Stuff</a></div>
-      <div class="dropup"><a href=#>Filter Menu
-          <button class="dropbtn"
+
+  <footer class="site-footer">
+    <nav class="navbar" aria-label="Primary navigation">
+      <a class="nav-link" href="{{ url_for('profile') }}">Profile</a>
+      <a class="nav-link" href="{{ url_for('home') }}">Cards</a>
+      <a class="nav-link" href="{{ url_for('credits') }}">My Stuff</a>
+
+      <div class="dropup">
+        <button
+          type="button"
+          class="nav-link filter-trigger"
+          aria-controls="myDropup"
+          aria-expanded="false"
           onclick="myFunction()">
-          <i class="fa fa-caret-down"></i>
-        </button> 
-      </a>
-      
-      <div class="dropup-content" id="myDropup">
-        <p id="distance-label" style="padding-left:10px;"><span id="distanceValue">50</span> miles</p>
-          <div class="slidecontainer">
-            <p style="display: inline; text-align: left;"> 1 </p>
-  <input type="range" min="1" max="100" value="50" class="slider" id="myRange">
-  <p style="display: inline; text-align: right;"> 100 </p>
-</div>
-        </label>
-        
-<form id="locationForm" action="/" method="POST">
-    <input type="hidden" name="latitude" id="lat_input">
-    <input type="hidden" name="longitude" id="lng_input">
-    
-    <button type="button" onclick="getAndSend()">Save My Current Location</button>
-</form>
+          Filters
+        </button>
 
-<script>
-function getAndSend() {
-    // 1. Ask the browser for coordinates
-    navigator.geolocation.getCurrentPosition((position) => {
-        // 2. Put coordinates into the hidden inputs
-        document.getElementById('lat_input').value = position.coords.latitude;
-        document.getElementById('lng_input').value = position.coords.longitude;
-        
-        // 3. Immediately submit the form to your Flask route
-        document.getElementById('locationForm').submit();
-    }, (error) => {
-        alert("Please enable location services in your browser.");
-    });
-}
-</script>
+        <div class="dropup-content" id="myDropup">
+          <section class="filter-section" aria-labelledby="distance-filter-title">
+            <h2 id="distance-filter-title">Distance</h2>
+            <label class="filter-distance-label" for="myRange">
+              <span id="distanceValue">50</span> miles
+            </label>
+            <div class="slidecontainer">
+              <span>1</span>
+              <input type="range" min="1" max="100" value="50" class="slider" id="myRange">
+              <span>100</span>
+            </div>
+          </section>
 
-<form id="locationForm" action="/" method="POST">
-    <input type="hidden" name="latitude" id="lat_input">
-    <input type="hidden" name="longitude" id="lng_input">
-    
-    <button type="button" onclick="getAndSend()">Get Location</button>
-</form>
+          <section class="filter-section" aria-labelledby="allergen-filter-title">
+            <h2 id="allergen-filter-title">Allergens</h2>
+            <div class="filter-options">
+              <label class="filter-option" for="celiac">
+                <input type="checkbox" id="celiac">
+                Celiac
+              </label>
+              <label class="filter-option" for="peanuts">
+                <input type="checkbox" id="peanuts">
+                Peanuts
+              </label>
+              <label class="filter-option" for="milk">
+                <input type="checkbox" id="milk">
+                Milk
+              </label>
+              <label class="filter-option" for="soy">
+                <input type="checkbox" id="soy">
+                Soy
+              </label>
+              <label class="filter-option" for="shellFish">
+                <input type="checkbox" id="shellFish">
+                Shellfish
+              </label>
+              <label class="filter-option" for="sesame">
+                <input type="checkbox" id="sesame">
+                Sesame
+              </label>
+              <label class="filter-option" for="treenuts">
+                <input type="checkbox" id="treenuts">
+                Tree nuts
+              </label>
+              <label class="filter-option" for="eggs">
+                <input type="checkbox" id="eggs">
+                Eggs
+              </label>
+            </div>
+          </section>
 
-<button type="button" onclick ="get_restaurant()">Refresh Cards</button>
+          <section class="filter-section" aria-labelledby="price-filter-title">
+            <h2 id="price-filter-title">Price</h2>
+            <div class="filter-options">
+              <label class="filter-option" for="cheapPrice">
+                <input type="checkbox" id="cheapPrice">
+                $5 - $20
+              </label>
+              <label class="filter-option" for="mediumPrice">
+                <input type="checkbox" id="mediumPrice">
+                $25 - $40
+              </label>
+              <label class="filter-option" for="expensivePrice">
+                <input type="checkbox" id="expensivePrice">
+                $40+
+              </label>
+            </div>
+          </section>
 
-
-        <hr> <!-- Line to visually separate the filters -->
-
-        <p style="text-align: center;">Allergens</p>
-        <div style="max-width:300px;">
-        <label>
-          <input type="checkbox" id="celiac" onchange="updateFilters()">
-          Celiac
-        </label>
-
-    <label>
-      <input type="checkbox" id="peanuts" onchange="updateFilters()">
-      Peanuts
-    </label>
- 
-    <label>
-      <input type="checkbox" id="milk" onchange="updateFilters()">
-      Milk
-    </label>
-
-    <label>
-      <input type="checkbox"id="soy" onchange="updateFilters()">
-      Soy
-    </label>
-
-    <label>
-      <input type="checkbox" id="shellFish" onchange="updateFilters()">
-      ShellFish
-    </label>
-    
-    <label>
-      <input type="checkbox" id="sesame" onchange="updateFilters()">
-      Sesame
-    </label>
-
-    <label>
-      <input type="checkbox" id="treenuts" onchange="updateFilters()">
-      Treenuts
-    </label>
-
-      <label>
-        <input type="checkbox" id="Eggs" onchange="updateFilters()">
-        Eggs
-      </label>
-    </div>
-
-      <hr> <!-- Line to visually separate the filters -->
-
-      <p style="text-align: center;">Price</p>
-
-      <label>
-        <input type="checkbox" id="cheapPrice" onchange="updateFilters()">
-        $5 - $20
-      </label>
-      <label>
-        <input type="checkbox" id="mediumPrice" onchange="updateFilters()">
-        $25 - $40
-      </label>
-      <label>
-        <input type="checkbox" id="expensivePrice" onchange="updateFilters()">
-        $40+
-      </label>
-      </label>
-      </div>
+          <section class="filter-section" aria-labelledby="food-filter-title">
+            <h2 id="food-filter-title">Food Preferences</h2>
+            <div class="filter-options">
+              {% for preference in ["American", "Italian", "Seafood", "Mexican", "Chinese", "Japanese", "Indian", "Mediterranean", "Pizza", "Vegan"] %}
+                <label class="filter-option" for="foodPreference{{ loop.index }}">
+                  <input
+                    type="checkbox"
+                    id="foodPreference{{ loop.index }}"
+                    name="foodPreferences"
+                    value="{{ preference }}">
+                  {{ preference }}
+                </label>
+              {% endfor %}
+            </div>
+          </section>
+        </div>
       </div>
 
-      <div id="chat"><a href="/chat">Chat</a></div>
-    </div>
+      <div class="dropup">
+        <button
+          type="button"
+          class="nav-link interests-trigger"
+          aria-controls="myInterestsDropup"
+          aria-expanded="false"
+          onclick="toggleFooterPanel('interests')">
+          Interests
+        </button>
+
+        <div class="dropup-content" id="myInterestsDropup">
+          <section class="filter-section" aria-labelledby="hobby-interest-title">
+            <h2 id="hobby-interest-title">Profile Interests</h2>
+            <p class="filter-help">These show on your profile and do not change restaurant results.</p>
+            <div class="filter-options">
+              {% for interest in ["Gaming", "Music", "Drawing", "Computers", "Math", "Science", "Sports", "Reading", "Movies", "Fitness"] %}
+                <label class="filter-option" for="hobbyInterest{{ loop.index }}">
+                  <input
+                    type="checkbox"
+                    id="hobbyInterest{{ loop.index }}"
+                    name="hobbyInterests"
+                    value="{{ interest }}">
+                  {{ interest }}
+                </label>
+              {% endfor %}
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <a class="nav-link" href="{{ url_for('blog') }}">Chat</a>
+      <button
+        type="button"
+        class="nav-link theme-toggle-button"
+        data-theme-toggle
+        aria-label="Change to light theme">
+        Light theme
+      </button>
+    </nav>
   </footer>
 </body>
-
-<script src="{{ url_for('static', filename='themetoggle.js') }}"></script>
-<script>
-function getAndSend() {
-    // 1. Ask the browser for coordinates
-    navigator.geolocation.getCurrentPosition((position) => {
-        // 2. Put coordinates into the hidden inputs
-        document.getElementById('lat_input').value = position.coords.latitude;
-        document.getElementById('lng_input').value = position.coords.longitude;
-        
-        // 3. Immediately submit the form to your Flask route
-        document.getElementById('locationForm').submit();
-    }, (error) => {
-        alert("Please enable location services in your browser.");
-    });
-}
-</script>
-
 </html>

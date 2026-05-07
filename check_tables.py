@@ -6,7 +6,7 @@ import os
 # ------------------------------
 
 # Path to your SQLite database file
-DB_FILE = r'instance\users.sqlite3'
+DB_FILE = r'instance\users.db'
 
 # Folder where uploaded images are stored
 UPLOAD_FOLDER = os.path.join("static", "uploads")

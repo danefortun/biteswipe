@@ -22,7 +22,8 @@
 
         <input type="hidden" name="action" value="send">
         <textarea name="message" placeholder="Type your message here..."
-    placeholder="Type your message here..."
+    maxlength="500"
+    required
     style="padding: 10px;
            border-radius: 5px;
            border: 1px solid #ccc;
@@ -50,12 +51,14 @@ function loadPosts() {
             postsDiv.innerHTML = "";
 
             data.posts.forEach(post => {
-                postsDiv.innerHTML += `
-                    <div style="margin-bottom: 20px;">
-                        <p>${post.user_id}: ${post.message}</p>
-                        
-                    </div>
-                `;
+                const wrapper = document.createElement("div");
+                wrapper.style.marginBottom = "20px";
+
+                const message = document.createElement("p");
+                message.textContent = `${post.user_name}: ${post.message}`;
+
+                wrapper.appendChild(message);
+                postsDiv.appendChild(wrapper);
             });
         });
 }
