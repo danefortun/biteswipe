@@ -271,6 +271,28 @@ body.profile-page > header {
   overflow-wrap: anywhere;
 }
 
+.card-chip-row {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.card-chip-row span {
+  max-width: 100%;
+  padding: 5px 7px;
+  border: 1px solid #d3ece6;
+  border-radius: 999px;
+  background: #f4fffb;
+  color: #27302f;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+
 .card-address {
   width: 100%;
   margin: 0;
@@ -280,6 +302,14 @@ body.profile-page > header {
   text-align: center;
   text-transform: none;
   overflow-wrap: anywhere;
+}
+
+.card-flip-hint {
+  margin-top: auto;
+  color: #53615d;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: none;
 }
 
 .rating-panel {
@@ -476,6 +506,35 @@ span.restaurant-website-link {
   margin-top: 22px;
 }
 
+.saved-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+  color: var(--surface-text-color);
+}
+
+.saved-toolbar p {
+  margin: 0;
+  color: var(--surface-muted-color);
+}
+
+.saved-toolbar button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--accent-color);
+  border-radius: 8px;
+  background: var(--accent-soft-color);
+  color: var(--accent-color);
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .saved-card {
   display: grid;
   grid-template-rows: 150px 1fr;
@@ -485,6 +544,11 @@ span.restaurant-website-link {
   background: #FFFFFF;
   color: #1d2522;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.09);
+}
+
+.saved-card.is-picked {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px var(--accent-soft-color), 0 16px 34px rgba(16, 185, 129, 0.2);
 }
 
 .saved-card-image {
@@ -568,6 +632,33 @@ span.restaurant-website-link {
   background: #ffe2e2;
 }
 
+.saved-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.saved-actions a,
+.saved-actions button {
+  width: 100%;
+  min-height: 36px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.saved-actions a {
+  border: 1px solid #bfe7dc;
+  background: #eefcf8;
+  color: #126f60;
+}
+
 .empty-stuff {
   display: flex;
   flex-direction: column;
@@ -616,6 +707,11 @@ span.restaurant-website-link {
 
   .my-stuff-hero h1 {
     font-size: 36px;
+  }
+
+  .saved-toolbar {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

@@ -83,6 +83,11 @@ class SavedRestaurant(db.Model):
     address = db.Column(db.String(512))
     photo = db.Column(db.String(512))
     distance_meters = db.Column(db.Float)
+    cuisine = db.Column(db.String(255))
+    price_text = db.Column(db.String(64))
+    rating = db.Column(db.Float)
+    review_count = db.Column(db.Integer)
+    website = db.Column(db.String(512))
     created_at = db.Column(db.String(40), nullable=False, index=True)
 
     user = db.relationship("Users", backref=db.backref("saved_restaurants", lazy=True))
@@ -96,6 +101,11 @@ class SavedRestaurant(db.Model):
         address: str | None = None,
         photo: str | None = None,
         distance_meters: float | None = None,
+        cuisine: str | None = None,
+        price_text: str | None = None,
+        rating: float | None = None,
+        review_count: int | None = None,
+        website: str | None = None,
     ) -> None:
         self.user_id = user_id
         self.place_id = place_id
@@ -104,4 +114,9 @@ class SavedRestaurant(db.Model):
         self.address = address
         self.photo = photo
         self.distance_meters = distance_meters
+        self.cuisine = cuisine
+        self.price_text = price_text
+        self.rating = rating
+        self.review_count = review_count
+        self.website = website
         self.created_at = datetime.now(timezone.utc).isoformat()

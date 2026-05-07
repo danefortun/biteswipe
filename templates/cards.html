@@ -130,6 +130,52 @@ async function refreshRestaurantCards() {
     await get_restaurant({ autoLocate: true });
 }
 
+async function clearRestaurantFilters() {
+    const filters = {
+        celiac: false,
+        peanuts: false,
+        milk: false,
+        soy: false,
+        shellFish: false,
+        sesame: false,
+        treenuts: false,
+        eggs: false,
+        cheapPrice: false,
+        mediumPrice: false,
+        expensivePrice: false,
+        distance: 50,
+        foodPreferences: [],
+        hobbyInterests: [],
+    };
+
+    try {
+        await fetch("/save_filters", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(filters),
+        });
+
+        document.querySelectorAll(".dropup-content input[type='checkbox']").forEach((input) => {
+            input.checked = false;
+        });
+
+        const slider = document.getElementById("myRange");
+        const distanceValue = document.getElementById("distanceValue");
+        if (slider && distanceValue) {
+            slider.value = 50;
+            distanceValue.textContent = "50";
+        }
+
+        localStorage.removeItem(window.restaurantCardStorageKey);
+        setRestaurantStatus("Filters cleared. Loading a fresh stack...");
+        await get_restaurant({ autoLocate: true });
+    } catch (error) {
+        setRestaurantStatus("Unable to clear filters right now.");
+    }
+}
+
 async function get_restaurant(options = {}) {
     try {
         setRestaurantStatus("Loading nearby restaurants...");
@@ -204,12 +250,22 @@ function renderRestaurantCards(places, options = {}) {
         title.textContent = result.name || "Unknown restaurant";
         front.appendChild(title);
 
+        const chips = buildCardChips(result);
+        if (chips.children.length > 0) {
+            front.appendChild(chips);
+        }
+
         if (result.address) {
             const address = document.createElement("small");
             address.classList.add("card-address");
             address.textContent = result.address;
             front.appendChild(address);
         }
+
+        const hint = document.createElement("small");
+        hint.classList.add("card-flip-hint");
+        hint.textContent = "Tap card for details";
+        front.appendChild(hint);
 
         inner.appendChild(front);
         inner.appendChild(buildCardBack(result));
@@ -227,6 +283,24 @@ function renderRestaurantCards(places, options = {}) {
 
 function toggleCardFlip(card) {
     card.classList.toggle("is-flipped");
+}
+
+function buildCardChips(result) {
+    const chips = document.createElement("div");
+    chips.classList.add("card-chip-row");
+
+    [
+        formatDistance(result.distance_meters),
+        result.price_text || formatPriceLevel(result.price_level),
+        formatCuisine(result.cuisine),
+        formatShortRating(result),
+    ].filter(Boolean).slice(0, 4).forEach((value) => {
+        const chip = document.createElement("span");
+        chip.textContent = value;
+        chips.appendChild(chip);
+    });
+
+    return chips;
 }
 
 function buildCardBack(result) {
@@ -273,7 +347,7 @@ function buildRatingPanel(result) {
 
     const online = document.createElement("div");
     online.classList.add("online-rating");
-    online.innerHTML = `<span aria-hidden="true">★</span> ${formatOnlineRating(result)}`;
+    online.innerHTML = `<span aria-hidden="true">\u2605</span> ${formatOnlineRating(result)}`;
     panel.appendChild(online);
 
     const userRating = document.createElement("div");
@@ -286,7 +360,7 @@ function buildRatingPanel(result) {
         button.type = "button";
         button.classList.add("star-button");
         button.classList.toggle("is-selected", rating <= currentRating);
-        button.textContent = "★";
+        button.textContent = "\u2605";
         button.setAttribute("aria-label", `Rate ${rating} stars`);
         button.addEventListener("click", (event) => {
             event.stopPropagation();
@@ -394,6 +468,11 @@ function formatOnlineRating(result) {
     return rating.toFixed(1);
 }
 
+function formatShortRating(result) {
+    const rating = Number(result.rating);
+    return Number.isFinite(rating) ? `${rating.toFixed(1)} rated` : null;
+}
+
 function buildRestaurantSummary(result) {
     const parts = [];
     const cuisine = formatCuisine(result.cuisine);
@@ -448,6 +527,12 @@ document.addEventListener("DOMContentLoaded", () => {
       class="card-action-button card-action-refresh"
       onclick="refreshRestaurantCards()">
       Refresh cards
+    </button>
+    <button
+      type="button"
+      class="card-action-button card-action-clear"
+      onclick="clearRestaurantFilters()">
+      Clear filters
     </button>
   </div>
   <p id="restaurantStatus"></p>

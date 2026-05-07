@@ -17,6 +17,11 @@
   </div>
 
   {% if saved_restaurants %}
+    <div class="saved-toolbar">
+      <p>Ready to stop debating? Let BiteSwipe choose from your saved picks.</p>
+      <button type="button" onclick="pickRandomSavedRestaurant()">Pick for me</button>
+    </div>
+
     <div class="saved-grid">
       {% for restaurant in saved_restaurants %}
         <article class="saved-card">
@@ -41,12 +46,32 @@
               {% else %}
                 <span>Distance pending</span>
               {% endif %}
+              {% if restaurant.price_text %}
+                <span>{{ restaurant.price_text }}</span>
+              {% endif %}
+              {% if restaurant.cuisine %}
+                <span>{{ restaurant.cuisine }}</span>
+              {% endif %}
+              {% if restaurant.rating is not none %}
+                <span>{{ "%.1f"|format(restaurant.rating) }} rated</span>
+              {% endif %}
               <span>Saved pick</span>
             </div>
 
-            <form method="POST" action="{{ url_for('remove_restaurant', restaurant_id=restaurant.id) }}">
-              <button type="submit" class="saved-remove">Remove</button>
-            </form>
+            <div class="saved-actions">
+              {% if restaurant.website %}
+                <a href="{{ restaurant.website }}" target="_blank" rel="noopener noreferrer">Website</a>
+              {% endif %}
+              <a
+                href="https://www.google.com/maps/search/{{ (restaurant.name ~ ' ' ~ (restaurant.address or ''))|urlencode }}"
+                target="_blank"
+                rel="noopener noreferrer">
+                Directions
+              </a>
+              <form method="POST" action="{{ url_for('remove_restaurant', restaurant_id=restaurant.id) }}">
+                <button type="submit" class="saved-remove">Remove</button>
+              </form>
+            </div>
           </div>
         </article>
       {% endfor %}
@@ -60,4 +85,17 @@
     </div>
   {% endif %}
 </section>
+<script>
+function pickRandomSavedRestaurant() {
+  const cards = Array.from(document.querySelectorAll(".saved-card"));
+  if (cards.length === 0) {
+    return;
+  }
+
+  cards.forEach((card) => card.classList.remove("is-picked"));
+  const picked = cards[Math.floor(Math.random() * cards.length)];
+  picked.classList.add("is-picked");
+  picked.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+</script>
 {%endblock%}
