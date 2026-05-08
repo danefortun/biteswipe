@@ -4021,6 +4021,89 @@ body[data-route="home"] .main {
   padding-top: 10px;
 }
 
+body[data-route="home"][data-school-theme] {
+  --accent-color: var(--school-accent, #178f79);
+  --accent-soft-color: color-mix(in srgb, var(--school-accent, #178f79) 16%, transparent);
+  --school-theme-glow: color-mix(in srgb, var(--school-primary, #178f79) 20%, transparent);
+  background:
+    radial-gradient(circle at 14% 14%, color-mix(in srgb, var(--school-secondary, #6ae0c2) 18%, transparent), transparent 34%),
+    radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--school-primary, #178f79) 14%, transparent), transparent 28%),
+    linear-gradient(135deg, color-mix(in srgb, var(--school-primary, #178f79) 7%, var(--body-background-color)), var(--body-background-color));
+}
+
+body[data-route="home"][data-school-theme]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image: var(--school-bg-image);
+  background-repeat: no-repeat;
+  background-position: center 52%;
+  background-size: min(620px, 72vw);
+  opacity: 0.075;
+  filter: saturate(0.92);
+  pointer-events: none;
+}
+
+body[data-route="home"][data-school-theme] > .app-header,
+body[data-route="home"][data-school-theme] > .main,
+body[data-route="home"][data-school-theme] > .site-footer {
+  position: relative;
+  z-index: 1;
+}
+
+body[data-route="home"][data-school-theme] .cards-page-shell .card-stage {
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--school-primary, #178f79) 22%, var(--border-color));
+  border-radius: 30px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--surface-color) 88%, transparent), color-mix(in srgb, var(--school-secondary, #6ae0c2) 8%, var(--surface-color))),
+    var(--surface-color);
+  box-shadow:
+    0 26px 70px color-mix(in srgb, var(--school-primary, #178f79) 18%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--school-secondary, #ffffff) 12%, transparent);
+}
+
+.school-theme-chip {
+  width: max-content;
+  max-width: 100%;
+  min-height: 36px;
+  margin: 0 auto 10px;
+  padding: 5px 12px 5px 6px;
+  border: 1px solid color-mix(in srgb, var(--school-primary, var(--accent-color)) 32%, transparent);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: color-mix(in srgb, var(--surface-color) 82%, var(--school-secondary, transparent));
+  color: var(--surface-text-color);
+  box-shadow: 0 14px 34px var(--school-theme-glow, rgba(13, 20, 18, 0.12));
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.school-theme-chip img,
+.school-theme-monogram {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.school-theme-chip img {
+  object-fit: cover;
+  background: #ffffff;
+}
+
+.school-theme-monogram {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--school-primary, var(--accent-color));
+  color: #ffffff;
+}
+
 [data-feature-parked][hidden] {
   display: none !important;
 }

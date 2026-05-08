@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 import secrets
@@ -145,6 +146,72 @@ FOOD_KEYWORDS: dict[str, tuple[str, ...]] = {
     "thai": ("thai", "pad thai", "curry"),
 }
 
+SCHOOL_THEMES: dict[str, dict[str, str | None]] = {
+    "drexel.edu": {
+        "slug": "drexel",
+        "name": "Drexel University",
+        "short_name": "Drexel",
+        "primary": "#07294D",
+        "secondary": "#FFC600",
+        "accent": "#007A78",
+        "image_file": "drexelxfizz.png",
+    },
+    "temple.edu": {
+        "slug": "temple",
+        "name": "Temple University",
+        "short_name": "Temple",
+        "primary": "#9D2235",
+        "secondary": "#FFFFFF",
+        "accent": "#222222",
+        "image_file": None,
+    },
+    "upenn.edu": {
+        "slug": "penn",
+        "name": "University of Pennsylvania",
+        "short_name": "Penn",
+        "primary": "#011F5B",
+        "secondary": "#990000",
+        "accent": "#2F6DB3",
+        "image_file": None,
+    },
+    "princeton.edu": {
+        "slug": "princeton",
+        "name": "Princeton University",
+        "short_name": "Princeton",
+        "primary": "#E77500",
+        "secondary": "#000000",
+        "accent": "#FFB347",
+        "image_file": None,
+    },
+    "rutgers.edu": {
+        "slug": "rutgers",
+        "name": "Rutgers University",
+        "short_name": "Rutgers",
+        "primary": "#CC0033",
+        "secondary": "#5F6A72",
+        "accent": "#CC0033",
+        "image_file": None,
+    },
+    "psu.edu": {
+        "slug": "penn-state",
+        "name": "Penn State",
+        "short_name": "Penn State",
+        "primary": "#1E407C",
+        "secondary": "#96BEE6",
+        "accent": "#009CDE",
+        "image_file": None,
+    },
+    "villanova.edu": {
+        "slug": "villanova",
+        "name": "Villanova University",
+        "short_name": "Villanova",
+        "primary": "#00205B",
+        "secondary": "#13B5EA",
+        "accent": "#0072CE",
+        "image_file": None,
+    },
+}
+
 DEFAULT_FILTERS: dict[str, Any] = {
     "celiac": False,
     "peanuts": False,
@@ -254,7 +321,11 @@ def get_table_column_names(table_name: str) -> set[str]:
 def register_routes(app: Flask) -> None:
     @app.context_processor
     def inject_template_user() -> dict[str, Any]:
-        return {"template_user": current_user()}
+        user = current_user()
+        return {
+            "template_user": user,
+            "school_theme": build_school_theme_payload(user),
+        }
 
     @app.get("/health")
     def health() -> Any:
@@ -631,6 +702,72 @@ def current_user() -> Users | None:
     if not email:
         return None
     return Users.query.filter_by(email=email).first()
+
+
+def get_email_domain(email: str | None) -> str:
+    if not email or "@" not in email:
+        return ""
+
+    return email.rsplit("@", 1)[1].strip().lower()
+
+
+def get_school_theme_for_email(email: str | None) -> dict[str, str | None] | None:
+    domain = get_email_domain(email)
+    if not domain.endswith(".edu"):
+        return None
+
+    for school_domain, theme in SCHOOL_THEMES.items():
+        if domain == school_domain or domain.endswith(f".{school_domain}"):
+            return dict(theme, domain=school_domain, is_generated="false")
+
+    return build_generated_school_theme(domain)
+
+
+def build_generated_school_theme(domain: str) -> dict[str, str | None]:
+    digest = hashlib.sha256(domain.encode("utf-8")).digest()
+    hue = int.from_bytes(digest[:2], "big") % 360
+    secondary_hue = (hue + 38) % 360
+    short_name = domain.split(".", 1)[0].replace("-", " ").title() or "Campus"
+
+    return {
+        "slug": slugify_school_theme(domain),
+        "name": f"{short_name} Campus",
+        "short_name": short_name,
+        "primary": f"hsl({hue} 62% 24%)",
+        "secondary": f"hsl({secondary_hue} 72% 52%)",
+        "accent": f"hsl({hue} 74% 42%)",
+        "image_file": None,
+        "domain": domain,
+        "is_generated": "true",
+    }
+
+
+def slugify_school_theme(value: str) -> str:
+    slug = []
+    previous_dash = False
+
+    for char in value.lower():
+        if char.isalnum():
+            slug.append(char)
+            previous_dash = False
+        elif not previous_dash:
+            slug.append("-")
+            previous_dash = True
+
+    return "".join(slug).strip("-") or "campus"
+
+
+def build_school_theme_payload(user: Users | None) -> dict[str, str | None] | None:
+    if user is None:
+        return None
+
+    theme = get_school_theme_for_email(user.email)
+    if theme is None:
+        return None
+
+    image_file = theme.get("image_file")
+    theme["image_url"] = url_for("static", filename=str(image_file)) if image_file else None
+    return theme
 
 
 def save_user_location(user: Users, raw_latitude: Any, raw_longitude: Any) -> tuple[bool, str]:

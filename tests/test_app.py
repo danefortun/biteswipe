@@ -7,7 +7,7 @@ from uuid import uuid4
 from pathlib import Path
 
 from db import db
-from main import build_overpass_query, create_app, format_osm_place
+from main import build_overpass_query, create_app, format_osm_place, get_school_theme_for_email
 from users_db import SavedRestaurant, Users
 
 
@@ -74,6 +74,32 @@ class LifeSwipeAppTestCase(unittest.TestCase):
             data={"email": "person@example.com", "pass": "wrong"},
         )
         self.assertEqual(response.status_code, 401)
+
+    def test_school_theme_matches_edu_email_domains(self) -> None:
+        theme = get_school_theme_for_email("student@drexel.edu")
+        self.assertIsNotNone(theme)
+        self.assertEqual(theme["slug"], "drexel")
+        self.assertEqual(theme["short_name"], "Drexel")
+
+        subdomain_theme = get_school_theme_for_email("student@mail.drexel.edu")
+        self.assertIsNotNone(subdomain_theme)
+        self.assertEqual(subdomain_theme["slug"], "drexel")
+
+        generated = get_school_theme_for_email("student@examplecollege.edu")
+        self.assertIsNotNone(generated)
+        self.assertEqual(generated["domain"], "examplecollege.edu")
+        self.assertEqual(generated["is_generated"], "true")
+
+        self.assertIsNone(get_school_theme_for_email("person@example.com"))
+
+    def test_home_applies_school_theme_to_cards_page(self) -> None:
+        self.login(email="student@drexel.edu")
+
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'data-school-theme="drexel"', response.data)
+        self.assertIn(b"--school-primary: #07294D", response.data)
+        self.assertIn(b"Drexel mode", response.data)
 
     def test_filters_are_sanitized_and_persisted_in_session(self) -> None:
         self.login()

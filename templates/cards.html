@@ -1424,6 +1424,17 @@ document.addEventListener("DOMContentLoaded", () => {
   </div>
 
   <div class="card-stage is-empty">
+    {% if school_theme %}
+      <div class="school-theme-chip" aria-label="Active school theme">
+        {% if school_theme.image_url %}
+          <img src="{{ school_theme.image_url }}" alt="">
+        {% else %}
+          <span class="school-theme-monogram" aria-hidden="true">{{ school_theme.short_name[:1] }}</span>
+        {% endif %}
+        <span>{{ school_theme.short_name }} mode</span>
+      </div>
+    {% endif %}
+
     <section class="group-mode-panel" id="groupModePanel" aria-label="Group swipe mode">
       <div id="groupModeInactive">
         <strong>Group mode</strong>
