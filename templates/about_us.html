@@ -21,7 +21,7 @@
   </div>
 
   {% if saved_restaurants %}
-    <div class="saved-decision-panel">
+    <div class="saved-decision-panel" hidden data-feature-parked="decision-mode">
       <div>
         <p class="profile-section-kicker">Decision mode</p>
         <h2>Turn saved restaurants into a real plan.</h2>
@@ -34,7 +34,7 @@
       </div>
     </div>
 
-    <div class="saved-plan-panel" aria-label="Saved pick plan builder">
+    <div class="saved-plan-panel" aria-label="Saved pick plan builder" hidden data-feature-parked="plan-builder">
       <div>
         <p class="profile-section-kicker">Plan builder</p>
         <h2>Make the shortlist choose itself.</h2>
@@ -67,8 +67,8 @@
           <option value="distance">Nearest first</option>
           <option value="rating">Top rated</option>
         </select>
-        <button type="button" onclick="pickRandomSavedRestaurant()">Pick for me</button>
-        <button type="button" onclick="copySavedShortlist()">Copy visible</button>
+        <button type="button" onclick="pickRandomSavedRestaurant()" hidden data-feature-parked="random-saved-picker">Pick for me</button>
+        <button type="button" onclick="copySavedShortlist()" hidden data-feature-parked="copy-visible-saved">Copy visible</button>
       </div>
     </div>
 
@@ -80,7 +80,7 @@
           data-place-id="{{ restaurant.place_id }}"
           data-distance="{{ restaurant.distance_meters if restaurant.distance_meters is not none else '' }}"
           data-rating="{{ restaurant.rating if restaurant.rating is not none else '' }}">
-          <label class="saved-select-pill">
+          <label class="saved-select-pill" hidden data-feature-parked="saved-shortlist-checkbox">
             <input type="checkbox" class="saved-select" aria-label="Add {{ restaurant.name }} to shortlist">
             Shortlist
           </label>

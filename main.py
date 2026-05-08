@@ -249,6 +249,10 @@ def get_table_column_names(table_name: str) -> set[str]:
 
 
 def register_routes(app: Flask) -> None:
+    @app.context_processor
+    def inject_template_user() -> dict[str, Any]:
+        return {"template_user": current_user()}
+
     @app.get("/health")
     def health() -> Any:
         return jsonify({"status": "ok"})
