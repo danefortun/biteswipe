@@ -99,6 +99,13 @@ FOOD_PREFERENCE_PRESETS = [
     "Mediterranean",
     "Pizza",
     "Vegan",
+    "Coffee",
+    "Dessert",
+    "Breakfast",
+    "Healthy",
+    "Halal",
+    "Korean",
+    "Thai",
 ]
 
 HOBBY_INTEREST_PRESETS = [
@@ -112,6 +119,8 @@ HOBBY_INTEREST_PRESETS = [
     "Reading",
     "Movies",
     "Fitness",
+    "Study Spots",
+    "Coffee Runs",
 ]
 
 FOOD_KEYWORDS: dict[str, tuple[str, ...]] = {
@@ -125,6 +134,13 @@ FOOD_KEYWORDS: dict[str, tuple[str, ...]] = {
     "mediterranean": ("mediterranean", "greek", "falafel", "kebab", "hummus"),
     "pizza": ("pizza", "pizzeria"),
     "vegan": ("vegan", "vegetarian", "plant based", "plant-based"),
+    "coffee": ("coffee", "cafe", "espresso", "latte"),
+    "dessert": ("dessert", "bakery", "ice cream", "donut", "pastry"),
+    "breakfast": ("breakfast", "brunch", "bagel", "pancake"),
+    "healthy": ("healthy", "salad", "juice", "smoothie", "vegetarian"),
+    "halal": ("halal",),
+    "korean": ("korean", "kimchi", "bbq"),
+    "thai": ("thai", "pad thai", "curry"),
 }
 
 DEFAULT_FILTERS: dict[str, Any] = {
@@ -275,6 +291,8 @@ def register_routes(app: Flask) -> None:
                 update_user_name(user)
             elif action == "add_food_preference":
                 add_user_food_preference(user)
+            elif action == "add_hobby_interest":
+                add_user_hobby_interest(user)
             elif action == "remove_interest":
                 remove_user_interest(user)
             else:
@@ -620,6 +638,20 @@ def add_user_food_preference(user: Users) -> None:
     db.session.commit()
     sync_session_filters_from_user(user)
     flash(f"Added {preference} to your food preferences.")
+
+
+def add_user_hobby_interest(user: Users) -> None:
+    interest = normalize_interest_label(request.form.get("hobby_interest", ""))
+    if not interest:
+        flash("Choose an interest before adding it.")
+        return
+
+    interests = user.get_interest_list("hobby_interests_json")
+    interests.append(interest)
+    user.set_interest_list("hobby_interests_json", interests)
+    db.session.commit()
+    sync_session_filters_from_user(user)
+    flash(f"Added {interest} to your profile interests.")
 
 
 def remove_user_interest(user: Users) -> None:

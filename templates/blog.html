@@ -1,73 +1,164 @@
 {% extends "base.html" %}
+{% block title %}BiteSwipe Chat{% endblock %}
 
 {% block content %}
-<style>
+<section class="chat-shell" aria-labelledby="chat-title">
+  <header class="chat-hero">
+    <div>
+      <p class="chat-kicker">Campus bite chat</p>
+      <h1 id="chat-title">Find food with people, not chaos.</h1>
+      <p>Drop cravings, allergy-safe finds, study-break plans, or restaurant warnings for the BiteSwipe crowd.</p>
+    </div>
+    <div class="chat-live-card" aria-label="Chat status">
+      <strong id="chatCount">0</strong>
+      <span>recent messages</span>
+      <button type="button" id="refreshChatButton">Refresh</button>
+    </div>
+  </header>
 
-</style>
-<div style="max-width: 600px; margin: auto; padding: 20px;">
+  <div class="chat-layout">
+    <section class="chat-feed-panel" aria-label="Recent messages">
+      <div class="section-heading-row">
+        <div>
+          <p class="profile-section-kicker">Live board</p>
+          <h2>Recent messages</h2>
+        </div>
+        <span class="chat-refresh-note" id="chatRefreshNote">Auto-refreshing</span>
+      </div>
+      <div id="posts" class="chat-feed" aria-live="polite">
+        <article class="chat-message-card chat-message-placeholder">
+          <p>Loading recent BiteSwipe messages…</p>
+        </article>
+      </div>
+    </section>
 
-    <h1>Messages</h1>
-
-    <!-- Messages list -->
-    <ul style="list-style: none;
-    padding: 0; margin-bottom: 20px;">
-        <div id="posts"></div>
-    </ul>
-
-    <!-- Message form -->
-    <form method="POST"
-    style="display: flex;
-    flex-direction: column;
-    gap: 10px;">
-
+    <aside class="chat-compose-panel" aria-labelledby="compose-title">
+      <p class="profile-section-kicker">Post</p>
+      <h2 id="compose-title">Share a bite tip</h2>
+      <div class="chat-prompt-row" aria-label="Quick chat prompts">
+        <button type="button" data-chat-prompt="Any allergy-safe spots near campus today?">Allergy check</button>
+        <button type="button" data-chat-prompt="I am choosing between saved picks. What would you vote for?">Vote request</button>
+        <button type="button" data-chat-prompt="Best cheap food within a short walk?">Cheap nearby</button>
+        <button type="button" data-chat-prompt="Good study-break place with seating?">Study break</button>
+      </div>
+      <form method="POST" class="chat-form">
         <input type="hidden" name="action" value="send">
-        <textarea name="message" placeholder="Type your message here..."
-    maxlength="500"
-    required
-    style="padding: 10px;
-           border-radius: 5px;
-           border: 1px solid #ccc;
-           resize: vertical;
-           min-height: 80px;"></textarea>
-
-        <input type="submit" value="Send"
-        style="padding: 10px;
-        border-radius: 5px;
-        border: none;
-        background-color: #007bff;
-        color: white;
-        cursor: pointer;">
-    </form>
-
-</div>
-
+        <label for="message">Message</label>
+        <textarea
+          id="message"
+          name="message"
+          placeholder="Anyone know a good gluten-free pizza spot nearby?"
+          maxlength="500"
+          required></textarea>
+        <div class="chat-form-footer">
+          <small><span id="messageCount">0</span>/500</small>
+          <button type="submit">Send message</button>
+        </div>
+      </form>
+      <div class="chat-guidelines">
+        <strong>Good BiteSwipe posts</strong>
+        <ul>
+          <li>Specific cravings or cuisine ideas.</li>
+          <li>Allergen/cross-contact questions.</li>
+          <li>Saved shortlist opinions before ordering.</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</section>
 
 <script>
-function loadPosts() {
-    fetch("/get_posts")
-        .then(response => response.json())
-        .then(data => {
-            const postsDiv = document.getElementById("posts");
-            postsDiv.innerHTML = "";
+const postsDiv = document.getElementById("posts");
+const chatCount = document.getElementById("chatCount");
+const chatRefreshNote = document.getElementById("chatRefreshNote");
+const messageInput = document.getElementById("message");
+const messageCount = document.getElementById("messageCount");
+const chatDraftKey = "biteswipe.chatDraft.{{ session.get('id', 'guest') }}";
 
-            data.posts.forEach(post => {
-                const wrapper = document.createElement("div");
-                wrapper.style.marginBottom = "20px";
-
-                const message = document.createElement("p");
-                message.textContent = `${post.user_name}: ${post.message}`;
-
-                wrapper.appendChild(message);
-                postsDiv.appendChild(wrapper);
-            });
-        });
+function formatPostTime(value) {
+  if (!value) return "just now";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "recently";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(date);
 }
 
-// Load immediately
+function renderPosts(posts) {
+  postsDiv.innerHTML = "";
+
+  if (!posts.length) {
+    const empty = document.createElement("article");
+    empty.className = "chat-message-card chat-message-placeholder";
+    empty.innerHTML = "<p>No messages yet. Start the first food debate.</p>";
+    postsDiv.appendChild(empty);
+    return;
+  }
+
+  posts.forEach((post) => {
+    const card = document.createElement("article");
+    card.className = "chat-message-card";
+
+    const meta = document.createElement("div");
+    meta.className = "chat-message-meta";
+
+    const author = document.createElement("strong");
+    author.textContent = post.user_name || "BiteSwipe user";
+
+    const time = document.createElement("span");
+    time.textContent = formatPostTime(post.created_at);
+
+    const body = document.createElement("p");
+    body.textContent = post.message || "";
+
+    meta.append(author, time);
+    card.append(meta, body);
+    postsDiv.appendChild(card);
+  });
+}
+
+function loadPosts() {
+  fetch("/get_posts")
+    .then((response) => response.json())
+    .then((data) => {
+      const posts = Array.isArray(data.posts) ? data.posts : [];
+      chatCount.textContent = String(posts.length);
+      chatRefreshNote.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+      renderPosts(posts);
+    })
+    .catch(() => {
+      postsDiv.innerHTML = '<article class="chat-message-card chat-message-placeholder"><p>Unable to load messages right now.</p></article>';
+      chatRefreshNote.textContent = "Connection issue";
+    });
+}
+
+messageInput?.addEventListener("input", () => {
+  messageCount.textContent = String(messageInput.value.length);
+  localStorage.setItem(chatDraftKey, messageInput.value);
+});
+
+document.querySelectorAll("[data-chat-prompt]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!messageInput) return;
+    messageInput.value = button.dataset.chatPrompt || "";
+    messageInput.focus();
+    messageInput.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+});
+
+document.querySelector(".chat-form")?.addEventListener("submit", () => {
+  localStorage.removeItem(chatDraftKey);
+});
+
+document.getElementById("refreshChatButton")?.addEventListener("click", loadPosts);
+if (messageInput) {
+  messageInput.value = localStorage.getItem(chatDraftKey) || messageInput.value;
+  messageCount.textContent = String(messageInput.value.length);
+}
 loadPosts();
-
-// Refresh posts every 3 seconds
-setInterval(loadPosts, 3000);
+setInterval(loadPosts, 5000);
 </script>
-
 {% endblock %}

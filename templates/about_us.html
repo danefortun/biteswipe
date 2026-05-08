@@ -1,38 +1,104 @@
-{%extends "base.html"%}
+{% extends "base.html" %}
+{% block title %}BiteSwipe Saved Picks{% endblock %}
 
-{%block content%}
-<section class="my-stuff-shell">
-  <div class="my-stuff-hero">
+{% block content %}
+<section class="my-stuff-shell saved-board-shell" aria-labelledby="saved-title">
+  <div class="my-stuff-hero saved-board-hero">
     <div>
       <p class="my-stuff-kicker">Your BiteSwipe board</p>
-      <h1>My Stuff</h1>
+      <h1 id="saved-title">Saved picks</h1>
       <p class="my-stuff-copy">
-        Restaurants you tap OK on from the card stack land here, ready for the next snack run, study break, or group vote.
+        Everything you save from the deck lands here so you can search, sort, compare, add private notes, and copy a shortlist for friends.
       </p>
     </div>
-    <div class="my-stuff-count">
-      <strong>{{ saved_restaurants|length }}</strong>
-      <span>saved pick{% if saved_restaurants|length != 1 %}s{% endif %}</span>
+    <div class="saved-hero-stats" aria-label="Saved board stats">
+      <div class="my-stuff-count">
+        <strong>{{ saved_restaurants|length }}</strong>
+        <span>saved pick{% if saved_restaurants|length != 1 %}s{% endif %}</span>
+      </div>
+      <a class="saved-hero-cta" href="{{ url_for('home') }}">Add more</a>
     </div>
   </div>
 
   {% if saved_restaurants %}
-    <div class="saved-toolbar">
-      <p>Ready to stop debating? Let BiteSwipe choose from your saved picks.</p>
-      <button type="button" onclick="pickRandomSavedRestaurant()">Pick for me</button>
+    <div class="saved-decision-panel">
+      <div>
+        <p class="profile-section-kicker">Decision mode</p>
+        <h2>Turn saved restaurants into a real plan.</h2>
+        <p>Use shortlist checkboxes for the places still in the running, then copy only those options into your group chat.</p>
+      </div>
+      <div class="saved-decision-actions">
+        <button type="button" onclick="selectVisibleSavedRestaurants()">Select visible</button>
+        <button type="button" onclick="clearSavedSelections()">Clear</button>
+        <button type="button" onclick="copySelectedSavedShortlist()">Copy shortlist</button>
+      </div>
+    </div>
+
+    <div class="saved-plan-panel" aria-label="Saved pick plan builder">
+      <div>
+        <p class="profile-section-kicker">Plan builder</p>
+        <h2>Make the shortlist choose itself.</h2>
+        <p>Pick the decision style and BiteSwipe will rank your visible or shortlisted restaurants into a clean top three.</p>
+      </div>
+      <div class="saved-plan-controls">
+        <select id="savedPlanMode" aria-label="Plan builder mode">
+          <option value="balanced">Balanced pick</option>
+          <option value="nearby">Closest first</option>
+          <option value="rating">Best rated</option>
+          <option value="budget">Budget friendly</option>
+        </select>
+        <button type="button" onclick="buildSavedPlan()">Build plan</button>
+      </div>
+      <ol class="saved-plan-output" id="savedPlanOutput">
+        <li>Choose a mode, then build a plan from your saved picks.</li>
+      </ol>
+    </div>
+
+    <div class="saved-toolbar saved-toolbar-enhanced">
+      <div>
+        <p>Search by name, cuisine, address, notes, rating, or distance. Sort the board when the group finally starts deciding.</p>
+        <small id="savedResultCount">Showing {{ saved_restaurants|length }} saved pick{% if saved_restaurants|length != 1 %}s{% endif %}</small>
+      </div>
+      <div class="saved-tools" aria-label="Saved restaurant tools">
+        <input id="savedSearch" type="search" placeholder="Search saved picks" aria-label="Search saved restaurants">
+        <select id="savedSort" aria-label="Sort saved restaurants">
+          <option value="recent">Recently saved</option>
+          <option value="name">Name A-Z</option>
+          <option value="distance">Nearest first</option>
+          <option value="rating">Top rated</option>
+        </select>
+        <button type="button" onclick="pickRandomSavedRestaurant()">Pick for me</button>
+        <button type="button" onclick="copySavedShortlist()">Copy visible</button>
+      </div>
     </div>
 
     <div class="saved-grid">
       {% for restaurant in saved_restaurants %}
-        <article class="saved-card">
+        <article
+          class="saved-card"
+          data-name="{{ restaurant.name|lower }}"
+          data-place-id="{{ restaurant.place_id }}"
+          data-distance="{{ restaurant.distance_meters if restaurant.distance_meters is not none else '' }}"
+          data-rating="{{ restaurant.rating if restaurant.rating is not none else '' }}">
+          <label class="saved-select-pill">
+            <input type="checkbox" class="saved-select" aria-label="Add {{ restaurant.name }} to shortlist">
+            Shortlist
+          </label>
+
           <div class="saved-card-image">
             <img
               src="{{ restaurant.photo or url_for('static', filename='biteswipe.png') }}"
               alt="{{ restaurant.name }}">
           </div>
+
           <div class="saved-card-body">
             <div class="saved-card-heading">
-              <h2>{{ restaurant.name }}</h2>
+              <div>
+                <h2>{{ restaurant.name }}</h2>
+                {% if restaurant.created_at %}
+                  <small>Saved {{ restaurant.created_at[:10] }}</small>
+                {% endif %}
+              </div>
               <span>{{ restaurant.source or 'saved' }}</span>
             </div>
 
@@ -55,8 +121,15 @@
               {% if restaurant.rating is not none %}
                 <span>{{ "%.1f"|format(restaurant.rating) }} rated</span>
               {% endif %}
-              <span>Saved pick</span>
             </div>
+
+            <label class="saved-note-label" for="saved-note-{{ restaurant.id }}">Private note</label>
+            <textarea
+              id="saved-note-{{ restaurant.id }}"
+              class="saved-note"
+              rows="2"
+              maxlength="140"
+              placeholder="Good for groups? Allergy call needed? Late-night option?"></textarea>
 
             <div class="saved-actions">
               {% if restaurant.website %}
@@ -68,7 +141,8 @@
                 rel="noopener noreferrer">
                 Directions
               </a>
-              <form method="POST" action="{{ url_for('remove_restaurant', restaurant_id=restaurant.id) }}">
+              <button type="button" onclick="copySingleSavedRestaurant(this)">Copy</button>
+              <form method="POST" action="{{ url_for('remove_restaurant', restaurant_id=restaurant.id) }}" onsubmit="return confirm('Remove {{ restaurant.name }} from Saved picks?')">
                 <button type="submit" class="saved-remove">Remove</button>
               </form>
             </div>
@@ -76,26 +150,218 @@
         </article>
       {% endfor %}
     </div>
+
+    <div class="saved-no-results" id="savedNoResults" hidden>
+      <h2>No saved picks match that search</h2>
+      <p>Clear the search or sort another way to bring your restaurants back.</p>
+    </div>
   {% else %}
-    <div class="empty-stuff">
+    <div class="empty-stuff empty-stuff-upgraded">
       <img src="{{ url_for('static', filename='biteswipe.png') }}" alt="BiteSwipe">
+      <p class="my-stuff-kicker">Start your board</p>
       <h2>No saved bites yet</h2>
-      <p>Head back to Cards and press OK on a restaurant. Your picks will show up here.</p>
-      <a href="{{ url_for('home') }}">Browse cards</a>
+      <p>Head back to Cards and press Save on a restaurant. Your picks will show up here for sorting, notes, and group decisions.</p>
+      <div class="empty-actions">
+        <a href="{{ url_for('home') }}">Browse cards</a>
+        <button type="button" onclick="toggleFooterPanel('filters')">Set filters first</button>
+      </div>
     </div>
   {% endif %}
 </section>
+
 <script>
-function pickRandomSavedRestaurant() {
-  const cards = Array.from(document.querySelectorAll(".saved-card"));
-  if (cards.length === 0) {
-    return;
+function getVisibleSavedCards() {
+  return Array.from(document.querySelectorAll(".saved-card")).filter((card) => !card.hidden);
+}
+
+function getSavedNoteStorageKey(card) {
+  return `biteswipe.savedNote.${card.dataset.placeId || card.dataset.name || "unknown"}`;
+}
+
+function updateSavedResultCount() {
+  const count = getVisibleSavedCards().length;
+  const selected = document.querySelectorAll(".saved-card:not([hidden]) .saved-select:checked").length;
+  const label = document.getElementById("savedResultCount");
+  const noResults = document.getElementById("savedNoResults");
+
+  if (label) {
+    label.textContent = `Showing ${count} saved pick${count === 1 ? "" : "s"}${selected ? ` · ${selected} shortlisted` : ""}`;
   }
 
-  cards.forEach((card) => card.classList.remove("is-picked"));
+  if (noResults) {
+    noResults.hidden = count !== 0;
+  }
+}
+
+function searchableSavedText(card) {
+  const note = card.querySelector(".saved-note")?.value || "";
+  return `${card.textContent} ${note}`.toLowerCase();
+}
+
+function filterSavedRestaurants() {
+  const query = document.getElementById("savedSearch")?.value.trim().toLowerCase() || "";
+
+  document.querySelectorAll(".saved-card").forEach((card) => {
+    card.hidden = query.length > 0 && !searchableSavedText(card).includes(query);
+  });
+
+  updateSavedResultCount();
+}
+
+function sortSavedRestaurants() {
+  const grid = document.querySelector(".saved-grid");
+  const mode = document.getElementById("savedSort")?.value || "recent";
+
+  if (!grid) return;
+
+  const cards = Array.from(grid.querySelectorAll(".saved-card"));
+  const numeric = (card, key, fallback) => {
+    const value = Number(card.dataset[key]);
+    return Number.isFinite(value) ? value : fallback;
+  };
+
+  cards.sort((a, b) => {
+    if (mode === "name") return a.dataset.name.localeCompare(b.dataset.name);
+    if (mode === "distance") return numeric(a, "distance", Number.POSITIVE_INFINITY) - numeric(b, "distance", Number.POSITIVE_INFINITY);
+    if (mode === "rating") return numeric(b, "rating", -1) - numeric(a, "rating", -1);
+    return 0;
+  });
+
+  cards.forEach((card) => grid.appendChild(card));
+  filterSavedRestaurants();
+}
+
+function getRestaurantLine(card, index) {
+  const name = card.querySelector("h2")?.textContent.trim();
+  const address = card.querySelector(".saved-address")?.textContent.trim();
+  const note = card.querySelector(".saved-note")?.value.trim();
+  const meta = Array.from(card.querySelectorAll(".saved-meta span")).map((span) => span.textContent.trim()).filter(Boolean).slice(0, 3).join(" · ");
+  return `${index + 1}. ${[name, address, meta, note ? `Note: ${note}` : ""].filter(Boolean).join(" — ")}`;
+}
+
+async function copyTextToClipboard(text, successMessage = "Copied") {
+  if (!text) return;
+
+  try {
+    await navigator.clipboard.writeText(text);
+    const label = document.getElementById("savedResultCount");
+    if (label) {
+      label.textContent = successMessage;
+      window.setTimeout(updateSavedResultCount, 1800);
+    }
+  } catch (error) {
+    alert("Unable to copy the saved list right now.");
+  }
+}
+
+function pickRandomSavedRestaurant() {
+  const cards = getVisibleSavedCards();
+  if (!cards.length) return;
+
+  document.querySelectorAll(".saved-card").forEach((card) => card.classList.remove("is-picked"));
   const picked = cards[Math.floor(Math.random() * cards.length)];
   picked.classList.add("is-picked");
   picked.scrollIntoView({ behavior: "smooth", block: "center" });
 }
+
+function copySavedShortlist() {
+  const text = getVisibleSavedCards().map(getRestaurantLine).join("\n");
+  copyTextToClipboard(text, "Copied visible saved picks");
+}
+
+function getSelectedSavedCards() {
+  return getVisibleSavedCards().filter((card) => card.querySelector(".saved-select")?.checked);
+}
+
+function getSavedCardScore(card, mode) {
+  const distance = Number(card.dataset.distance);
+  const rating = Number(card.dataset.rating);
+  const hasDistance = Number.isFinite(distance);
+  const hasRating = Number.isFinite(rating);
+  const distanceScore = hasDistance ? Math.max(0, 8 - distance / 800) : 2;
+  const ratingScore = hasRating ? rating * 2 : 5;
+  const budgetScore = card.textContent.includes("$5 - $20") || card.textContent.includes("$") ? 3 : 1;
+
+  if (mode === "nearby") return distanceScore * 3 + ratingScore;
+  if (mode === "rating") return ratingScore * 3 + distanceScore;
+  if (mode === "budget") return budgetScore * 3 + distanceScore + ratingScore;
+  return distanceScore + ratingScore + budgetScore;
+}
+
+function buildSavedPlan() {
+  const output = document.getElementById("savedPlanOutput");
+  const mode = document.getElementById("savedPlanMode")?.value || "balanced";
+  const selected = getSelectedSavedCards();
+  const pool = selected.length ? selected : getVisibleSavedCards();
+
+  if (!output) return;
+
+  output.innerHTML = "";
+
+  if (!pool.length) {
+    const item = document.createElement("li");
+    item.textContent = "No saved picks are visible right now.";
+    output.appendChild(item);
+    return;
+  }
+
+  pool
+    .slice()
+    .sort((a, b) => getSavedCardScore(b, mode) - getSavedCardScore(a, mode))
+    .slice(0, 3)
+    .forEach((card, index) => {
+      const item = document.createElement("li");
+      item.textContent = getRestaurantLine(card, index).replace(/^\d+\.\s*/, "");
+      output.appendChild(item);
+    });
+}
+
+function copySelectedSavedShortlist() {
+  const selected = getSelectedSavedCards();
+  const cards = selected.length ? selected : getVisibleSavedCards();
+  const text = cards.map(getRestaurantLine).join("\n");
+  copyTextToClipboard(text, selected.length ? "Copied selected shortlist" : "No shortlist selected, copied visible picks");
+}
+
+function copySingleSavedRestaurant(button) {
+  const card = button.closest(".saved-card");
+  if (!card) return;
+  copyTextToClipboard(getRestaurantLine(card, 0).replace(/^1\.\s*/, ""), "Copied this saved pick");
+}
+
+function selectVisibleSavedRestaurants() {
+  getVisibleSavedCards().forEach((card) => {
+    const checkbox = card.querySelector(".saved-select");
+    if (checkbox) checkbox.checked = true;
+  });
+  updateSavedResultCount();
+}
+
+function clearSavedSelections() {
+  document.querySelectorAll(".saved-select").forEach((checkbox) => {
+    checkbox.checked = false;
+  });
+  updateSavedResultCount();
+}
+
+function restoreSavedNotes() {
+  document.querySelectorAll(".saved-card").forEach((card) => {
+    const note = card.querySelector(".saved-note");
+    if (!note) return;
+    note.value = localStorage.getItem(getSavedNoteStorageKey(card)) || "";
+    note.addEventListener("input", () => {
+      localStorage.setItem(getSavedNoteStorageKey(card), note.value);
+      filterSavedRestaurants();
+    });
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  restoreSavedNotes();
+  document.getElementById("savedSearch")?.addEventListener("input", filterSavedRestaurants);
+  document.getElementById("savedSort")?.addEventListener("change", sortSavedRestaurants);
+  document.querySelectorAll(".saved-select").forEach((checkbox) => checkbox.addEventListener("change", updateSavedResultCount));
+  updateSavedResultCount();
+});
 </script>
-{%endblock%}
+{% endblock %}

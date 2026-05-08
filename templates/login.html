@@ -1,97 +1,86 @@
 <!DOCTYPE html>
-<html lang="en">
+<html data-theme="dark" lang="en">
 <head>
-    <title>Login</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.ico') }}"/>
-
-    <!-- App CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='util.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}">
+  <title>BiteSwipe Login</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#178f79">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Satoshi:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+  <script src="{{ url_for('static', filename='app-ui.js') }}" defer></script>
 </head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-brand-panel" aria-label="BiteSwipe intro">
+      <div class="auth-logo-card">
+        <img src="{{ url_for('static', filename='drexelxfizz.png') }}" alt="Drexel Fizz logo">
+      </div>
+      <p class="auth-kicker">BiteSwipe</p>
+      <h1>Find the next bite before the group chat melts down.</h1>
+      <p class="auth-rotating-line" data-biteswipe-headline>Swipe once. Eat better.</p>
+      <p>
+        Swipe through nearby restaurants, save the strongest options, tune for allergies and cravings, then bring your shortlist to My Stuff.
+      </p>
+      <div class="auth-feature-grid" aria-label="BiteSwipe features">
+        <span>Allergy-aware filters</span>
+        <span>Nearby deck</span>
+        <span>Saved shortlists</span>
+        <span>Campus chat</span>
+      </div>
+      <div class="auth-flow-preview" aria-label="BiteSwipe flow">
+        <div><strong>1</strong><span>Set filters</span></div>
+        <div><strong>2</strong><span>Swipe cards</span></div>
+        <div><strong>3</strong><span>Plan food</span></div>
+      </div>
+    </section>
 
-<body>
+    <section class="auth-card" aria-labelledby="login-title">
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          <div class="flash-messages auth-flashes" role="status" aria-live="polite">
+            {% for msg in messages %}
+              <div class="flash-message">{{ msg }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
 
-    <!-- Flash messages -->
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <div class="container mt-3">
-          {% for msg in messages %}
-            <div class="alert alert-info text-center">
-              {{ msg }}
-            </div>
-          {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
+      <div class="auth-card-heading">
+        <p class="auth-kicker">Welcome back</p>
+        <h2 id="login-title">Log in or create your account</h2>
+        <p>New here? Enter an email and password and BiteSwipe will create your account automatically.</p>
+      </div>
 
-    <div class="limiter">
-        <div class="container-login100">
-            <div class="wrap-login100">
+      <form class="auth-form" method="POST" action="{{ url_for('login') }}">
+        <label for="email">Email</label>
+        <input
+          id="email"
+          type="email"
+          name="email"
+          placeholder="you@drexel.edu"
+          autocomplete="email"
+          required>
 
-                <div class="login100-pic js-tilt" data-tilt>
-                    <img src="{{ url_for('static', filename='logo2.png') }}" alt="logo">
-                </div>
+        <label for="pass">Password</label>
+        <input
+          id="pass"
+          type="password"
+          name="pass"
+          placeholder="Your password"
+          autocomplete="current-password"
+          required>
 
-                <!-- 🔑 IMPORTANT: method + action -->
-                <form class="login100-form validate-form"
-                      method="POST"
-                      action="{{ url_for('login') }}">
+        <button type="submit">Enter BiteSwipe</button>
+      </form>
 
-                    <span class="login100-form-title">
-                        Member Login
-                    </span>
-
-                    <div class="wrap-input100 validate-input" data-validate="Valid email is required">
-                        <input class="input100"
-                               type="email"
-                               name="email"
-                               placeholder="Email"
-                               required>
-                        <span class="focus-input100"></span>
-                        <span class="symbol-input100">
-                            <i class="fa fa-envelope"></i>
-                        </span>
-                    </div>
-
-                    <div class="wrap-input100 validate-input" data-validate="Password is required">
-                        <input class="input100"
-                               type="password"
-                               name="pass"
-                               placeholder="Password"
-                               required>
-                        <span class="focus-input100"></span>
-                        <span class="symbol-input100">
-                            <i class="fa fa-lock"></i>
-                        </span>
-                    </div>
-
-                    <div class="container-login100-form-btn">
-                        <button type="submit" class="login100-form-btn">
-                            Login
-                        </button>
-                    </div>
-
-                    <div class="text-center p-t-12">
-                        <span class="txt1">Forgot</span>
-                        <a class="txt2" href="#">Username / Password?</a>
-                    </div>
-
-                    <div class="text-center p-t-136">
-                        <a class="txt2" href="#">
-                            Create your Account
-                            <i class="fa fa-long-arrow-right m-l-5"></i>
-                        </a>
-                    </div>
-
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <script src="{{ url_for('static', filename='main.js') }}"></script>
-
+      <div class="auth-safety-note">
+        <strong>Safe-bite note</strong>
+        <p>BiteSwipe can help narrow restaurant options, but always verify ingredients and cross-contact directly with the restaurant.</p>
+      </div>
+    </section>
+  </main>
 </body>
 </html>

@@ -1,14 +1,24 @@
 {% extends "base.html" %}
+{% block title %}BiteSwipe Profile{% endblock %}
 
 {% block content %}
-<section class="profile-shell">
+<script>document.body.classList.add("profile-page");</script>
+
+{% set profile_steps = 1 %}
+{% if u.bio and u.bio != 'this is a placeholder!' %}{% set profile_steps = profile_steps + 1 %}{% endif %}
+{% if food_preferences %}{% set profile_steps = profile_steps + 1 %}{% endif %}
+{% if allergen_interests %}{% set profile_steps = profile_steps + 1 %}{% endif %}
+{% if hobby_interests %}{% set profile_steps = profile_steps + 1 %}{% endif %}
+
+<section class="profile-shell profile-shell-upgraded" aria-labelledby="profile-title">
   <header class="profile-hero">
     <div class="profile-avatar-panel">
       <div class="profile-avatar-frame">
         <img
           src="{{ url_for('static', filename='uploads/' + (u.pfp_file_path or 'transparentnewdefaultpicture.png')) }}"
           alt="{{ u.name or 'Profile' }} picture"
-          class="profile-pic">
+          class="profile-pic"
+          id="profilePreview">
       </div>
 
       <form method="POST" enctype="multipart/form-data" class="upload-form">
@@ -55,66 +65,71 @@
         </div>
         <div>
           <strong>{{ food_preferences|length }}</strong>
-          <span>food preference{% if food_preferences|length != 1 %}s{% endif %}</span>
+          <span>craving{% if food_preferences|length != 1 %}s{% endif %}</span>
+        </div>
+        <div>
+          <strong>{{ allergen_interests|length }}</strong>
+          <span>allergy signal{% if allergen_interests|length != 1 %}s{% endif %}</span>
         </div>
         <div>
           <strong>{{ hobby_interests|length }}</strong>
-          <span>profile interest{% if hobby_interests|length != 1 %}s{% endif %}</span>
+          <span>interest{% if hobby_interests|length != 1 %}s{% endif %}</span>
+        </div>
+      </div>
+
+      <div class="profile-completion-card" aria-label="Profile completion">
+        <div>
+          <span>{{ profile_steps }}/5 setup steps</span>
+          <strong>{% if profile_steps >= 5 %}Profile ready{% elif profile_steps >= 3 %}Almost ready{% else %}Keep building{% endif %}</strong>
+        </div>
+        <div class="profile-completion-bar" aria-hidden="true">
+          <span style="width: {{ (profile_steps / 5 * 100)|round|int }}%"></span>
         </div>
       </div>
     </div>
   </header>
+
+  <div class="profile-action-strip" aria-label="Profile quick actions">
+    <a href="{{ url_for('home') }}">Open card deck</a>
+    <a href="{{ url_for('credits') }}">Review saved picks</a>
+    <button type="button" onclick="toggleFooterPanel('filters')">Edit filters</button>
+    <button type="button" onclick="toggleFooterPanel('interests')">Edit interests</button>
+  </div>
 
   <div class="profile-layout">
     <section class="profile-panel about-panel" aria-labelledby="about-title">
       <div class="section-heading-row">
         <div>
           <p class="profile-section-kicker">About</p>
-          <h2 id="about-title">About Me</h2>
+          <h2 id="about-title">Your food intro</h2>
         </div>
         <button type="button" id="edit-bio-btn" class="profile-small-button">Edit</button>
       </div>
 
-      <p id="bio-display" class="bio-copy">{{ u.bio or 'Add a quick note about what you like to eat, study, or do around campus.' }}</p>
+      <p id="bio-display" class="bio-copy">{{ u.bio if u.bio and u.bio != 'this is a placeholder!' else 'Add a quick note about what you like to eat, what you avoid, and where you usually study or hang out.' }}</p>
 
       <form id="bio-form" method="POST" class="bio-form" hidden>
         <input type="hidden" name="action" value="update_bio">
         <textarea
           name="bio"
           maxlength="256"
-          aria-label="Profile bio">{{ u.bio or '' }}</textarea>
+          aria-label="Profile bio">{{ '' if u.bio == 'this is a placeholder!' else (u.bio or '') }}</textarea>
         <div class="form-buttons">
+          <small><span id="bioCount">0</span>/256</small>
           <button type="submit">Save bio</button>
           <button type="button" id="cancel-bio-btn">Cancel</button>
         </div>
       </form>
     </section>
 
-    <section class="profile-panel verification-panel" aria-labelledby="verification-title">
-      <p class="profile-section-kicker">Account</p>
-      <h2 id="verification-title">Verification</h2>
-      <div class="verification-list">
-        <div class="verification-item is-complete">
-          <span aria-hidden="true">1</span>
-          <div>
-            <strong>Profile created</strong>
-            <p>Your account is ready to use.</p>
-          </div>
-        </div>
-        <div class="verification-item">
-          <span aria-hidden="true">2</span>
-          <div>
-            <strong>Verify .edu email</strong>
-            <p>Confirm your student email when verification is available.</p>
-          </div>
-        </div>
-        <div class="verification-item">
-          <span aria-hidden="true">3</span>
-          <div>
-            <strong>Add phone security</strong>
-            <p>Optional two-factor setup for future account protection.</p>
-          </div>
-        </div>
+    <section class="profile-panel taste-primer-panel" aria-labelledby="taste-primer-title">
+      <p class="profile-section-kicker">Taste setup</p>
+      <h2 id="taste-primer-title">Make the deck better</h2>
+      <div class="taste-checklist">
+        <div class="verification-item is-complete"><span aria-hidden="true">1</span><div><strong>Account created</strong><p>You are ready to swipe.</p></div></div>
+        <div class="verification-item{% if allergen_interests %} is-complete{% endif %}"><span aria-hidden="true">2</span><div><strong>Add allergy signals</strong><p>Use Allergens in the footer for safer deck filtering.</p></div></div>
+        <div class="verification-item{% if food_preferences %} is-complete{% endif %}"><span aria-hidden="true">3</span><div><strong>Add cravings</strong><p>Pick cuisines so the deck starts closer to what you want.</p></div></div>
+        <div class="verification-item{% if saved_restaurant_count %} is-complete{% endif %}"><span aria-hidden="true">4</span><div><strong>Save a few options</strong><p>Build a board for tonight or your next study break.</p></div></div>
       </div>
     </section>
   </div>
@@ -123,7 +138,7 @@
     <div class="profile-interests-header">
       <div>
         <p class="profile-section-kicker">Taste & profile</p>
-        <h2 id="interests-title">Interests</h2>
+        <h2 id="interests-title">Your signals</h2>
       </div>
       <form method="POST" class="food-preference-form">
         <input type="hidden" name="action" value="add_food_preference">
@@ -143,6 +158,34 @@
       </form>
     </div>
 
+    <div class="profile-signal-builder" aria-label="Quick profile signal buttons">
+      <section>
+        <h3>Quick cravings</h3>
+        <div class="profile-preset-actions">
+          {% for preference in food_preference_presets %}
+            <form method="POST">
+              <input type="hidden" name="action" value="add_food_preference">
+              <input type="hidden" name="food_preference" value="{{ preference }}">
+              <button type="submit">{{ preference }}</button>
+            </form>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section>
+        <h3>Quick interests</h3>
+        <div class="profile-preset-actions">
+          {% for interest in hobby_interest_presets %}
+            <form method="POST">
+              <input type="hidden" name="action" value="add_hobby_interest">
+              <input type="hidden" name="hobby_interest" value="{{ interest }}">
+              <button type="submit">{{ interest }}</button>
+            </form>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+
     <div class="interest-groups">
       <article class="interest-group">
         <h3>Allergens</h3>
@@ -154,17 +197,17 @@
                 <input type="hidden" name="category" value="allergen">
                 <input type="hidden" name="value" value="{{ interest }}">
                 <span>{{ interest }}</span>
-                <button type="submit" aria-label="Remove {{ interest }}">x</button>
+                <button type="submit" aria-label="Remove {{ interest }}">×</button>
               </form>
             {% endfor %}
           </div>
         {% else %}
-          <p class="interest-empty">Choose allergens in the footer Filters menu.</p>
+          <p class="interest-empty">Choose allergens in the footer Allergens panel.</p>
         {% endif %}
       </article>
 
       <article class="interest-group">
-        <h3>Food Preferences</h3>
+        <h3>Cravings</h3>
         {% if food_preferences %}
           <div class="interest-chip-list">
             {% for interest in food_preferences %}
@@ -173,17 +216,17 @@
                 <input type="hidden" name="category" value="food">
                 <input type="hidden" name="value" value="{{ interest }}">
                 <span>{{ interest }}</span>
-                <button type="submit" aria-label="Remove {{ interest }}">x</button>
+                <button type="submit" aria-label="Remove {{ interest }}">×</button>
               </form>
             {% endfor %}
           </div>
         {% else %}
-          <p class="interest-empty">Add one above or pick cuisines in the footer Filters menu.</p>
+          <p class="interest-empty">Add one above or pick cuisines in the footer Allergens panel.</p>
         {% endif %}
       </article>
 
       <article class="interest-group">
-        <h3>Other Interests</h3>
+        <h3>Interests</h3>
         {% if hobby_interests %}
           <div class="interest-chip-list">
             {% for interest in hobby_interests %}
@@ -192,12 +235,12 @@
                 <input type="hidden" name="category" value="hobby">
                 <input type="hidden" name="value" value="{{ interest }}">
                 <span>{{ interest }}</span>
-                <button type="submit" aria-label="Remove {{ interest }}">x</button>
+                <button type="submit" aria-label="Remove {{ interest }}">×</button>
               </form>
             {% endfor %}
           </div>
         {% else %}
-          <p class="interest-empty">Pick hobbies from the footer Interests menu.</p>
+          <p class="interest-empty">Pick hobbies from the footer Interests panel.</p>
         {% endif %}
       </article>
     </div>
@@ -205,40 +248,54 @@
 </section>
 
 <script>
-const editNameButton = document.getElementById("edit-name-btn");
-const cancelNameButton = document.getElementById("cancel-name-btn");
-const displayName = document.getElementById("username-display");
+function bindToggle(editButton, cancelButton, displayElement, formElement, focusSelector) {
+  editButton?.addEventListener("click", () => {
+    displayElement.hidden = true;
+    editButton.hidden = true;
+    formElement.hidden = false;
+    formElement.querySelector(focusSelector)?.focus();
+  });
+
+  cancelButton?.addEventListener("click", () => {
+    formElement.hidden = true;
+    displayElement.hidden = false;
+    editButton.hidden = false;
+  });
+}
+
 const nameForm = document.getElementById("username-form");
+const displayName = document.getElementById("username-display");
+bindToggle(
+  document.getElementById("edit-name-btn"),
+  document.getElementById("cancel-name-btn"),
+  displayName,
+  nameForm,
+  "input[name='name']"
+);
 
-editNameButton.addEventListener("click", () => {
-  displayName.hidden = true;
-  editNameButton.hidden = true;
-  nameForm.hidden = false;
-  nameForm.querySelector("input[name='name']").focus();
-});
-
-cancelNameButton.addEventListener("click", () => {
-  nameForm.hidden = true;
-  displayName.hidden = false;
-  editNameButton.hidden = false;
-});
-
-const editBioButton = document.getElementById("edit-bio-btn");
-const cancelBioButton = document.getElementById("cancel-bio-btn");
-const bioDisplay = document.getElementById("bio-display");
 const bioForm = document.getElementById("bio-form");
+const bioDisplay = document.getElementById("bio-display");
+const bioTextarea = bioForm?.querySelector("textarea");
+const bioCount = document.getElementById("bioCount");
+bindToggle(
+  document.getElementById("edit-bio-btn"),
+  document.getElementById("cancel-bio-btn"),
+  bioDisplay,
+  bioForm,
+  "textarea"
+);
 
-editBioButton.addEventListener("click", () => {
-  bioDisplay.hidden = true;
-  editBioButton.hidden = true;
-  bioForm.hidden = false;
-  bioForm.querySelector("textarea").focus();
-});
+function updateBioCount() {
+  if (bioTextarea && bioCount) bioCount.textContent = String(bioTextarea.value.length);
+}
+bioTextarea?.addEventListener("input", updateBioCount);
+updateBioCount();
 
-cancelBioButton.addEventListener("click", () => {
-  bioForm.hidden = true;
-  bioDisplay.hidden = false;
-  editBioButton.hidden = false;
+document.getElementById("profile-image")?.addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  const preview = document.getElementById("profilePreview");
+  if (!file || !preview) return;
+  preview.src = URL.createObjectURL(file);
 });
 </script>
 {% endblock %}

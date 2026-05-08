@@ -104,6 +104,24 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertIn(b"Italian", response.data)
         self.assertIn(b"Gaming", response.data)
 
+    def test_profile_quick_add_hobby_interest_updates_filters(self) -> None:
+        self.login()
+
+        response = self.client.post(
+            "/profile",
+            data={"action": "add_hobby_interest", "hobby_interest": "Music"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+
+        response = self.client.get("/get_filters")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["hobbyInterests"], ["Music"])
+
+        response = self.client.get("/profile")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Music", response.data)
+
     def test_chat_posts_return_user_names(self) -> None:
         self.login()
         response = self.client.post("/chat", data={"message": "hello"}, follow_redirects=False)
