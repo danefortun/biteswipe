@@ -120,3 +120,87 @@ class SavedRestaurant(db.Model):
         self.review_count = review_count
         self.website = website
         self.created_at = datetime.now(timezone.utc).isoformat()
+
+
+class GroupSwipeSession(db.Model):
+    __tablename__ = "group_swipe_sessions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(12), nullable=False, unique=True, index=True)
+    host_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    created_at = db.Column(db.String(40), nullable=False, index=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+
+    host = db.relationship("Users", backref=db.backref("hosted_group_sessions", lazy=True))
+
+    def __init__(self, code: str, host_user_id: int) -> None:
+        self.code = code
+        self.host_user_id = host_user_id
+        self.created_at = datetime.now(timezone.utc).isoformat()
+        self.is_active = True
+
+
+class GroupSwipeMember(db.Model):
+    __tablename__ = "group_swipe_members"
+    __table_args__ = (
+        db.UniqueConstraint("session_id", "user_id", name="uq_group_swipe_member_user"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey("group_swipe_sessions.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    joined_at = db.Column(db.String(40), nullable=False, index=True)
+
+    session = db.relationship("GroupSwipeSession", backref=db.backref("members", lazy=True))
+    user = db.relationship("Users", backref=db.backref("group_swipe_memberships", lazy=True))
+
+    def __init__(self, session_id: int, user_id: int) -> None:
+        self.session_id = session_id
+        self.user_id = user_id
+        self.joined_at = datetime.now(timezone.utc).isoformat()
+
+
+class GroupSwipeVote(db.Model):
+    __tablename__ = "group_swipe_votes"
+    __table_args__ = (
+        db.UniqueConstraint("session_id", "user_id", "place_id", name="uq_group_swipe_vote_place"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey("group_swipe_sessions.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    place_id = db.Column(db.String(255), nullable=False, index=True)
+    action = db.Column(db.String(16), nullable=False)
+    restaurant_json = db.Column(db.Text, default="{}")
+    updated_at = db.Column(db.String(40), nullable=False, index=True)
+
+    session = db.relationship("GroupSwipeSession", backref=db.backref("votes", lazy=True))
+    user = db.relationship("Users", backref=db.backref("group_swipe_votes", lazy=True))
+
+    def __init__(
+        self,
+        session_id: int,
+        user_id: int,
+        place_id: str,
+        action: str,
+        restaurant: dict[str, Any],
+    ) -> None:
+        self.session_id = session_id
+        self.user_id = user_id
+        self.place_id = place_id
+        self.action = action
+        self.restaurant_json = json.dumps(restaurant)
+        self.updated_at = datetime.now(timezone.utc).isoformat()
+
+    def set_vote(self, action: str, restaurant: dict[str, Any]) -> None:
+        self.action = action
+        self.restaurant_json = json.dumps(restaurant)
+        self.updated_at = datetime.now(timezone.utc).isoformat()
+
+    def restaurant_payload(self) -> dict[str, Any]:
+        try:
+            payload = json.loads(self.restaurant_json or "{}")
+        except (TypeError, json.JSONDecodeError):
+            return {}
+
+        return payload if isinstance(payload, dict) else {}

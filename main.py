@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hmac
 import json
+import secrets
+import string
 from functools import wraps
 from math import atan2, cos, radians, sin, sqrt
 from pathlib import Path
@@ -29,7 +31,7 @@ from werkzeug.utils import secure_filename
 from blog_db import BlogPosts
 from config import Config
 from db import db
-from users_db import SavedRestaurant, Users
+from users_db import GroupSwipeMember, GroupSwipeSession, GroupSwipeVote, SavedRestaurant, Users
 
 
 ALLOWED_UPLOAD_EXTENSIONS = {"gif", "jpeg", "jpg", "png", "webp"}
@@ -156,6 +158,7 @@ DEFAULT_FILTERS: dict[str, Any] = {
     "mediumPrice": False,
     "expensivePrice": False,
     "distance": 50,
+    "openNow": False,
     "foodPreferences": [],
     "hobbyInterests": [],
 }
@@ -326,7 +329,7 @@ def register_routes(app: Flask) -> None:
             if user_id
             else []
         )
-        return render_template("about_us.html", saved_restaurants=saved_restaurants)
+        return render_template("saved.html", saved_restaurants=saved_restaurants)
 
     @app.route("/login", methods=["POST", "GET"])
     def login() -> Any:
@@ -484,6 +487,99 @@ def register_routes(app: Flask) -> None:
         payload = request.get_json(silent=True) or {}
         ok, message, saved = save_selected_restaurant(user, payload)
         return jsonify({"ok": ok, "message": message, "saved": saved}), 200 if ok else 400
+
+    @app.post("/group_session/create")
+    @login_required
+    def create_group_session() -> Any:
+        user = current_user()
+        if user is None:
+            abort(404)
+
+        group_session = GroupSwipeSession(code=generate_group_code(), host_user_id=user.id)
+        db.session.add(group_session)
+        db.session.flush()
+        add_group_member(group_session, user)
+        db.session.commit()
+        session["group_swipe_code"] = group_session.code
+        return jsonify({"ok": True, "group": serialize_group_session(group_session, user)})
+
+    @app.post("/group_session/join")
+    @login_required
+    def join_group_session() -> Any:
+        user = current_user()
+        if user is None:
+            abort(404)
+
+        payload = request.get_json(silent=True) or request.form
+        code = normalize_group_code(payload.get("code", ""))
+        group_session = GroupSwipeSession.query.filter_by(code=code, is_active=True).first()
+
+        if group_session is None:
+            return jsonify({"ok": False, "message": "No active group session found for that code."}), 404
+
+        add_group_member(group_session, user)
+        db.session.commit()
+        session["group_swipe_code"] = group_session.code
+        return jsonify({"ok": True, "group": serialize_group_session(group_session, user)})
+
+    @app.post("/group_session/leave")
+    @login_required
+    def leave_group_session() -> Any:
+        session.pop("group_swipe_code", None)
+        return jsonify({"ok": True, "message": "Left group mode."})
+
+    @app.get("/group_session/current")
+    @login_required
+    def current_group_session() -> Any:
+        user = current_user()
+        if user is None:
+            abort(404)
+
+        group_session = get_current_group_session()
+        if group_session is None:
+            return jsonify({"ok": True, "group": None})
+
+        return jsonify({"ok": True, "group": serialize_group_session(group_session, user)})
+
+    @app.post("/group_session/swipe")
+    @login_required
+    def group_session_swipe() -> Any:
+        user = current_user()
+        if user is None:
+            abort(404)
+
+        group_session = get_current_group_session()
+        if group_session is None:
+            return jsonify({"ok": False, "message": "Join or create a group session first."}), 400
+
+        payload = request.get_json(silent=True) or {}
+        restaurant = payload.get("restaurant") if isinstance(payload.get("restaurant"), dict) else {}
+        place_id = str(payload.get("place") or restaurant.get("place") or "").strip()
+        action = str(payload.get("action") or "").strip().lower()
+
+        if not place_id or action not in {"save", "pass"}:
+            return jsonify({"ok": False, "message": "Unable to record that group swipe."}), 400
+
+        vote = GroupSwipeVote.query.filter_by(
+            session_id=group_session.id,
+            user_id=user.id,
+            place_id=place_id,
+        ).first()
+
+        if vote is None:
+            vote = GroupSwipeVote(
+                session_id=group_session.id,
+                user_id=user.id,
+                place_id=place_id,
+                action=action,
+                restaurant=sanitize_group_restaurant_payload(restaurant),
+            )
+            db.session.add(vote)
+        else:
+            vote.set_vote(action, sanitize_group_restaurant_payload(restaurant))
+
+        db.session.commit()
+        return jsonify({"ok": True, "group": serialize_group_session(group_session, user)})
 
     @app.post("/remove_restaurant/<int:restaurant_id>")
     @login_required
@@ -815,6 +911,109 @@ def save_selected_restaurant(user: Users, payload: dict[str, Any]) -> tuple[bool
     return True, message, serialize_saved_restaurant(saved)
 
 
+def generate_group_code() -> str:
+    alphabet = string.ascii_uppercase + string.digits
+
+    for _ in range(12):
+        code = "".join(secrets.choice(alphabet) for _ in range(6))
+        if GroupSwipeSession.query.filter_by(code=code).first() is None:
+            return code
+
+    return "".join(secrets.choice(alphabet) for _ in range(8))
+
+
+def normalize_group_code(value: Any) -> str:
+    return "".join(char for char in str(value).upper() if char.isalnum())[:12]
+
+
+def add_group_member(group_session: GroupSwipeSession, user: Users) -> None:
+    existing = GroupSwipeMember.query.filter_by(
+        session_id=group_session.id,
+        user_id=user.id,
+    ).first()
+
+    if existing is None:
+        db.session.add(GroupSwipeMember(session_id=group_session.id, user_id=user.id))
+
+
+def get_current_group_session() -> GroupSwipeSession | None:
+    code = normalize_group_code(session.get("group_swipe_code", ""))
+    if not code:
+        return None
+
+    return GroupSwipeSession.query.filter_by(code=code, is_active=True).first()
+
+
+def sanitize_group_restaurant_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    allowed_keys = {
+        "name",
+        "place",
+        "source",
+        "address",
+        "photo",
+        "distance_meters",
+        "cuisine",
+        "price_text",
+        "price_level",
+        "rating",
+        "review_count",
+        "website",
+        "is_open",
+    }
+    return {key: payload.get(key) for key in allowed_keys if key in payload}
+
+
+def serialize_group_session(group_session: GroupSwipeSession, user: Users | None = None) -> dict[str, Any]:
+    members = sorted(group_session.members, key=lambda member: member.joined_at)
+    member_ids = {member.user_id for member in members}
+    member_count = max(len(member_ids), 1)
+    votes = list(group_session.votes)
+    saved_votes = [vote for vote in votes if vote.action == "save"]
+    saved_by_place: dict[str, list[GroupSwipeVote]] = {}
+
+    for vote in saved_votes:
+        saved_by_place.setdefault(vote.place_id, []).append(vote)
+
+    consensus = []
+    maybe = []
+    for place_id, place_votes in saved_by_place.items():
+        voter_ids = {vote.user_id for vote in place_votes}
+        payload = place_votes[-1].restaurant_payload()
+        entry = {
+            "place": place_id,
+            "name": payload.get("name") or "Restaurant",
+            "address": payload.get("address"),
+            "photo": payload.get("photo"),
+            "source": payload.get("source"),
+            "saved_count": len(voter_ids),
+            "needed_count": member_count,
+        }
+
+        if member_ids and voter_ids >= member_ids:
+            consensus.append(entry)
+        else:
+            maybe.append(entry)
+
+    consensus.sort(key=lambda item: item["name"])
+    maybe.sort(key=lambda item: (-item["saved_count"], item["name"]))
+
+    return {
+        "code": group_session.code,
+        "is_host": bool(user and user.id == group_session.host_user_id),
+        "member_count": member_count,
+        "members": [
+            {
+                "id": member.user_id,
+                "name": member.user.name if member.user else "BiteSwipe user",
+            }
+            for member in members
+        ],
+        "vote_count": len(votes),
+        "consensus": consensus[:12],
+        "almost": maybe[:12],
+    }
+
+
 def normalize_optional_string(value: Any, max_length: int) -> str | None:
     if value is None:
         return None
@@ -918,6 +1117,9 @@ def restaurant_matches_filters(place: dict[str, Any], filters: dict[str, Any]) -
         return False
 
     if not restaurant_matches_food_preferences(place, sanitize_interest_values(filters.get("foodPreferences", []))):
+        return False
+
+    if filters.get("openNow") and place.get("is_open") is False:
         return False
 
     if not restaurant_matches_allergens(place, filters):
@@ -1054,7 +1256,7 @@ def search_restaurants_with_google(
         "X-Goog-FieldMask": (
             "places.id,places.displayName,places.photos,places.formattedAddress,"
             "places.priceLevel,places.types,places.rating,places.userRatingCount,"
-            "places.websiteUri,places.googleMapsUri"
+            "places.websiteUri,places.googleMapsUri,places.currentOpeningHours"
         ),
     }
     filters = filters or DEFAULT_FILTERS
@@ -1145,6 +1347,8 @@ def format_osm_place(
         "rating": None,
         "review_count": None,
         "website": normalize_website_url(tags.get("website") or tags.get("contact:website")),
+        "is_open": None,
+        "opening_hours_text": tags.get("opening_hours"),
         "distance_meters": distance_meters(origin_latitude, origin_longitude, latitude, longitude)
         if latitude is not None and longitude is not None
         else None,
@@ -1183,6 +1387,8 @@ def format_google_place(place: dict[str, Any], api_key: str) -> dict[str, Any]:
     display_name = place.get("displayName") or {}
     photos = place.get("photos") or []
     photo_name = photos[0].get("name") if photos else None
+    opening_hours = place.get("currentOpeningHours") or {}
+    weekday_descriptions = opening_hours.get("weekdayDescriptions") or []
 
     return {
         "name": display_name.get("text", "Unknown restaurant"),
@@ -1201,6 +1407,8 @@ def format_google_place(place: dict[str, Any], api_key: str) -> dict[str, Any]:
         "rating": normalize_optional_float(place.get("rating")),
         "review_count": place.get("userRatingCount"),
         "website": place.get("websiteUri") or place.get("googleMapsUri"),
+        "is_open": opening_hours.get("openNow"),
+        "opening_hours_text": "; ".join(weekday_descriptions[:2]) if weekday_descriptions else None,
         "distance_meters": None,
     }
 

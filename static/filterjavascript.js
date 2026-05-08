@@ -10,6 +10,7 @@ const checkboxFilterIds = [
   "cheapPrice",
   "mediumPrice",
   "expensivePrice",
+  "openNow",
 ];
 
 function myFunction() {

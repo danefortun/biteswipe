@@ -7,10 +7,13 @@ const restaurantCardStorageUser = {{ session.get("id", "guest") | tojson }};
 window.restaurantCardStorageKey = `biteswipe.restaurantStack.${restaurantCardStorageUser}`;
 window.restaurantRatingStorageKey = `biteswipe.userRatings.${restaurantCardStorageUser}`;
 window.restaurantStatsStorageKey = `biteswipe.deckStats.${restaurantCardStorageUser}`;
+window.restaurantPassHistoryStorageKey = `biteswipe.passHistory.${restaurantCardStorageUser}`;
 window.currentRestaurantCards = [];
 window.restaurantDecisionHistory = [];
 window.restaurantToastTimeout = null;
 window.deckCoachStorageKey = `biteswipe.deckCoachDismissed.${restaurantCardStorageUser}`;
+window.activeGroupSession = null;
+window.groupStatusTimer = null;
 
 function setRestaurantStatus(message) {
     const status = document.getElementById("restaurantStatus");
@@ -166,7 +169,7 @@ function updateActiveFilterSummary() {
     if (labels.length === 0) {
         const empty = document.createElement("span");
         empty.className = "filter-summary-empty";
-        empty.textContent = "No filters yet — open Allergens to tune your deck.";
+        empty.textContent = "No filters yet - open Allergens to tune your deck.";
         summary.appendChild(empty);
         return;
     }
@@ -353,6 +356,267 @@ async function shareRestaurant(result) {
     }
 }
 
+function readPassedRestaurantHistory() {
+    try {
+        const rawHistory = localStorage.getItem(window.restaurantPassHistoryStorageKey);
+        const history = rawHistory ? JSON.parse(rawHistory) : [];
+        return Array.isArray(history) ? history : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function writePassedRestaurantHistory(history) {
+    try {
+        localStorage.setItem(window.restaurantPassHistoryStorageKey, JSON.stringify(history.slice(0, 30)));
+    } catch (error) {
+        // Pass history is a convenience feature.
+    }
+}
+
+function addPassedRestaurantToHistory(restaurant) {
+    if (!restaurant) {
+        return;
+    }
+
+    const key = restaurant.place || restaurant.name || "";
+    const history = readPassedRestaurantHistory().filter((item) => (item.place || item.name || "") !== key);
+    history.unshift({
+        ...restaurant,
+        passedAt: new Date().toISOString(),
+    });
+    writePassedRestaurantHistory(history);
+    updateDeckHistoryPanel();
+}
+
+function updateDeckHistoryPanel() {
+    const list = document.getElementById("deckHistoryList");
+    const count = document.getElementById("deckHistoryCount");
+    const history = readPassedRestaurantHistory();
+
+    if (count) {
+        count.textContent = String(history.length);
+    }
+
+    if (!list) {
+        return;
+    }
+
+    list.innerHTML = "";
+
+    if (!history.length) {
+        const empty = document.createElement("p");
+        empty.className = "deck-history-empty";
+        empty.textContent = "Passed restaurants will show up here during this browser session.";
+        list.appendChild(empty);
+        return;
+    }
+
+    history.slice(0, 10).forEach((restaurant) => {
+        const item = document.createElement("article");
+        item.className = "deck-history-item";
+
+        const title = document.createElement("strong");
+        title.textContent = restaurant.name || "Restaurant";
+        item.appendChild(title);
+
+        const meta = document.createElement("span");
+        meta.textContent = [formatDistance(restaurant.distance_meters), formatCuisine(restaurant.cuisine)].filter(Boolean).join(" - ") || "Passed pick";
+        item.appendChild(meta);
+
+        const actions = document.createElement("div");
+
+        const saveButton = document.createElement("button");
+        saveButton.type = "button";
+        saveButton.textContent = "Save";
+        saveButton.addEventListener("click", async () => {
+            const response = await fetch("/save_restaurant", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(restaurant),
+            });
+            const data = await response.json();
+            setRestaurantStatus(data.message || "Saved from history.");
+        });
+
+        const directions = document.createElement("a");
+        directions.href = buildMapsUrl(restaurant);
+        directions.target = "_blank";
+        directions.rel = "noopener noreferrer";
+        directions.textContent = "Directions";
+
+        actions.append(saveButton, directions);
+        item.appendChild(actions);
+        list.appendChild(item);
+    });
+}
+
+function toggleDeckHistory() {
+    const panel = document.getElementById("deckHistoryPanel");
+    if (!panel) {
+        return;
+    }
+
+    panel.hidden = !panel.hidden;
+    updateDeckHistoryPanel();
+}
+
+function clearDeckHistory() {
+    writePassedRestaurantHistory([]);
+    updateDeckHistoryPanel();
+    showBiteToast("Pass history cleared", "success");
+}
+
+async function createGroupSession() {
+    try {
+        const response = await fetch("/group_session/create", { method: "POST" });
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            setRestaurantStatus(data.message || "Unable to start group mode.");
+            return;
+        }
+
+        window.activeGroupSession = data.group;
+        updateGroupPanel(data.group);
+        startGroupStatusPolling();
+        showBiteToast(`Group code ${data.group.code} created`, "success");
+    } catch (error) {
+        setRestaurantStatus("Unable to start group mode right now.");
+    }
+}
+
+async function joinGroupSession() {
+    const input = document.getElementById("groupCodeInput");
+    const code = input?.value || "";
+
+    if (!code.trim()) {
+        setRestaurantStatus("Enter a group code first.");
+        return;
+    }
+
+    try {
+        const response = await fetch("/group_session/join", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code }),
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            setRestaurantStatus(data.message || "Unable to join that group.");
+            return;
+        }
+
+        window.activeGroupSession = data.group;
+        updateGroupPanel(data.group);
+        startGroupStatusPolling();
+        showBiteToast(`Joined group ${data.group.code}`, "success");
+    } catch (error) {
+        setRestaurantStatus("Unable to join group mode right now.");
+    }
+}
+
+async function leaveGroupSession() {
+    await fetch("/group_session/leave", { method: "POST" });
+    window.activeGroupSession = null;
+    window.clearInterval(window.groupStatusTimer);
+    updateGroupPanel(null);
+    showBiteToast("Left group mode", "success");
+}
+
+async function refreshGroupSession() {
+    try {
+        const response = await fetch("/group_session/current");
+        const data = await response.json();
+        window.activeGroupSession = data.group || null;
+        updateGroupPanel(window.activeGroupSession);
+    } catch (error) {
+        // Polling should stay quiet if the network blips.
+    }
+}
+
+function startGroupStatusPolling() {
+    window.clearInterval(window.groupStatusTimer);
+    window.groupStatusTimer = window.setInterval(refreshGroupSession, 4500);
+}
+
+async function recordGroupSwipe(action, restaurant) {
+    if (!window.activeGroupSession || !restaurant) {
+        return;
+    }
+
+    try {
+        const response = await fetch("/group_session/swipe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                action,
+                place: restaurant.place,
+                restaurant,
+            }),
+        });
+        const data = await response.json();
+
+        if (response.ok && data.group) {
+            window.activeGroupSession = data.group;
+            updateGroupPanel(data.group);
+        }
+    } catch (error) {
+        setRestaurantStatus("Saved your swipe locally, but group mode could not update.");
+    }
+}
+
+function updateGroupPanel(group) {
+    const panel = document.getElementById("groupModePanel");
+    const inactive = document.getElementById("groupModeInactive");
+    const active = document.getElementById("groupModeActive");
+    const code = document.getElementById("groupCodeLabel");
+    const memberCount = document.getElementById("groupMemberCount");
+    const consensusList = document.getElementById("groupConsensusList");
+    const almostList = document.getElementById("groupAlmostList");
+
+    if (!panel || !inactive || !active) {
+        return;
+    }
+
+    panel.classList.toggle("is-active", Boolean(group));
+    inactive.hidden = Boolean(group);
+    active.hidden = !group;
+
+    if (!group) {
+        return;
+    }
+
+    if (code) code.textContent = group.code;
+    if (memberCount) memberCount.textContent = `${group.member_count} member${group.member_count === 1 ? "" : "s"}`;
+
+    renderGroupRestaurantList(consensusList, group.consensus, "No unanimous saves yet.");
+    renderGroupRestaurantList(almostList, group.almost, "Near matches will show here.");
+}
+
+function renderGroupRestaurantList(container, restaurants, emptyText) {
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = "";
+    const items = Array.isArray(restaurants) ? restaurants : [];
+
+    if (!items.length) {
+        const empty = document.createElement("li");
+        empty.textContent = emptyText;
+        container.appendChild(empty);
+        return;
+    }
+
+    items.slice(0, 5).forEach((restaurant) => {
+        const item = document.createElement("li");
+        item.textContent = `${restaurant.name} (${restaurant.saved_count}/${restaurant.needed_count})`;
+        container.appendChild(item);
+    });
+}
+
 function readRestaurantCardStack() {
     try {
         const rawStack = localStorage.getItem(window.restaurantCardStorageKey);
@@ -487,6 +751,7 @@ async function clearRestaurantFilters() {
         cheapPrice: false,
         mediumPrice: false,
         expensivePrice: false,
+        openNow: false,
         distance: 50,
         foodPreferences: [],
         hobbyInterests: typeof getCheckedValues === "function" ? getCheckedValues("hobbyInterests") : [],
@@ -679,6 +944,7 @@ function buildCardChips(result) {
     [
         formatDistance(result.distance_meters),
         result.price_text || formatPriceLevel(result.price_level),
+        formatOpenStatus(result),
         formatCuisine(result.cuisine),
         formatShortRating(result),
     ].filter(Boolean).slice(0, 4).forEach((value) => {
@@ -704,6 +970,7 @@ function buildCardBack(result) {
     detailList.classList.add("restaurant-details");
     addDetail(detailList, "Food", formatCuisine(result.cuisine));
     addDetail(detailList, "Cost", result.price_text || formatPriceLevel(result.price_level));
+    addDetail(detailList, "Hours", result.opening_hours_text || formatOpenStatus(result));
     addDetail(detailList, "Address", result.address);
     addDetail(detailList, "Distance", formatDistance(result.distance_meters));
     addDetail(detailList, "Source", formatSource(result.source));
@@ -951,6 +1218,18 @@ function formatShortRating(result) {
     return Number.isFinite(rating) ? `${rating.toFixed(1)} rated` : null;
 }
 
+function formatOpenStatus(result) {
+    if (result?.is_open === true) {
+        return "Open now";
+    }
+
+    if (result?.is_open === false) {
+        return "Closed now";
+    }
+
+    return null;
+}
+
 function formatSource(source) {
     if (source === "google") {
         return "Google Places";
@@ -984,6 +1263,11 @@ function buildRestaurantSummary(result) {
         parts.push(`Online rating: ${formatOnlineRating(result)}.`);
     }
 
+    const openStatus = formatOpenStatus(result);
+    if (openStatus) {
+        parts.push(openStatus + ".");
+    }
+
     return parts.join(" ") || "More restaurant details will appear here when the provider has them.";
 }
 
@@ -1006,7 +1290,7 @@ function updateCurrentCardMeta() {
         formatDistance(result.distance_meters),
         formatShortRating(result),
     ].filter(Boolean);
-    label.textContent = parts.join(" · ");
+    label.textContent = parts.join(" - ");
 }
 
 function updateCardProgress() {
@@ -1022,8 +1306,8 @@ function updateCardProgress() {
 
     if (progress) {
         progress.textContent = isComplete
-            ? `Deck complete · ${total} reviewed`
-            : `${activeNumber} of ${total || "—"} spots`;
+            ? `Deck complete - ${total} reviewed`
+            : `${activeNumber} of ${total || "-"} spots`;
     }
 
     if (miniProgress) {
@@ -1065,6 +1349,12 @@ document.addEventListener("DOMContentLoaded", () => {
     restoreRestaurantCardStack();
     updateSessionStats();
     updateActiveFilterSummary();
+    updateDeckHistoryPanel();
+    refreshGroupSession().then(() => {
+        if (window.activeGroupSession) {
+            startGroupStatusPolling();
+        }
+    });
 });
 </script>
 
@@ -1077,7 +1367,7 @@ document.addEventListener("DOMContentLoaded", () => {
     </p>
 
     <div class="cards-hero-metrics" aria-label="Deck status">
-      <span id="cardProgressText">0 of — spots</span>
+      <span id="cardProgressText">0 of - spots</span>
       <span id="currentCardMeta">Choose filters, use location, then load a deck.</span>
       <span>Tap cards for details</span>
     </div>
@@ -1091,7 +1381,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <strong>Best flow</strong>
         <p>Set allergy filters, load nearby spots, tap a card for details, save only the places you would actually eat at, then compare in Saved.</p>
       </div>
-      <button type="button" onclick="dismissDeckCoach()" aria-label="Hide BiteSwipe tips">×</button>
+      <button type="button" onclick="dismissDeckCoach()" aria-label="Hide BiteSwipe tips">x</button>
     </aside>
 
     <div class="deck-insight-grid" aria-label="Your deck activity">
@@ -1101,7 +1391,7 @@ document.addEventListener("DOMContentLoaded", () => {
     </div>
 
     <div class="active-filter-summary" id="activeFilterSummary" aria-live="polite">
-      <span class="filter-summary-empty">No filters yet — open Allergens to tune your deck.</span>
+      <span class="filter-summary-empty">No filters yet - open Allergens to tune your deck.</span>
     </div>
 
     <div class="quick-cravings" aria-label="Quick food cravings">
@@ -1134,10 +1424,41 @@ document.addEventListener("DOMContentLoaded", () => {
   </div>
 
   <div class="card-stage is-empty">
+    <section class="group-mode-panel" id="groupModePanel" aria-label="Group swipe mode">
+      <div id="groupModeInactive">
+        <strong>Group mode</strong>
+        <p>Start or join a session. Only restaurants everyone saves make the final shortlist.</p>
+        <div class="group-mode-actions">
+          <button type="button" onclick="createGroupSession()">Start group</button>
+          <input id="groupCodeInput" type="text" maxlength="12" placeholder="Code" aria-label="Group code">
+          <button type="button" onclick="joinGroupSession()">Join</button>
+        </div>
+      </div>
+      <div id="groupModeActive" hidden>
+        <div class="group-mode-active-header">
+          <div>
+            <strong>Group <span id="groupCodeLabel"></span></strong>
+            <span id="groupMemberCount">1 member</span>
+          </div>
+          <button type="button" onclick="leaveGroupSession()">Leave</button>
+        </div>
+        <div class="group-mode-results">
+          <div>
+            <span>Everyone saved</span>
+            <ul id="groupConsensusList"></ul>
+          </div>
+          <div>
+            <span>Almost there</span>
+            <ul id="groupAlmostList"></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <div class="deck-status-row">
       <span class="deck-status-pill" id="deckMiniProgress">No deck yet</span>
-      <span class="deck-status-pill">← Pass</span>
-      <span class="deck-status-pill deck-status-pill-save">Save →</span>
+      <span class="deck-status-pill">Pass</span>
+      <span class="deck-status-pill deck-status-pill-save">Save</span>
     </div>
 
     <div class="deck-sort-row" aria-label="Deck sorting tools">
@@ -1214,7 +1535,24 @@ document.addEventListener("DOMContentLoaded", () => {
         onclick="clearRestaurantFilters()">
         Clear
       </button>
+      <button
+        type="button"
+        class="card-action-button card-action-history"
+        onclick="toggleDeckHistory()">
+        History <span id="deckHistoryCount">0</span>
+      </button>
     </div>
+
+    <section class="deck-history-panel" id="deckHistoryPanel" hidden aria-label="Passed restaurant history">
+      <div class="deck-history-header">
+        <div>
+          <strong>Passed restaurants</strong>
+          <span>Save one later if you change your mind.</span>
+        </div>
+        <button type="button" onclick="clearDeckHistory()">Clear history</button>
+      </div>
+      <div class="deck-history-list" id="deckHistoryList"></div>
+    </section>
 
     <p id="restaurantStatus" role="status" aria-live="polite"></p>
     <div class="deck-trust-strip" aria-label="BiteSwipe trust reminders">
@@ -1222,8 +1560,9 @@ document.addEventListener("DOMContentLoaded", () => {
       <span>Cards stay hidden until active</span>
       <span>Confirm allergies before ordering</span>
     </div>
-    <p class="deck-keyboard-hint">Keyboard: ← pass · → save · U undo · Enter/Space details. Allergy results are guidance only—confirm with the restaurant before ordering.</p>
+    <p class="deck-keyboard-hint">Keyboard: left arrow pass - right arrow save - U undo - Enter/Space details. Allergy results are guidance only; confirm with the restaurant before ordering.</p>
   </div>
 </section>
+<script src="{{ url_for('static', filename='deck-state.js') }}"></script>
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 {% endblock %}

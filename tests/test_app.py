@@ -297,6 +297,78 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertEqual(payload["places"][0]["name"], "Burger Place")
         self.assertIn("No exact filter matches", payload["message"])
 
+    def test_restaurant_route_filters_closed_places_when_open_now_is_selected(self) -> None:
+        self.login()
+        response = self.client.post("/save_location", json={"latitude": 39.9566, "longitude": -75.1899})
+        self.assertEqual(response.status_code, 200)
+        self.client.post("/save_filters", json={"openNow": True})
+
+        with patch(
+            "main.search_restaurants_with_openstreetmap",
+            return_value=[
+                {
+                    "name": "Open Cafe",
+                    "place": "osm:node:1",
+                    "photo": "/static/biteswipe.png",
+                    "source": "openstreetmap",
+                    "is_open": True,
+                    "distance_meters": 100,
+                },
+                {
+                    "name": "Closed Cafe",
+                    "place": "osm:node:2",
+                    "photo": "/static/biteswipe.png",
+                    "source": "openstreetmap",
+                    "is_open": False,
+                    "distance_meters": 100,
+                },
+                {
+                    "name": "Unknown Hours Cafe",
+                    "place": "osm:node:3",
+                    "photo": "/static/biteswipe.png",
+                    "source": "openstreetmap",
+                    "is_open": None,
+                    "distance_meters": 100,
+                },
+            ],
+        ):
+            response = self.client.get("/get_restaurant")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [place["name"] for place in response.get_json()["places"]],
+            ["Open Cafe", "Unknown Hours Cafe"],
+        )
+
+    def test_group_session_consensus_requires_every_member_to_save(self) -> None:
+        self.login("one@example.com")
+        response = self.client.post("/group_session/create")
+        self.assertEqual(response.status_code, 200)
+        code = response.get_json()["group"]["code"]
+
+        self.client.get("/logout")
+        self.login("two@example.com")
+        response = self.client.post("/group_session/join", json={"code": code})
+        self.assertEqual(response.status_code, 200)
+
+        payload = {
+            "action": "save",
+            "place": "osm:node:1",
+            "restaurant": {"name": "Shared Pizza", "place": "osm:node:1"},
+        }
+        response = self.client.post("/group_session/swipe", json=payload)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["group"]["consensus"], [])
+
+        self.client.get("/logout")
+        self.login("one@example.com")
+        self.client.post("/group_session/join", json={"code": code})
+        response = self.client.post("/group_session/swipe", json=payload)
+        self.assertEqual(response.status_code, 200)
+        group = response.get_json()["group"]
+        self.assertEqual(group["consensus"][0]["name"], "Shared Pizza")
+        self.assertEqual(group["consensus"][0]["saved_count"], 2)
+
     def test_openstreetmap_helpers_format_places(self) -> None:
         query = build_overpass_query(39.9566, -75.1899, 2000, 12, 25)
         self.assertIn("node[\"amenity\"~", query)
