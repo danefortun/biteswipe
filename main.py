@@ -99,6 +99,13 @@ FOOD_PREFERENCE_PRESETS = [
     "Mediterranean",
     "Pizza",
     "Vegan",
+    "Coffee",
+    "Dessert",
+    "Breakfast",
+    "Healthy",
+    "Halal",
+    "Korean",
+    "Thai",
 ]
 
 HOBBY_INTEREST_PRESETS = [
@@ -112,6 +119,8 @@ HOBBY_INTEREST_PRESETS = [
     "Reading",
     "Movies",
     "Fitness",
+    "Study Spots",
+    "Coffee Runs",
 ]
 
 FOOD_KEYWORDS: dict[str, tuple[str, ...]] = {
@@ -125,6 +134,13 @@ FOOD_KEYWORDS: dict[str, tuple[str, ...]] = {
     "mediterranean": ("mediterranean", "greek", "falafel", "kebab", "hummus"),
     "pizza": ("pizza", "pizzeria"),
     "vegan": ("vegan", "vegetarian", "plant based", "plant-based"),
+    "coffee": ("coffee", "cafe", "espresso", "latte"),
+    "dessert": ("dessert", "bakery", "ice cream", "donut", "pastry"),
+    "breakfast": ("breakfast", "brunch", "bagel", "pancake"),
+    "healthy": ("healthy", "salad", "juice", "smoothie", "vegetarian"),
+    "halal": ("halal",),
+    "korean": ("korean", "kimchi", "bbq"),
+    "thai": ("thai", "pad thai", "curry"),
 }
 
 DEFAULT_FILTERS: dict[str, Any] = {
@@ -163,6 +179,7 @@ def create_app(config_object: type[Config] = Config, config_overrides: dict[str,
         with app.app_context():
             db.create_all()
             ensure_user_interest_columns()
+            ensure_saved_restaurant_detail_columns()
 
     return app
 
@@ -173,29 +190,12 @@ def register_cli(app: Flask) -> None:
         """Create configured database tables."""
         db.create_all()
         ensure_user_interest_columns()
+        ensure_saved_restaurant_detail_columns()
         print("Initialized the database.")
 
 
 def ensure_user_interest_columns() -> None:
-    if db.engine.dialect.name == "sqlite":
-        column_names = {
-            row[1]
-            for row in db.session.execute(text("PRAGMA table_info(users)")).all()
-        }
-    else:
-        column_names = {
-            row[0]
-            for row in db.session.execute(
-                text(
-                    """
-                    SELECT column_name
-                    FROM information_schema.columns
-                    WHERE table_name = 'users'
-                    """
-                )
-            ).all()
-        }
-
+    column_names = get_table_column_names("users")
     required_columns = {
         "allergen_interests_json": "TEXT DEFAULT '[]'",
         "food_preferences_json": "TEXT DEFAULT '[]'",
@@ -209,7 +209,50 @@ def ensure_user_interest_columns() -> None:
     db.session.commit()
 
 
+def ensure_saved_restaurant_detail_columns() -> None:
+    column_names = get_table_column_names("saved_restaurants")
+    required_columns = {
+        "cuisine": "VARCHAR(255)",
+        "price_text": "VARCHAR(64)",
+        "rating": "FLOAT",
+        "review_count": "INTEGER",
+        "website": "VARCHAR(512)",
+    }
+
+    for column_name, column_type in required_columns.items():
+        if column_name not in column_names:
+            db.session.execute(text(f"ALTER TABLE saved_restaurants ADD COLUMN {column_name} {column_type}"))
+
+    db.session.commit()
+
+
+def get_table_column_names(table_name: str) -> set[str]:
+    if db.engine.dialect.name == "sqlite":
+        return {
+            row[1]
+            for row in db.session.execute(text(f"PRAGMA table_info({table_name})")).all()
+        }
+
+    return {
+        row[0]
+        for row in db.session.execute(
+            text(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = :table_name
+                """
+            ),
+            {"table_name": table_name},
+        ).all()
+    }
+
+
 def register_routes(app: Flask) -> None:
+    @app.context_processor
+    def inject_template_user() -> dict[str, Any]:
+        return {"template_user": current_user()}
+
     @app.get("/health")
     def health() -> Any:
         return jsonify({"status": "ok"})
@@ -252,6 +295,8 @@ def register_routes(app: Flask) -> None:
                 update_user_name(user)
             elif action == "add_food_preference":
                 add_user_food_preference(user)
+            elif action == "add_hobby_interest":
+                add_user_hobby_interest(user)
             elif action == "remove_interest":
                 remove_user_interest(user)
             else:
@@ -262,6 +307,7 @@ def register_routes(app: Flask) -> None:
         return render_template(
             "public.html",
             u=user,
+            saved_restaurant_count=len(user.saved_restaurants),
             allergen_interests=user.get_interest_list("allergen_interests_json"),
             food_preferences=user.get_interest_list("food_preferences_json"),
             hobby_interests=user.get_interest_list("hobby_interests_json"),
@@ -598,6 +644,20 @@ def add_user_food_preference(user: Users) -> None:
     flash(f"Added {preference} to your food preferences.")
 
 
+def add_user_hobby_interest(user: Users) -> None:
+    interest = normalize_interest_label(request.form.get("hobby_interest", ""))
+    if not interest:
+        flash("Choose an interest before adding it.")
+        return
+
+    interests = user.get_interest_list("hobby_interests_json")
+    interests.append(interest)
+    user.set_interest_list("hobby_interests_json", interests)
+    db.session.commit()
+    sync_session_filters_from_user(user)
+    flash(f"Added {interest} to your profile interests.")
+
+
 def remove_user_interest(user: Users) -> None:
     category = request.form.get("category", "")
     value = request.form.get("value", "").strip().lower()
@@ -712,6 +772,11 @@ def save_selected_restaurant(user: Users, payload: dict[str, Any]) -> tuple[bool
     address = normalize_optional_string(payload.get("address"), 512)
     photo = normalize_optional_string(payload.get("photo"), 512)
     distance_meters = normalize_optional_float(payload.get("distance_meters"))
+    cuisine = normalize_optional_string(payload.get("cuisine"), 255)
+    price_text = normalize_optional_string(payload.get("price_text"), 64) or format_price_text(normalize_price_level(payload.get("price_level")))
+    rating = normalize_optional_float(payload.get("rating"))
+    review_count = normalize_optional_int(payload.get("review_count"))
+    website = normalize_website_url(payload.get("website"))
 
     saved = SavedRestaurant.query.filter_by(user_id=user.id, place_id=place_id).first()
     created = saved is None
@@ -725,6 +790,11 @@ def save_selected_restaurant(user: Users, payload: dict[str, Any]) -> tuple[bool
             address=address,
             photo=photo,
             distance_meters=distance_meters,
+            cuisine=cuisine,
+            price_text=price_text,
+            rating=rating,
+            review_count=review_count,
+            website=website,
         )
         db.session.add(saved)
     else:
@@ -733,6 +803,11 @@ def save_selected_restaurant(user: Users, payload: dict[str, Any]) -> tuple[bool
         saved.address = address
         saved.photo = photo
         saved.distance_meters = distance_meters
+        saved.cuisine = cuisine
+        saved.price_text = price_text
+        saved.rating = rating
+        saved.review_count = review_count
+        saved.website = website
 
     db.session.commit()
 
@@ -756,6 +831,15 @@ def normalize_optional_float(value: Any) -> float | None:
         return None
 
 
+def normalize_optional_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def serialize_saved_restaurant(saved: SavedRestaurant) -> dict[str, Any]:
     return {
         "id": saved.id,
@@ -765,6 +849,11 @@ def serialize_saved_restaurant(saved: SavedRestaurant) -> dict[str, Any]:
         "address": saved.address,
         "photo": saved.photo,
         "distance_meters": saved.distance_meters,
+        "cuisine": saved.cuisine,
+        "price_text": saved.price_text,
+        "rating": saved.rating,
+        "review_count": saved.review_count,
+        "website": saved.website,
         "created_at": saved.created_at,
     }
 

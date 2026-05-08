@@ -2,63 +2,69 @@
 <html data-theme="dark" lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BiteSwipe</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#178f79">
+  <title>{% block title %}BiteSwipe{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <link href="https://fonts.googleapis.com/css2?family=Satoshi:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Satoshi:wght@300;400;500;700;900&display=swap" rel="stylesheet">
   <script src="{{ url_for('static', filename='filterjavascript.js') }}" defer></script>
   <script src="{{ url_for('static', filename='themetoggle.js') }}" defer></script>
-  <style>
-    body {
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-    }
-
-    .main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .flash-messages {
-      width: min(90vw, 720px);
-      margin: 16px auto;
-    }
-
-    .flash-message {
-      padding: 10px 14px;
-      border: 1px solid #93c5fd;
-      border-radius: 8px;
-      background: #eff6ff;
-      color: #1e3a8a;
-      font-family: "Satoshi", sans-serif;
-    }
-  </style>
+  <script src="{{ url_for('static', filename='app-ui.js') }}" defer></script>
 </head>
-<body>
-  <header>
-    <div class="img_container">
-      <div class="brand-row">
-        <img
-          class="brand-logo"
-          src="{{ url_for('static', filename='drexelxfizz.png') }}"
-          alt="Drexel Fizz logo">
-        <p class="brand-title">BiteSwipe</p>
-      </div>
-      <div class="hrbar">
-        <hr>
-      </div>
+<body data-route="{{ request.endpoint or '' }}">
+  <a class="skip-link" href="#mainContent">Skip to content</a>
+
+  <header class="app-header" aria-label="BiteSwipe header">
+    <a class="header-brand" href="{{ url_for('home') }}" aria-label="Go to BiteSwipe cards">
+      <img
+        class="brand-logo"
+        src="{{ url_for('static', filename='drexelxfizz.png') }}"
+        alt="Drexel Fizz logo">
+    </a>
+
+    <div class="header-copy">
+      <span class="header-eyebrow">BiteSwipe</span>
+      <strong class="header-random-headline" data-biteswipe-headline aria-live="polite">
+        Swipe once. Eat better.
+      </strong>
+      <span class="header-tagline">Nearby picks for cravings, budgets, groups, and allergy-aware choices.</span>
     </div>
+
+    <nav class="header-actions" aria-label="Quick navigation">
+      <a class="header-pill header-pill-primary{% if request.endpoint == 'home' %} is-active{% endif %}" href="{{ url_for('home') }}">Swipe</a>
+      <a class="header-pill{% if request.endpoint == 'credits' %} is-active{% endif %}" href="{{ url_for('credits') }}">Saved</a>
+      <details class="header-settings-menu">
+        <summary class="header-settings-trigger" aria-label="Open account settings">
+          <span class="header-settings-avatar-wrap">
+            <img
+              class="header-settings-avatar"
+              src="{{ url_for('static', filename='uploads/' + ((template_user.pfp_file_path if template_user else '') or 'transparentnewdefaultpicture.png')) }}"
+              alt="">
+          </span>
+          <span class="header-settings-label">Settings</span>
+        </summary>
+        <div class="header-settings-dropdown" role="menu" aria-label="Account settings">
+          <div class="header-settings-user">
+            <strong>{{ template_user.name if template_user else 'BiteSwipe user' }}</strong>
+            <span>{{ template_user.email if template_user else 'Account settings' }}</span>
+          </div>
+          <a role="menuitem" href="{{ url_for('profile') }}">Profile</a>
+          <a role="menuitem" href="{{ url_for('credits') }}">Saved picks</a>
+          <button type="button" role="menuitem" onclick="toggleFooterPanel('filters')">Filters</button>
+          <button type="button" role="menuitem" onclick="toggleFooterPanel('interests')">Interests</button>
+          <a role="menuitem" class="header-settings-logout" href="{{ url_for('logout') }}">Log out</a>
+        </div>
+      </details>
+    </nav>
   </header>
 
-  <main class="main">
+  <main class="main" id="mainContent" tabindex="-1">
     {% with messages = get_flashed_messages() %}
       {% if messages %}
-        <div class="flash-messages">
+        <div class="flash-messages" role="status" aria-live="polite">
           {% for message in messages %}
             <div class="flash-message">{{ message }}</div>
           {% endfor %}
@@ -68,11 +74,20 @@
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="site-footer">
+  <footer class="site-footer" aria-label="BiteSwipe footer controls">
     <nav class="navbar" aria-label="Primary navigation">
-      <a class="nav-link" href="{{ url_for('profile') }}">Profile</a>
-      <a class="nav-link" href="{{ url_for('home') }}">Cards</a>
-      <a class="nav-link" href="{{ url_for('credits') }}">My Stuff</a>
+      <a class="nav-link{% if request.endpoint == 'profile' %} is-active{% endif %}" href="{{ url_for('profile') }}">
+        <span class="nav-icon" aria-hidden="true">👤</span>
+        <span>Profile</span>
+      </a>
+      <a class="nav-link{% if request.endpoint == 'home' %} is-active{% endif %}" href="{{ url_for('home') }}">
+        <span class="nav-icon" aria-hidden="true">🍽️</span>
+        <span>Cards</span>
+      </a>
+      <a class="nav-link{% if request.endpoint == 'credits' %} is-active{% endif %}" href="{{ url_for('credits') }}">
+        <span class="nav-icon" aria-hidden="true">✅</span>
+        <span>Saved</span>
+      </a>
 
       <div class="dropup">
         <button
@@ -81,10 +96,25 @@
           aria-controls="myDropup"
           aria-expanded="false"
           onclick="myFunction()">
-          Filters
+          <span class="nav-icon" aria-hidden="true">⚙️</span>
+          <span>Filters</span>
+          <span class="nav-chip-count" id="filterCount" aria-label="0 active deck filters">0</span>
         </button>
 
-        <div class="dropup-content" id="myDropup">
+        <div class="dropup-content" id="myDropup" role="dialog" aria-modal="false" aria-labelledby="filter-panel-title">
+          <div class="footer-panel-header">
+            <div>
+              <p>Deck controls</p>
+              <h2 id="filter-panel-title">Tune your safe-bite stack</h2>
+            </div>
+            <button type="button" class="footer-panel-close" data-close-footer-panel aria-label="Close filters">×</button>
+          </div>
+
+          <section class="filter-section filter-section-alert" aria-label="Allergy reminder">
+            <strong>Allergy-first reminder</strong>
+            <p>BiteSwipe can help narrow choices, but restaurant menus and cross-contact can change. Always confirm with the restaurant before ordering.</p>
+          </section>
+
           <section class="filter-section" aria-labelledby="distance-filter-title">
             <h2 id="distance-filter-title">Distance</h2>
             <label class="filter-distance-label" for="myRange">
@@ -100,63 +130,30 @@
           <section class="filter-section" aria-labelledby="allergen-filter-title">
             <h2 id="allergen-filter-title">Allergens</h2>
             <div class="filter-options">
-              <label class="filter-option" for="celiac">
-                <input type="checkbox" id="celiac">
-                Celiac
-              </label>
-              <label class="filter-option" for="peanuts">
-                <input type="checkbox" id="peanuts">
-                Peanuts
-              </label>
-              <label class="filter-option" for="milk">
-                <input type="checkbox" id="milk">
-                Milk
-              </label>
-              <label class="filter-option" for="soy">
-                <input type="checkbox" id="soy">
-                Soy
-              </label>
-              <label class="filter-option" for="shellFish">
-                <input type="checkbox" id="shellFish">
-                Shellfish
-              </label>
-              <label class="filter-option" for="sesame">
-                <input type="checkbox" id="sesame">
-                Sesame
-              </label>
-              <label class="filter-option" for="treenuts">
-                <input type="checkbox" id="treenuts">
-                Tree nuts
-              </label>
-              <label class="filter-option" for="eggs">
-                <input type="checkbox" id="eggs">
-                Eggs
-              </label>
+              <label class="filter-option" for="celiac"><input type="checkbox" id="celiac"> Celiac</label>
+              <label class="filter-option" for="peanuts"><input type="checkbox" id="peanuts"> Peanuts</label>
+              <label class="filter-option" for="milk"><input type="checkbox" id="milk"> Milk</label>
+              <label class="filter-option" for="soy"><input type="checkbox" id="soy"> Soy</label>
+              <label class="filter-option" for="shellFish"><input type="checkbox" id="shellFish"> Shellfish</label>
+              <label class="filter-option" for="sesame"><input type="checkbox" id="sesame"> Sesame</label>
+              <label class="filter-option" for="treenuts"><input type="checkbox" id="treenuts"> Tree nuts</label>
+              <label class="filter-option" for="eggs"><input type="checkbox" id="eggs"> Eggs</label>
             </div>
           </section>
 
           <section class="filter-section" aria-labelledby="price-filter-title">
             <h2 id="price-filter-title">Price</h2>
-            <div class="filter-options">
-              <label class="filter-option" for="cheapPrice">
-                <input type="checkbox" id="cheapPrice">
-                $5 - $20
-              </label>
-              <label class="filter-option" for="mediumPrice">
-                <input type="checkbox" id="mediumPrice">
-                $25 - $40
-              </label>
-              <label class="filter-option" for="expensivePrice">
-                <input type="checkbox" id="expensivePrice">
-                $40+
-              </label>
+            <div class="filter-options filter-options-compact">
+              <label class="filter-option" for="cheapPrice"><input type="checkbox" id="cheapPrice"> $5 - $20</label>
+              <label class="filter-option" for="mediumPrice"><input type="checkbox" id="mediumPrice"> $25 - $40</label>
+              <label class="filter-option" for="expensivePrice"><input type="checkbox" id="expensivePrice"> $40+</label>
             </div>
           </section>
 
           <section class="filter-section" aria-labelledby="food-filter-title">
-            <h2 id="food-filter-title">Food Preferences</h2>
+            <h2 id="food-filter-title">Cravings</h2>
             <div class="filter-options">
-              {% for preference in ["American", "Italian", "Seafood", "Mexican", "Chinese", "Japanese", "Indian", "Mediterranean", "Pizza", "Vegan"] %}
+              {% for preference in ["American", "Italian", "Seafood", "Mexican", "Chinese", "Japanese", "Indian", "Mediterranean", "Pizza", "Vegan", "Coffee", "Dessert", "Breakfast", "Healthy", "Halal", "Korean", "Thai"] %}
                 <label class="filter-option" for="foodPreference{{ loop.index }}">
                   <input
                     type="checkbox"
@@ -168,6 +165,11 @@
               {% endfor %}
             </div>
           </section>
+
+          <div class="filter-panel-actions">
+            <button type="button" class="filter-action-primary" data-apply-filters>Apply to deck</button>
+            <button type="button" class="filter-action-secondary" data-reset-filters>Reset filters</button>
+          </div>
         </div>
       </div>
 
@@ -178,15 +180,25 @@
           aria-controls="myInterestsDropup"
           aria-expanded="false"
           onclick="toggleFooterPanel('interests')">
-          Interests
+          <span class="nav-icon" aria-hidden="true">✨</span>
+          <span>Interests</span>
+          <span class="nav-chip-count" id="interestCount" aria-label="0 profile interests">0</span>
         </button>
 
-        <div class="dropup-content" id="myInterestsDropup">
+        <div class="dropup-content" id="myInterestsDropup" role="dialog" aria-modal="false" aria-labelledby="interest-panel-title">
+          <div class="footer-panel-header">
+            <div>
+              <p>Profile signals</p>
+              <h2 id="interest-panel-title">Make BiteSwipe feel personal</h2>
+            </div>
+            <button type="button" class="footer-panel-close" data-close-footer-panel aria-label="Close interests">×</button>
+          </div>
+
           <section class="filter-section" aria-labelledby="hobby-interest-title">
-            <h2 id="hobby-interest-title">Profile Interests</h2>
-            <p class="filter-help">These show on your profile and do not change restaurant results.</p>
+            <h2 id="hobby-interest-title">Interests</h2>
+            <p class="filter-help">These show on your profile and help the app feel more social. Restaurant matching still comes from your deck filters.</p>
             <div class="filter-options">
-              {% for interest in ["Gaming", "Music", "Drawing", "Computers", "Math", "Science", "Sports", "Reading", "Movies", "Fitness"] %}
+              {% for interest in ["Gaming", "Music", "Drawing", "Computers", "Math", "Science", "Sports", "Reading", "Movies", "Fitness", "Study Spots", "Coffee Runs"] %}
                 <label class="filter-option" for="hobbyInterest{{ loop.index }}">
                   <input
                     type="checkbox"
@@ -198,16 +210,25 @@
               {% endfor %}
             </div>
           </section>
+
+          <div class="filter-panel-actions">
+            <button type="button" class="filter-action-primary" data-save-interests>Save interests</button>
+            <button type="button" class="filter-action-secondary" data-close-footer-panel>Close</button>
+          </div>
         </div>
       </div>
 
-      <a class="nav-link" href="{{ url_for('blog') }}">Chat</a>
+      <a class="nav-link{% if request.endpoint == 'blog' %} is-active{% endif %}" href="{{ url_for('blog') }}">
+        <span class="nav-icon" aria-hidden="true">💬</span>
+        <span>Chat</span>
+      </a>
       <button
         type="button"
         class="nav-link theme-toggle-button"
         data-theme-toggle
         aria-label="Change to light theme">
-        Light theme
+        <span class="nav-icon" aria-hidden="true">◐</span>
+        <span>Light</span>
       </button>
     </nav>
   </footer>

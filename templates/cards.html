@@ -2,16 +2,354 @@
 {% block content %}
 
 <script>
-const RESTAURANT_STACK_STORAGE_VERSION = 2;
+const RESTAURANT_STACK_STORAGE_VERSION = 3;
 const restaurantCardStorageUser = {{ session.get("id", "guest") | tojson }};
 window.restaurantCardStorageKey = `biteswipe.restaurantStack.${restaurantCardStorageUser}`;
 window.restaurantRatingStorageKey = `biteswipe.userRatings.${restaurantCardStorageUser}`;
+window.restaurantStatsStorageKey = `biteswipe.deckStats.${restaurantCardStorageUser}`;
 window.currentRestaurantCards = [];
+window.restaurantDecisionHistory = [];
+window.restaurantToastTimeout = null;
+window.deckCoachStorageKey = `biteswipe.deckCoachDismissed.${restaurantCardStorageUser}`;
 
 function setRestaurantStatus(message) {
     const status = document.getElementById("restaurantStatus");
     if (status) {
         status.textContent = message || "";
+        status.classList.toggle("has-message", Boolean(message));
+    }
+}
+
+function showBiteToast(message, tone = "neutral") {
+    let toast = document.getElementById("biteToast");
+    if (!toast) {
+        toast = document.createElement("div");
+        toast.id = "biteToast";
+        toast.className = "bite-toast";
+        toast.setAttribute("role", "status");
+        document.body.appendChild(toast);
+    }
+
+    toast.textContent = message;
+    toast.dataset.tone = tone;
+    toast.classList.add("is-visible");
+    window.clearTimeout(window.restaurantToastTimeout);
+    window.restaurantToastTimeout = window.setTimeout(() => {
+        toast.classList.remove("is-visible");
+    }, 2800);
+}
+
+
+function dismissDeckCoach() {
+    const panel = document.getElementById("deckCoachPanel");
+    if (panel) {
+        panel.hidden = true;
+    }
+
+    try {
+        localStorage.setItem(window.deckCoachStorageKey, "true");
+    } catch (error) {
+        // Coach dismissal is only a convenience preference.
+    }
+}
+
+function restoreDeckCoach() {
+    const panel = document.getElementById("deckCoachPanel");
+    if (!panel) {
+        return;
+    }
+
+    try {
+        panel.hidden = localStorage.getItem(window.deckCoachStorageKey) === "true";
+    } catch (error) {
+        panel.hidden = false;
+    }
+}
+
+function toggleDeckFocusMode() {
+    document.body.classList.toggle("deck-focus-mode");
+    const isOn = document.body.classList.contains("deck-focus-mode");
+    showBiteToast(isOn ? "Focus mode on" : "Focus mode off", "success");
+}
+
+function readSessionStats() {
+    try {
+        const rawStats = localStorage.getItem(window.restaurantStatsStorageKey);
+        const stats = rawStats ? JSON.parse(rawStats) : {};
+        return {
+            reviewed: Number(stats.reviewed) || 0,
+            saved: Number(stats.saved) || 0,
+            passed: Number(stats.passed) || 0,
+        };
+    } catch (error) {
+        return { reviewed: 0, saved: 0, passed: 0 };
+    }
+}
+
+function writeSessionStats(stats) {
+    try {
+        localStorage.setItem(window.restaurantStatsStorageKey, JSON.stringify(stats));
+    } catch (error) {
+        // Stats are a convenience feature, so failure should not block the deck.
+    }
+}
+
+function incrementSessionStat(action) {
+    const stats = readSessionStats();
+    stats.reviewed += 1;
+    if (action === "save") {
+        stats.saved += 1;
+    }
+    if (action === "pass") {
+        stats.passed += 1;
+    }
+    writeSessionStats(stats);
+    updateSessionStats();
+}
+
+function decrementSessionStat(action) {
+    const stats = readSessionStats();
+    stats.reviewed = Math.max(stats.reviewed - 1, 0);
+    if (action === "save") {
+        stats.saved = Math.max(stats.saved - 1, 0);
+    }
+    if (action === "pass") {
+        stats.passed = Math.max(stats.passed - 1, 0);
+    }
+    writeSessionStats(stats);
+    updateSessionStats();
+}
+
+function resetSessionStats() {
+    const stats = { reviewed: 0, saved: 0, passed: 0 };
+    writeSessionStats(stats);
+    updateSessionStats();
+}
+
+function updateSessionStats() {
+    const stats = readSessionStats();
+    const reviewed = document.getElementById("reviewedCount");
+    const saved = document.getElementById("savedCount");
+    const passed = document.getElementById("passedCount");
+
+    if (reviewed) reviewed.textContent = String(stats.reviewed);
+    if (saved) saved.textContent = String(stats.saved);
+    if (passed) passed.textContent = String(stats.passed);
+}
+
+function getActiveFilterLabels() {
+    const labels = [];
+    document.querySelectorAll(".dropup-content input[type='checkbox']:checked").forEach((input) => {
+        const label = input.closest("label")?.textContent?.trim();
+        if (label) {
+            labels.push(label.replace(/\s+/g, " "));
+        }
+    });
+
+    const slider = document.getElementById("myRange");
+    if (slider && Number(slider.value) !== 50) {
+        labels.unshift(`${slider.value} mi radius`);
+    }
+
+    return Array.from(new Set(labels)).slice(0, 8);
+}
+
+function updateActiveFilterSummary() {
+    const summary = document.getElementById("activeFilterSummary");
+    if (!summary) {
+        return;
+    }
+
+    const labels = getActiveFilterLabels();
+    summary.innerHTML = "";
+
+    if (labels.length === 0) {
+        const empty = document.createElement("span");
+        empty.className = "filter-summary-empty";
+        empty.textContent = "No filters yet — open Allergens to tune your deck.";
+        summary.appendChild(empty);
+        return;
+    }
+
+    labels.forEach((label) => {
+        const chip = document.createElement("span");
+        chip.textContent = label;
+        summary.appendChild(chip);
+    });
+}
+
+function openFooterPanelFromCard(panelName) {
+    if (typeof toggleFooterPanel === "function") {
+        if (typeof closeFooterPanels === "function") {
+            closeFooterPanels();
+        }
+        window.setTimeout(() => toggleFooterPanel(panelName), 0);
+    }
+}
+
+async function setQuickCraving(preference) {
+    const normalized = String(preference).toLowerCase();
+    document.querySelectorAll('input[name="foodPreferences"]').forEach((input) => {
+        input.checked = String(input.value).toLowerCase() === normalized;
+    });
+
+    if (typeof updateFooterFilterCounts === "function") {
+        updateFooterFilterCounts();
+    }
+    updateActiveFilterSummary();
+
+    if (typeof saveFilters === "function" && typeof getFilters === "function") {
+        await saveFilters(getFilters(), { quiet: true });
+    }
+
+    showBiteToast(`${preference} craving applied`, "success");
+    await refreshRestaurantCards();
+}
+
+async function applyDeckMode(mode) {
+    const modes = {
+        cheap: {
+            label: "Cheap eats",
+            distance: 3,
+            prices: ["cheapPrice"],
+            cravings: [],
+        },
+        study: {
+            label: "Study break",
+            distance: 2,
+            prices: ["cheapPrice", "mediumPrice"],
+            cravings: ["Coffee", "Breakfast"],
+        },
+        group: {
+            label: "Group friendly",
+            distance: 5,
+            prices: ["cheapPrice", "mediumPrice"],
+            cravings: ["Pizza", "American", "Mexican"],
+        },
+        clean: {
+            label: "Fresh and light",
+            distance: 5,
+            prices: ["cheapPrice", "mediumPrice"],
+            cravings: ["Healthy", "Mediterranean", "Vegan"],
+        },
+    };
+    const config = modes[mode];
+
+    if (!config) {
+        return;
+    }
+
+    const slider = document.getElementById("myRange");
+    const distanceValue = document.getElementById("distanceValue");
+    if (slider) {
+        slider.value = config.distance;
+    }
+    if (distanceValue) {
+        distanceValue.textContent = String(config.distance);
+    }
+
+    ["cheapPrice", "mediumPrice", "expensivePrice"].forEach((id) => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.checked = config.prices.includes(id);
+        }
+    });
+
+    const selectedCravings = new Set(config.cravings.map((value) => value.toLowerCase()));
+    document.querySelectorAll('input[name="foodPreferences"]').forEach((input) => {
+        input.checked = selectedCravings.has(String(input.value).toLowerCase());
+    });
+
+    if (typeof updateFooterFilterCounts === "function") {
+        updateFooterFilterCounts();
+    }
+    updateActiveFilterSummary();
+
+    if (typeof saveFilters === "function" && typeof getFilters === "function") {
+        await saveFilters(getFilters(), { quiet: true });
+    }
+
+    showBiteToast(`${config.label} mode applied`, "success");
+    await refreshRestaurantCards();
+}
+
+function shuffleRemainingDeck() {
+    const restaurants = window.currentRestaurantCards || [];
+    if (!restaurants.length || typeof currentIndex !== "number" || currentIndex >= restaurants.length - 1) {
+        setRestaurantStatus("Nothing left to shuffle yet.");
+        return;
+    }
+
+    const reviewed = restaurants.slice(0, currentIndex);
+    const remaining = restaurants.slice(currentIndex);
+    for (let i = remaining.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
+    }
+
+    renderRestaurantCards([...reviewed, ...remaining], {
+        currentIndex,
+        persist: true,
+    });
+    showBiteToast("Remaining deck shuffled", "success");
+}
+
+function sortRemainingDeck(mode = "best") {
+    const restaurants = window.currentRestaurantCards || [];
+    if (!restaurants.length || typeof currentIndex !== "number" || currentIndex >= restaurants.length - 1) {
+        setRestaurantStatus("Load a deck with at least two remaining spots to sort.");
+        return;
+    }
+
+    const reviewed = restaurants.slice(0, currentIndex);
+    const remaining = restaurants.slice(currentIndex);
+    const getDistance = (restaurant) => Number(restaurant.distance_meters) || Number.POSITIVE_INFINITY;
+    const getRating = (restaurant) => Number(restaurant.rating) || 0;
+
+    remaining.sort((a, b) => {
+        if (mode === "nearby") {
+            return getDistance(a) - getDistance(b);
+        }
+        if (mode === "rating") {
+            return getRating(b) - getRating(a);
+        }
+        return (getRating(b) * 2 - getDistance(b) / 1609.344) - (getRating(a) * 2 - getDistance(a) / 1609.344);
+    });
+
+    renderRestaurantCards([...reviewed, ...remaining], {
+        currentIndex,
+        persist: true,
+    });
+    showBiteToast(mode === "nearby" ? "Nearest spots moved up" : mode === "rating" ? "Top-rated spots moved up" : "Best matches moved up", "success");
+}
+
+function getRestaurantShareText(result) {
+    const lines = [result?.name, result?.address, buildMapsUrl(result || {})].filter(Boolean);
+    return lines.join("\n");
+}
+
+async function shareRestaurant(result) {
+    if (!result) {
+        result = (window.currentRestaurantCards || [])[currentIndex];
+    }
+
+    if (!result) {
+        return;
+    }
+
+    const text = getRestaurantShareText(result);
+
+    try {
+        if (navigator.share) {
+            await navigator.share({ title: result.name || "BiteSwipe pick", text });
+            showBiteToast("Shared this BiteSwipe pick", "success");
+            return;
+        }
+
+        await navigator.clipboard.writeText(text);
+        showBiteToast("Restaurant details copied", "success");
+    } catch (error) {
+        setRestaurantStatus("Unable to share or copy this spot right now.");
     }
 }
 
@@ -42,6 +380,7 @@ function persistRestaurantCardStack() {
                 version: RESTAURANT_STACK_STORAGE_VERSION,
                 places: window.currentRestaurantCards || [],
                 currentIndex: getPersistableCardIndex(),
+                savedAt: new Date().toISOString(),
             })
         );
     } catch (error) {
@@ -51,20 +390,20 @@ function persistRestaurantCardStack() {
 
 function getPersistableCardIndex() {
     const cards = window.currentRestaurantCards || [];
-    const maxIndex = Math.max(cards.length - 1, 0);
 
     if (typeof currentIndex !== "number") {
         return 0;
     }
 
-    return Math.min(Math.max(currentIndex, 0), maxIndex);
+    return Math.min(Math.max(currentIndex, 0), cards.length);
 }
 
 function restoreRestaurantCardStack() {
     const stack = readRestaurantCardStack();
 
     if (!stack || stack.places.length === 0) {
-        setRestaurantStatus("Press Refresh cards to load nearby restaurants.");
+        updateCardProgress();
+        setRestaurantStatus("Use your location or refresh cards to build a nearby restaurant deck.");
         return false;
     }
 
@@ -72,7 +411,12 @@ function restoreRestaurantCardStack() {
         currentIndex: stack.currentIndex || 0,
         persist: false,
     });
-    setRestaurantStatus("");
+
+    setRestaurantStatus(
+        (stack.currentIndex || 0) >= stack.places.length
+            ? "You finished this saved deck. Refresh deck for a new set."
+            : ""
+    );
     return true;
 }
 
@@ -115,7 +459,7 @@ async function saveBrowserLocation(options = {}) {
         setRestaurantStatus(
             options.reloadAfterSave
                 ? "Location saved. Loading nearby restaurants..."
-                : "Location saved. Press Refresh cards when you want a new stack."
+                : "Location saved. Press Refresh deck when you want a new stack."
         );
 
         if (options.reloadAfterSave) {
@@ -130,9 +474,63 @@ async function refreshRestaurantCards() {
     await get_restaurant({ autoLocate: true });
 }
 
+async function clearRestaurantFilters() {
+    const filters = {
+        celiac: false,
+        peanuts: false,
+        milk: false,
+        soy: false,
+        shellFish: false,
+        sesame: false,
+        treenuts: false,
+        eggs: false,
+        cheapPrice: false,
+        mediumPrice: false,
+        expensivePrice: false,
+        distance: 50,
+        foodPreferences: [],
+        hobbyInterests: typeof getCheckedValues === "function" ? getCheckedValues("hobbyInterests") : [],
+    };
+
+    try {
+        await fetch("/save_filters", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(filters),
+        });
+
+        document.querySelectorAll("#myDropup input[type='checkbox']").forEach((input) => {
+            input.checked = false;
+        });
+
+        const slider = document.getElementById("myRange");
+        const distanceValue = document.getElementById("distanceValue");
+        if (slider && distanceValue) {
+            slider.value = 50;
+            distanceValue.textContent = "50";
+        }
+
+        if (typeof updateFooterFilterCounts === "function") {
+            updateFooterFilterCounts();
+        }
+
+        localStorage.removeItem(window.restaurantCardStorageKey);
+        window.restaurantDecisionHistory = [];
+        resetSessionStats();
+        updateActiveFilterSummary();
+        setRestaurantStatus("Filters cleared. Loading a fresh deck...");
+        await get_restaurant({ autoLocate: true });
+    } catch (error) {
+        setRestaurantStatus("Unable to clear filters right now.");
+    }
+}
+
 async function get_restaurant(options = {}) {
     try {
         setRestaurantStatus("Loading nearby restaurants...");
+        toggleDeckLoading(true);
         const response = await fetch("/get_restaurant");
         const data = await response.json();
 
@@ -146,12 +544,26 @@ async function get_restaurant(options = {}) {
             return;
         }
 
+        window.restaurantDecisionHistory = [];
+        resetSessionStats();
         renderRestaurantCards(data.places || []);
         setRestaurantStatus(
-            data.message || (data.places && data.places.length ? "" : "No nearby restaurants found.")
+            data.message ||
+            (data.places && data.places.length
+                ? `Loaded ${data.places.length} nearby spots. Swipe right to save, left to pass.`
+                : "No nearby restaurants found. Try widening your distance filter.")
         );
     } catch (error) {
         setRestaurantStatus("Unable to load restaurants right now.");
+    } finally {
+        toggleDeckLoading(false);
+    }
+}
+
+function toggleDeckLoading(isLoading) {
+    const stage = document.querySelector(".card-stage");
+    if (stage) {
+        stage.classList.toggle("is-loading", Boolean(isLoading));
     }
 }
 
@@ -168,9 +580,10 @@ function renderRestaurantCards(places, options = {}) {
     container.innerHTML = "";
     currentIndex = Math.min(
         Math.max(Number(options.currentIndex) || 0, 0),
-        Math.max(cards.length - 1, 0)
+        cards.length
     );
     stage.classList.toggle("has-cards", cards.length > 0);
+    stage.classList.toggle("is-empty", cards.length === 0);
 
     cards.forEach((result, index) => {
         const card = document.createElement("div");
@@ -193,16 +606,32 @@ function renderRestaurantCards(places, options = {}) {
         const front = document.createElement("div");
         front.classList.add("card-face", "card-front");
 
+        const media = document.createElement("div");
+        media.classList.add("card-media");
+
         const img = document.createElement("img");
         img.classList.add("card-image");
         img.src = result.photo;
         img.alt = result.name || "Restaurant photo";
-        front.appendChild(img);
+        media.appendChild(img);
+
+        const source = document.createElement("span");
+        source.classList.add("card-source-pill");
+        source.textContent = formatSource(result.source);
+        media.appendChild(source);
+        front.appendChild(media);
 
         const title = document.createElement("p");
         title.classList.add("card-title");
         title.textContent = result.name || "Unknown restaurant";
         front.appendChild(title);
+
+        const chips = buildCardChips(result);
+        if (chips.children.length > 0) {
+            front.appendChild(chips);
+        }
+
+        front.appendChild(buildMatchPanel(result));
 
         if (result.address) {
             const address = document.createElement("small");
@@ -210,6 +639,11 @@ function renderRestaurantCards(places, options = {}) {
             address.textContent = result.address;
             front.appendChild(address);
         }
+
+        const hint = document.createElement("small");
+        hint.classList.add("card-flip-hint");
+        hint.textContent = "Tap for details, ratings, and links";
+        front.appendChild(hint);
 
         inner.appendChild(front);
         inner.appendChild(buildCardBack(result));
@@ -219,6 +653,11 @@ function renderRestaurantCards(places, options = {}) {
     });
 
     updateCardPosition();
+    updateCardProgress();
+
+    if (typeof updateCardControls === "function") {
+        updateCardControls();
+    }
 
     if (options.persist !== false) {
         persistRestaurantCardStack();
@@ -226,7 +665,29 @@ function renderRestaurantCards(places, options = {}) {
 }
 
 function toggleCardFlip(card) {
+    if (window.cardDragLock) {
+        window.cardDragLock = false;
+        return;
+    }
     card.classList.toggle("is-flipped");
+}
+
+function buildCardChips(result) {
+    const chips = document.createElement("div");
+    chips.classList.add("card-chip-row");
+
+    [
+        formatDistance(result.distance_meters),
+        result.price_text || formatPriceLevel(result.price_level),
+        formatCuisine(result.cuisine),
+        formatShortRating(result),
+    ].filter(Boolean).slice(0, 4).forEach((value) => {
+        const chip = document.createElement("span");
+        chip.textContent = value;
+        chips.appendChild(chip);
+    });
+
+    return chips;
 }
 
 function buildCardBack(result) {
@@ -245,6 +706,7 @@ function buildCardBack(result) {
     addDetail(detailList, "Cost", result.price_text || formatPriceLevel(result.price_level));
     addDetail(detailList, "Address", result.address);
     addDetail(detailList, "Distance", formatDistance(result.distance_meters));
+    addDetail(detailList, "Source", formatSource(result.source));
     back.appendChild(detailList);
 
     const summary = document.createElement("p");
@@ -252,9 +714,17 @@ function buildCardBack(result) {
     summary.textContent = buildRestaurantSummary(result);
     back.appendChild(summary);
 
+    const safetyNote = document.createElement("p");
+    safetyNote.classList.add("restaurant-safety-note");
+    safetyNote.textContent = "Allergy filters help narrow the deck, but always confirm ingredients and cross-contact with the restaurant before ordering.";
+    back.appendChild(safetyNote);
+
+    const linkRow = document.createElement("div");
+    linkRow.classList.add("restaurant-link-row");
+
     const website = document.createElement(result.website ? "a" : "span");
     website.classList.add("restaurant-website-link");
-    website.textContent = result.website ? "Restaurant website" : "Website unavailable";
+    website.textContent = result.website ? "Website" : "No website";
 
     if (result.website) {
         website.href = result.website;
@@ -263,8 +733,87 @@ function buildCardBack(result) {
         website.addEventListener("click", (event) => event.stopPropagation());
     }
 
-    back.appendChild(website);
+    const maps = document.createElement("a");
+    maps.classList.add("restaurant-website-link");
+    maps.href = buildMapsUrl(result);
+    maps.target = "_blank";
+    maps.rel = "noopener noreferrer";
+    maps.textContent = "Directions";
+    maps.addEventListener("click", (event) => event.stopPropagation());
+
+    const shareButton = document.createElement("button");
+    shareButton.type = "button";
+    shareButton.classList.add("restaurant-website-link");
+    shareButton.textContent = "Share";
+    shareButton.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        await shareRestaurant(result);
+    });
+
+    linkRow.appendChild(website);
+    linkRow.appendChild(maps);
+    linkRow.appendChild(shareButton);
+    back.appendChild(linkRow);
+
+    const saveButton = document.createElement("button");
+    saveButton.type = "button";
+    saveButton.classList.add("restaurant-save-inline");
+    saveButton.textContent = "Save this spot";
+    saveButton.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        await swipeRight();
+    });
+    back.appendChild(saveButton);
+
     return back;
+}
+
+
+function buildMatchPanel(result) {
+    const panel = document.createElement("div");
+    panel.classList.add("match-panel");
+
+    const label = document.createElement("strong");
+    label.textContent = "Why this might work";
+    panel.appendChild(label);
+
+    const reasons = getMatchReasons(result);
+    const list = document.createElement("div");
+    list.classList.add("match-reasons");
+
+    reasons.forEach((reason) => {
+        const chip = document.createElement("span");
+        chip.textContent = reason;
+        list.appendChild(chip);
+    });
+
+    panel.appendChild(list);
+    return panel;
+}
+
+function getMatchReasons(result) {
+    const reasons = [];
+    const distance = formatDistance(result.distance_meters);
+    const cuisine = formatCuisine(result.cuisine);
+    const rating = Number(result.rating);
+    const price = result.price_text || formatPriceLevel(result.price_level);
+
+    if (distance) {
+        reasons.push(distance);
+    }
+    if (Number.isFinite(rating) && rating >= 4.3) {
+        reasons.push("highly rated");
+    } else if (Number.isFinite(rating)) {
+        reasons.push(`${rating.toFixed(1)} rating`);
+    }
+    if (price && price !== "Price not listed") {
+        reasons.push(price);
+    }
+    if (cuisine) {
+        reasons.push(cuisine.split(",")[0]);
+    }
+
+    return reasons.slice(0, 4).length ? reasons.slice(0, 4) : ["nearby discovery", "tap for details"];
 }
 
 function buildRatingPanel(result) {
@@ -273,7 +822,7 @@ function buildRatingPanel(result) {
 
     const online = document.createElement("div");
     online.classList.add("online-rating");
-    online.innerHTML = `<span aria-hidden="true">★</span> ${formatOnlineRating(result)}`;
+    online.innerHTML = `<span aria-hidden="true">\u2605</span> ${formatOnlineRating(result)}`;
     panel.appendChild(online);
 
     const userRating = document.createElement("div");
@@ -286,12 +835,13 @@ function buildRatingPanel(result) {
         button.type = "button";
         button.classList.add("star-button");
         button.classList.toggle("is-selected", rating <= currentRating);
-        button.textContent = "★";
+        button.textContent = "\u2605";
         button.setAttribute("aria-label", `Rate ${rating} stars`);
         button.addEventListener("click", (event) => {
             event.stopPropagation();
             saveUserRating(result, rating);
             updateRatingButtons(userRating, rating);
+            setRestaurantStatus(`Rated ${result.name || "this spot"} ${rating} stars.`);
         });
         userRating.appendChild(button);
     }
@@ -352,6 +902,7 @@ function formatCuisine(value) {
         .split(";")
         .map((part) => part.trim())
         .filter(Boolean)
+        .slice(0, 6)
         .join(", ");
 }
 
@@ -376,7 +927,8 @@ function formatDistance(value) {
         return null;
     }
 
-    return `${(meters / 1609.344).toFixed(1)} mi away`;
+    const miles = meters / 1609.344;
+    return miles < 0.1 ? "Very close" : `${miles.toFixed(1)} mi away`;
 }
 
 function formatOnlineRating(result) {
@@ -392,6 +944,28 @@ function formatOnlineRating(result) {
     }
 
     return rating.toFixed(1);
+}
+
+function formatShortRating(result) {
+    const rating = Number(result.rating);
+    return Number.isFinite(rating) ? `${rating.toFixed(1)} rated` : null;
+}
+
+function formatSource(source) {
+    if (source === "google") {
+        return "Google Places";
+    }
+
+    if (source === "openstreetmap") {
+        return "OpenStreetMap";
+    }
+
+    return source ? String(source) : "Nearby result";
+}
+
+function buildMapsUrl(result) {
+    const query = [result.name, result.address].filter(Boolean).join(" ");
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query || "restaurants near me")}`;
 }
 
 function buildRestaurantSummary(result) {
@@ -413,44 +987,243 @@ function buildRestaurantSummary(result) {
     return parts.join(" ") || "More restaurant details will appear here when the provider has them.";
 }
 
+function updateCurrentCardMeta() {
+    const label = document.getElementById("currentCardMeta");
+    const cards = window.currentRestaurantCards || [];
+    const result = typeof currentIndex === "number" ? cards[currentIndex] : null;
+
+    if (!label) {
+        return;
+    }
+
+    if (!result) {
+        label.textContent = "Choose filters, use location, then load a deck.";
+        return;
+    }
+
+    const parts = [
+        result.name,
+        formatDistance(result.distance_meters),
+        formatShortRating(result),
+    ].filter(Boolean);
+    label.textContent = parts.join(" · ");
+}
+
+function updateCardProgress() {
+    const cards = window.currentRestaurantCards || [];
+    const total = cards.length;
+    const activeNumber = total === 0 ? 0 : Math.min(currentIndex + 1, total);
+    const isComplete = total > 0 && currentIndex >= total;
+    const progress = document.getElementById("cardProgressText");
+    const miniProgress = document.getElementById("deckMiniProgress");
+    const emptyState = document.querySelector(".card-empty-state");
+    const progressFill = document.getElementById("deckProgressFill");
+    const stage = document.querySelector(".card-stage");
+
+    if (progress) {
+        progress.textContent = isComplete
+            ? `Deck complete · ${total} reviewed`
+            : `${activeNumber} of ${total || "—"} spots`;
+    }
+
+    if (miniProgress) {
+        miniProgress.textContent = isComplete
+            ? "Deck complete"
+            : total
+                ? `${activeNumber}/${total}`
+                : "No deck yet";
+    }
+
+    if (progressFill) {
+        const percentage = total ? Math.min((Math.max(currentIndex, 0) / total) * 100, 100) : 0;
+        progressFill.style.width = `${percentage}%`;
+    }
+
+    updateCurrentCardMeta();
+    updateSessionStats();
+    updateActiveFilterSummary();
+
+    if (stage) {
+        stage.classList.toggle("is-deck-complete", isComplete);
+        stage.classList.toggle("is-empty", total === 0);
+    }
+
+    if (emptyState) {
+        const title = emptyState.querySelector("strong");
+        const copy = emptyState.querySelector("span");
+        if (title && copy) {
+            title.textContent = isComplete ? "You reviewed the whole deck." : "Build your BiteSwipe deck.";
+            copy.textContent = isComplete
+                ? "Refresh for a new set, or open My Stuff to compare saved spots."
+                : "Use your location, set filters, then refresh cards to discover nearby places.";
+        }
+    }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+    restoreDeckCoach();
     restoreRestaurantCardStack();
+    updateSessionStats();
+    updateActiveFilterSummary();
 });
 </script>
 
-<div class="card-stage">
-  <div class="card-container">
-    <div class="cards" id="cards"></div>
+<section class="cards-page-shell" aria-label="BiteSwipe restaurant card deck">
+  <div class="cards-hero">
+    <p class="cards-kicker">BiteSwipe deck</p>
+    <h1>Swipe less. Eat smarter.</h1>
+    <p class="cards-hero-copy">
+      Build a nearby restaurant deck around allergies, distance, price, and cravings. Save the strongest picks, share them with friends, and let BiteSwipe cut down the group-chat debate.
+    </p>
+
+    <div class="cards-hero-metrics" aria-label="Deck status">
+      <span id="cardProgressText">0 of — spots</span>
+      <span id="currentCardMeta">Choose filters, use location, then load a deck.</span>
+      <span>Tap cards for details</span>
+    </div>
+
+    <div class="deck-progress-bar" aria-hidden="true">
+      <span id="deckProgressFill"></span>
+    </div>
+
+    <aside class="deck-coach-panel" id="deckCoachPanel" aria-label="How BiteSwipe works">
+      <div>
+        <strong>Best flow</strong>
+        <p>Set allergy filters, load nearby spots, tap a card for details, save only the places you would actually eat at, then compare in Saved.</p>
+      </div>
+      <button type="button" onclick="dismissDeckCoach()" aria-label="Hide BiteSwipe tips">×</button>
+    </aside>
+
+    <div class="deck-insight-grid" aria-label="Your deck activity">
+      <div><strong id="reviewedCount">0</strong><span>reviewed</span></div>
+      <div><strong id="savedCount">0</strong><span>saved</span></div>
+      <div><strong id="passedCount">0</strong><span>passed</span></div>
+    </div>
+
+    <div class="active-filter-summary" id="activeFilterSummary" aria-live="polite">
+      <span class="filter-summary-empty">No filters yet — open Allergens to tune your deck.</span>
+    </div>
+
+    <div class="quick-cravings" aria-label="Quick food cravings">
+      <button type="button" onclick="setQuickCraving('Pizza')">Pizza</button>
+      <button type="button" onclick="setQuickCraving('Mexican')">Mexican</button>
+      <button type="button" onclick="setQuickCraving('Japanese')">Japanese</button>
+      <button type="button" onclick="setQuickCraving('Vegan')">Vegan</button>
+      <button type="button" onclick="setQuickCraving('Coffee')">Coffee</button>
+      <button type="button" onclick="setQuickCraving('Healthy')">Healthy</button>
+    </div>
+
+    <div class="deck-mode-panel" aria-label="Smart deck modes">
+      <div>
+        <strong>Smart starts</strong>
+        <span>One tap adjusts distance, price, and cravings before refreshing the deck.</span>
+      </div>
+      <div class="deck-mode-actions">
+        <button type="button" onclick="applyDeckMode('cheap')">Cheap eats</button>
+        <button type="button" onclick="applyDeckMode('study')">Study break</button>
+        <button type="button" onclick="applyDeckMode('group')">Group friendly</button>
+        <button type="button" onclick="applyDeckMode('clean')">Fresh and light</button>
+      </div>
+    </div>
+
+    <div class="hero-action-row">
+      <button type="button" onclick="openFooterPanelFromCard('filters')">Tune filters</button>
+      <button type="button" onclick="saveBrowserLocation({ reloadAfterSave: true })">Nearby now</button>
+      <button type="button" onclick="toggleDeckFocusMode()">Focus mode</button>
+    </div>
   </div>
-  <div class="card-actions">
-    <button
-      type="button"
-      class="card-action-button card-action-location"
-      onclick="saveBrowserLocation()">
-      Use my location
-    </button>
-    <button
-      type="button"
-      class="arrow left swipe-action"
-      onclick="swipeLeft()"
-      aria-label="Skip restaurant">
-      X
-    </button>
-    <button
-      type="button"
-      class="arrow right swipe-action"
-      onclick="swipeRight()"
-      aria-label="Choose restaurant">
-      OK
-    </button>
-    <button
-      type="button"
-      class="card-action-button card-action-refresh"
-      onclick="refreshRestaurantCards()">
-      Refresh cards
-    </button>
+
+  <div class="card-stage is-empty">
+    <div class="deck-status-row">
+      <span class="deck-status-pill" id="deckMiniProgress">No deck yet</span>
+      <span class="deck-status-pill">← Pass</span>
+      <span class="deck-status-pill deck-status-pill-save">Save →</span>
+    </div>
+
+    <div class="deck-sort-row" aria-label="Deck sorting tools">
+      <button type="button" onclick="sortRemainingDeck('best')">Best match</button>
+      <button type="button" onclick="sortRemainingDeck('nearby')">Nearest</button>
+      <button type="button" onclick="sortRemainingDeck('rating')">Top rated</button>
+    </div>
+
+    <div class="card-empty-state" aria-hidden="true">
+      <strong>Build your BiteSwipe deck.</strong>
+      <span>Use your location, set filters, then refresh cards to discover nearby places.</span>
+    </div>
+
+    <div class="card-container" aria-live="polite">
+      <div class="cards" id="cards"></div>
+    </div>
+
+    <div class="card-actions" aria-label="Card actions">
+      <button
+        type="button"
+        class="arrow left swipe-action"
+        id="passCardButton"
+        onclick="swipeLeft()"
+        aria-label="Pass on this restaurant">
+        Pass
+      </button>
+      <button
+        type="button"
+        class="card-action-button card-action-undo"
+        id="undoCardButton"
+        onclick="undoLastDecision()"
+        disabled>
+        Undo
+      </button>
+      <button
+        type="button"
+        class="arrow right swipe-action"
+        id="saveCardButton"
+        onclick="swipeRight()"
+        aria-label="Save this restaurant">
+        Save
+      </button>
+    </div>
+
+    <div class="deck-secondary-actions" aria-label="Deck utilities">
+      <button
+        type="button"
+        class="card-action-button card-action-location"
+        onclick="saveBrowserLocation()">
+        Use my location
+      </button>
+      <button
+        type="button"
+        class="card-action-button card-action-refresh"
+        onclick="refreshRestaurantCards()">
+        Refresh deck
+      </button>
+      <button
+        type="button"
+        class="card-action-button card-action-shuffle"
+        onclick="shuffleRemainingDeck()">
+        Shuffle
+      </button>
+      <button
+        type="button"
+        class="card-action-button card-action-share"
+        id="shareCardButton"
+        onclick="shareRestaurant()">
+        Share
+      </button>
+      <button
+        type="button"
+        class="card-action-button card-action-clear"
+        onclick="clearRestaurantFilters()">
+        Clear
+      </button>
+    </div>
+
+    <p id="restaurantStatus" role="status" aria-live="polite"></p>
+    <div class="deck-trust-strip" aria-label="BiteSwipe trust reminders">
+      <span>Filters narrow options</span>
+      <span>Cards stay hidden until active</span>
+      <span>Confirm allergies before ordering</span>
+    </div>
+    <p class="deck-keyboard-hint">Keyboard: ← pass · → save · U undo · Enter/Space details. Allergy results are guidance only—confirm with the restaurant before ordering.</p>
   </div>
-  <p id="restaurantStatus"></p>
-</div>
+</section>
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 {% endblock %}
