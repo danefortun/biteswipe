@@ -21,7 +21,7 @@
           id="profilePreview">
       </div>
 
-      <form method="POST" enctype="multipart/form-data" class="upload-form">
+      <form method="POST" enctype="multipart/form-data" class="upload-form hero-edit-control">
         <input type="hidden" name="action" value="upload_pic">
         <label class="file-upload-label" for="profile-image">Update photo</label>
         <input
@@ -45,7 +45,10 @@
 
           <div class="name-display">
             <h1 id="username-display">{{ u.name or 'Your Name' }}</h1>
-            <button type="button" id="edit-name-btn" class="profile-small-button">Edit</button>
+            <div class="profile-hero-edit-actions">
+              <button type="button" id="hero-edit-btn" class="profile-small-button" aria-expanded="false">Edit</button>
+              <button type="button" id="edit-name-btn" class="profile-small-button hero-edit-control">Edit name</button>
+            </div>
           </div>
 
           <form id="username-form" method="POST" class="profile-inline-form" hidden>
@@ -83,7 +86,7 @@
             </div>
           </div>
 
-          <form method="POST" enctype="multipart/form-data" class="profile-banner-upload">
+          <form method="POST" enctype="multipart/form-data" class="profile-banner-upload hero-edit-control">
             <input type="hidden" name="action" value="upload_banner">
             <label class="file-upload-label" for="profile-banner-image">Update banner</label>
             <input
@@ -302,8 +305,24 @@ function bindToggle(editButton, cancelButton, displayElement, formElement, focus
 
 const nameForm = document.getElementById("username-form");
 const displayName = document.getElementById("username-display");
+const profileHero = document.querySelector(".profile-hero");
+const heroEditButton = document.getElementById("hero-edit-btn");
+const nameEditButton = document.getElementById("edit-name-btn");
+
+heroEditButton?.addEventListener("click", () => {
+  const isEditing = profileHero?.classList.toggle("is-editing");
+  heroEditButton.textContent = isEditing ? "Done" : "Edit";
+  heroEditButton.setAttribute("aria-expanded", String(Boolean(isEditing)));
+
+  if (!isEditing && nameForm && displayName && nameEditButton) {
+    nameForm.hidden = true;
+    displayName.hidden = false;
+    nameEditButton.hidden = false;
+  }
+});
+
 bindToggle(
-  document.getElementById("edit-name-btn"),
+  nameEditButton,
   document.getElementById("cancel-name-btn"),
   displayName,
   nameForm,
