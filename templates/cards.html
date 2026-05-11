@@ -1424,17 +1424,6 @@ document.addEventListener("DOMContentLoaded", () => {
   </div>
 
   <div class="card-stage is-empty">
-    {% if school_theme %}
-      <div class="school-theme-chip" aria-label="Active school theme">
-        {% if school_theme.card_image_url %}
-          <img src="{{ school_theme.card_image_url }}" alt="">
-        {% else %}
-          <span class="school-theme-monogram" aria-hidden="true">{{ school_theme.short_name[:1] }}</span>
-        {% endif %}
-        <span>{{ school_theme.short_name }} mode</span>
-      </div>
-    {% endif %}
-
     <section class="group-mode-panel" id="groupModePanel" aria-label="Group swipe mode">
       <div id="groupModeInactive">
         <strong>Group mode</strong>
@@ -1466,12 +1455,6 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
     </section>
 
-    <div class="deck-status-row">
-      <span class="deck-status-pill" id="deckMiniProgress">No deck yet</span>
-      <span class="deck-status-pill">Pass</span>
-      <span class="deck-status-pill deck-status-pill-save">Save</span>
-    </div>
-
     <div class="deck-sort-row" aria-label="Deck sorting tools">
       <button type="button" onclick="sortRemainingDeck('best')">Best match</button>
       <button type="button" onclick="sortRemainingDeck('nearby')">Nearest</button>
@@ -1479,6 +1462,16 @@ document.addEventListener("DOMContentLoaded", () => {
     </div>
 
     <div class="card-container" aria-live="polite">
+      {% if school_theme %}
+        <div class="school-theme-chip" aria-label="Active school theme">
+          {% if school_theme.card_image_url %}
+            <img src="{{ school_theme.card_image_url }}" alt="">
+          {% else %}
+            <span class="school-theme-monogram" aria-hidden="true">{{ school_theme.short_name[:1] }}</span>
+          {% endif %}
+          <span>{{ school_theme.short_name }} mode</span>
+        </div>
+      {% endif %}
       <div class="card-empty-state" aria-hidden="true">
         <strong>Build your BiteSwipe deck.</strong>
         <span>Use your location, set filters, then refresh cards to discover nearby places.</span>
