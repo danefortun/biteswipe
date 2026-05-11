@@ -16,8 +16,10 @@ window.currentRestaurantCards = [];
 window.restaurantDecisionHistory = [];
 window.restaurantToastTimeout = null;
 window.deckCoachStorageKey = `biteswipe.deckCoachDismissed.${restaurantCardStorageUser}`;
+window.groupPanelPositionStorageKey = `biteswipe.groupPanelPosition.${restaurantCardStorageUser}`;
 window.activeGroupSession = null;
 window.groupStatusTimer = null;
+window.groupPanelDragState = null;
 
 function setRestaurantStatus(message) {
     const status = document.getElementById("restaurantStatus");
@@ -999,6 +1001,130 @@ function updateGroupPanel(group) {
     renderGroupRestaurantList(almostList, group.almost, "Near matches will show here.");
 }
 
+function getBoundedGroupPanelPosition(left, top, panel) {
+    const margin = 12;
+    const width = panel?.offsetWidth || 300;
+    const height = panel?.offsetHeight || 160;
+    const maxLeft = Math.max(window.innerWidth - width - margin, margin);
+    const maxTop = Math.max(window.innerHeight - height - margin, margin);
+
+    return {
+        left: Math.min(Math.max(left, margin), maxLeft),
+        top: Math.min(Math.max(top, margin), maxTop),
+    };
+}
+
+function setGroupPanelPosition(left, top, options = {}) {
+    const panel = document.getElementById("groupModePanel");
+    if (!panel || window.matchMedia("(max-width: 760px)").matches) {
+        return;
+    }
+
+    const position = getBoundedGroupPanelPosition(left, top, panel);
+    panel.classList.add("is-user-positioned");
+    panel.style.left = `${position.left}px`;
+    panel.style.top = `${position.top}px`;
+
+    if (options.persist !== false) {
+        try {
+            localStorage.setItem(window.groupPanelPositionStorageKey, JSON.stringify(position));
+        } catch (error) {
+            // Drag position is just a local convenience.
+        }
+    }
+}
+
+function restoreGroupPanelPosition() {
+    const panel = document.getElementById("groupModePanel");
+    if (!panel || window.matchMedia("(max-width: 760px)").matches) {
+        return;
+    }
+
+    try {
+        const saved = JSON.parse(localStorage.getItem(window.groupPanelPositionStorageKey) || "null");
+        if (saved && Number.isFinite(Number(saved.left)) && Number.isFinite(Number(saved.top))) {
+            setGroupPanelPosition(Number(saved.left), Number(saved.top), { persist: false });
+        }
+    } catch (error) {
+        // Ignore old or malformed positions.
+    }
+}
+
+function resetGroupPanelPosition() {
+    const panel = document.getElementById("groupModePanel");
+    if (!panel) {
+        return;
+    }
+
+    panel.classList.remove("is-user-positioned", "is-dragging");
+    panel.style.left = "";
+    panel.style.top = "";
+    try {
+        localStorage.removeItem(window.groupPanelPositionStorageKey);
+    } catch (error) {
+        // Nothing else to do.
+    }
+}
+
+function handleGroupPanelPointerDown(event) {
+    const panel = document.getElementById("groupModePanel");
+    if (!panel || window.matchMedia("(max-width: 760px)").matches) {
+        return;
+    }
+
+    if (event.target.closest("button, input, a, select, textarea")) {
+        return;
+    }
+
+    const rect = panel.getBoundingClientRect();
+    window.groupPanelDragState = {
+        pointerId: event.pointerId,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top,
+    };
+    panel.classList.add("is-dragging");
+    panel.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+}
+
+function handleGroupPanelPointerMove(event) {
+    const panel = document.getElementById("groupModePanel");
+    const state = window.groupPanelDragState;
+    if (!panel || !state || state.pointerId !== event.pointerId) {
+        return;
+    }
+
+    setGroupPanelPosition(event.clientX - state.offsetX, event.clientY - state.offsetY, { persist: false });
+}
+
+function handleGroupPanelPointerEnd(event) {
+    const panel = document.getElementById("groupModePanel");
+    const state = window.groupPanelDragState;
+    if (!panel || !state || state.pointerId !== event.pointerId) {
+        return;
+    }
+
+    const rect = panel.getBoundingClientRect();
+    setGroupPanelPosition(rect.left, rect.top);
+    panel.classList.remove("is-dragging");
+    panel.releasePointerCapture?.(event.pointerId);
+    window.groupPanelDragState = null;
+}
+
+function setupDraggableGroupPanel() {
+    const panel = document.getElementById("groupModePanel");
+    if (!panel) {
+        return;
+    }
+
+    panel.addEventListener("pointerdown", handleGroupPanelPointerDown);
+    panel.addEventListener("pointermove", handleGroupPanelPointerMove);
+    panel.addEventListener("pointerup", handleGroupPanelPointerEnd);
+    panel.addEventListener("pointercancel", handleGroupPanelPointerEnd);
+    window.addEventListener("resize", restoreGroupPanelPosition);
+    restoreGroupPanelPosition();
+}
+
 function renderGroupRestaurantList(container, restaurants, emptyText) {
     if (!container) {
         return;
@@ -1882,6 +2008,7 @@ function updateCardProgress() {
 
 document.addEventListener("DOMContentLoaded", () => {
     restoreDeckCoach();
+    setupDraggableGroupPanel();
     restoreRestaurantCardStack();
     updateSessionStats();
     updateActiveFilterSummary();
@@ -1979,6 +2106,10 @@ document.addEventListener("DOMContentLoaded", () => {
   </div>
 
   <section class="group-mode-panel" id="groupModePanel" aria-label="Group swipe mode">
+    <div class="group-mode-drag-handle" aria-hidden="true">
+      <span></span>
+      <span></span>
+    </div>
     <div id="groupModeInactive">
       <strong>Group mode</strong>
       <p>Start or join a session. Only restaurants everyone saves make the final shortlist.</p>
