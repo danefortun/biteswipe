@@ -256,10 +256,10 @@ SCHOOL_THEME_EXTRAS: tuple[tuple[str, str, str, str, str, str, str], ...] = (
 )
 
 SCHOOL_THEME_ASSET_OVERRIDES: dict[str, dict[str, str | None]] = {
-    "drexel.edu": {"image_file": "schools/drexel.webp"},
-    "temple.edu": {"image_file": "schools/temple.webp"},
-    "upenn.edu": {"image_file": "schools/upenn.webp", "card_image_file": "schools/upenn logo.webp"},
-    "wcupa.edu": {"image_file": "schools/west-chester.webp"},
+    "drexel.edu": {"image_file": "schools/backdrops/drexel.webp"},
+    "temple.edu": {"image_file": "schools/backdrops/temple.webp"},
+    "upenn.edu": {"image_file": "schools/backdrops/penn.webp", "card_image_file": "schools/upenn logo.webp"},
+    "wcupa.edu": {"image_file": "schools/backdrops/west-chester.webp"},
 }
 
 

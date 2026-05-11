@@ -82,7 +82,7 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertIsNotNone(theme)
         self.assertEqual(theme["slug"], "drexel")
         self.assertEqual(theme["short_name"], "Drexel")
-        self.assertEqual(theme["image_file"], "schools/drexel.webp")
+        self.assertEqual(theme["image_file"], "schools/backdrops/drexel.webp")
         self.assertEqual(theme["card_image_file"], "schools/badges/drexel.webp")
 
         subdomain_theme = get_school_theme_for_email("student@mail.drexel.edu")
@@ -92,11 +92,11 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertEqual(get_school_theme_for_email("student@princeton.edu")["card_image_file"], "schools/badges/princeton.webp")
         self.assertEqual(get_school_theme_for_email("student@princeton.edu")["image_file"], "schools/backdrops/princeton.webp")
         self.assertEqual(get_school_theme_for_email("student@mit.edu")["card_image_file"], "schools/badges/mit.webp")
-        self.assertEqual(get_school_theme_for_email("student@temple.edu")["image_file"], "schools/temple.webp")
+        self.assertEqual(get_school_theme_for_email("student@temple.edu")["image_file"], "schools/backdrops/temple.webp")
         upenn_theme = get_school_theme_for_email("student@upenn.edu")
-        self.assertEqual(upenn_theme["image_file"], "schools/upenn.webp")
+        self.assertEqual(upenn_theme["image_file"], "schools/backdrops/penn.webp")
         self.assertEqual(upenn_theme["card_image_file"], "schools/upenn logo.webp")
-        self.assertEqual(get_school_theme_for_email("student@wcupa.edu")["image_file"], "schools/west-chester.webp")
+        self.assertEqual(get_school_theme_for_email("student@wcupa.edu")["image_file"], "schools/backdrops/west-chester.webp")
         self.assertEqual(get_school_theme_for_email("student@mail.newark.rutgers.edu")["slug"], "rutgers-newark")
 
         generated = get_school_theme_for_email("student@examplecollege.edu")
@@ -129,7 +129,7 @@ class LifeSwipeAppTestCase(unittest.TestCase):
 
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"schools/upenn.webp", response.data)
+        self.assertIn(b"schools/backdrops/penn.webp", response.data)
         self.assertIn(b"schools/upenn%20logo.webp", response.data)
 
     def test_filters_are_sanitized_and_persisted_in_session(self) -> None:
