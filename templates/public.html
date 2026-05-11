@@ -98,7 +98,12 @@
         </div>
       </div>
 
-      <div class="profile-completion-card" aria-label="Profile completion">
+      <div
+        class="profile-completion-card"
+        aria-label="Profile completion"
+        data-profile-completion
+        data-profile-steps="{{ profile_steps }}"
+        data-profile-user="{{ u.id }}">
         <div>
           <span>{{ profile_steps }}/5 setup steps</span>
           <strong>{% if profile_steps >= 5 %}Profile ready{% elif profile_steps >= 3 %}Almost ready{% else %}Keep building{% endif %}</strong>
@@ -359,5 +364,38 @@ document.getElementById("profile-banner-image")?.addEventListener("change", (eve
   banner.style.setProperty("--profile-banner-image", `url("${URL.createObjectURL(file)}")`);
   banner.classList.add("has-banner-image");
 });
+
+function settleProfileCompletionCard() {
+  const completionCard = document.querySelector("[data-profile-completion]");
+  if (!completionCard) return;
+
+  const profileSteps = Number(completionCard.dataset.profileSteps);
+  const profileUser = completionCard.dataset.profileUser || "guest";
+  const storageKey = `biteswipe.profileSetupComplete.${profileUser}`;
+
+  try {
+    if (localStorage.getItem(storageKey) === "true") {
+      completionCard.hidden = true;
+      return;
+    }
+
+    if (profileSteps >= 5) {
+      window.requestAnimationFrame(() => {
+        completionCard.classList.add("is-completing");
+      });
+
+      completionCard.addEventListener("animationend", () => {
+        localStorage.setItem(storageKey, "true");
+        completionCard.hidden = true;
+      }, { once: true });
+    }
+  } catch {
+    if (profileSteps >= 5) {
+      completionCard.hidden = true;
+    }
+  }
+}
+
+settleProfileCompletionCard();
 </script>
 {% endblock %}

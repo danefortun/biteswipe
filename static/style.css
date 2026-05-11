@@ -3808,6 +3808,44 @@ body.deck-focus-mode .card-stage {
   margin-top: 18px;
   padding: 14px;
   border-radius: 18px;
+  transform-origin: top center;
+  will-change: opacity, transform, max-height, margin, padding;
+}
+
+.profile-completion-card[hidden] {
+  display: none;
+}
+
+.profile-completion-card.is-completing {
+  pointer-events: none;
+  overflow: hidden;
+  animation: profileSetupCrumble 900ms ease-in forwards;
+}
+
+@keyframes profileSetupCrumble {
+  0% {
+    max-height: 120px;
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scaleY(1);
+  }
+
+  44% {
+    max-height: 120px;
+    opacity: 0.76;
+    filter: blur(0.5px);
+    transform: translateY(2px) scaleY(0.88) rotateX(9deg);
+  }
+
+  100% {
+    max-height: 0;
+    margin-top: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    filter: blur(2px);
+    transform: translateY(16px) scaleY(0.12) rotateX(22deg);
+  }
 }
 
 .profile-completion-card > div:first-child {
