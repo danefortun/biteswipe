@@ -98,6 +98,14 @@ function recordRestaurantDecision(action, restaurant, index) {
     rememberAvoidedRestaurant(restaurant);
   }
 
+  if (typeof updateTasteProfile === "function") {
+    updateTasteProfile(action, restaurant);
+  }
+
+  if (typeof rememberRestaurantDecision === "function") {
+    rememberRestaurantDecision(action, restaurant);
+  }
+
   if (typeof recordGroupSwipe === "function") {
     recordGroupSwipe(action, restaurant);
   }
