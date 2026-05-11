@@ -1563,6 +1563,12 @@ span.restaurant-website-link {
     grid-template-columns: 1fr;
   }
 
+  .profile-action-strip .campus-mode-form {
+    flex-basis: 100%;
+    grid-template-columns: 1fr;
+    margin-left: 0;
+  }
+
   .food-preference-form,
   .food-preference-form input {
     width: 100%;
@@ -3816,7 +3822,12 @@ body.deck-focus-mode .card-stage {
   display: none;
 }
 
-.profile-completion-card.is-completing {
+.taste-primer-panel[hidden] {
+  display: none;
+}
+
+.profile-completion-card.is-completing,
+.taste-primer-panel.is-completing {
   pointer-events: none;
   overflow: hidden;
   animation: profileSetupCrumble 900ms ease-in forwards;
@@ -3824,14 +3835,14 @@ body.deck-focus-mode .card-stage {
 
 @keyframes profileSetupCrumble {
   0% {
-    max-height: 120px;
+    max-height: 520px;
     opacity: 1;
     filter: blur(0);
     transform: translateY(0) scaleY(1);
   }
 
   44% {
-    max-height: 120px;
+    max-height: 520px;
     opacity: 0.76;
     filter: blur(0.5px);
     transform: translateY(2px) scaleY(0.88) rotateX(9deg);
@@ -3878,6 +3889,7 @@ body.deck-focus-mode .card-stage {
 .profile-action-strip {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
   margin-top: 18px;
   padding: 14px;
@@ -3896,6 +3908,17 @@ body.deck-focus-mode .card-stage {
   border: 1px solid color-mix(in srgb, var(--accent-color) 32%, var(--border-color));
   border-radius: 8px;
   background: color-mix(in srgb, var(--accent-soft-color) 45%, var(--surface-color));
+}
+
+.profile-action-strip .campus-mode-form {
+  flex: 1 1 360px;
+  grid-template-columns: minmax(150px, auto) minmax(220px, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-top: 0;
+  margin-left: auto;
+  padding: 10px;
+  border-radius: 14px;
 }
 
 .campus-mode-form label {
