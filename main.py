@@ -340,6 +340,7 @@ def register_cli(app: Flask) -> None:
 def ensure_user_interest_columns() -> None:
     column_names = get_table_column_names("users")
     required_columns = {
+        "campus_theme_domain": "VARCHAR(255)",
         "allergen_interests_json": "TEXT DEFAULT '[]'",
         "food_preferences_json": "TEXT DEFAULT '[]'",
         "hobby_interests_json": "TEXT DEFAULT '[]'",
@@ -422,6 +423,7 @@ def register_routes(app: Flask) -> None:
 
             return redirect(url_for("home"))
 
+        join_group_from_invite(user)
         return render_template("cards.html")
 
     @app.route("/profile", methods=["GET", "POST"])
@@ -446,6 +448,8 @@ def register_routes(app: Flask) -> None:
                 add_user_hobby_interest(user)
             elif action == "remove_interest":
                 remove_user_interest(user)
+            elif action == "update_campus_theme":
+                update_user_campus_theme(user)
             else:
                 flash("Unknown profile action.")
 
@@ -460,6 +464,10 @@ def register_routes(app: Flask) -> None:
             hobby_interests=user.get_interest_list("hobby_interests_json"),
             food_preference_presets=FOOD_PREFERENCE_PRESETS,
             hobby_interest_presets=HOBBY_INTEREST_PRESETS,
+            school_theme_options=get_school_theme_options(),
+            current_school_theme_domain=get_user_school_theme_domain(user),
+            selected_campus_theme_domain=str(user.campus_theme_domain or ""),
+            detected_school_theme=get_school_theme_for_email(user.email),
         )
 
     @app.get("/credits")
@@ -619,6 +627,7 @@ def register_routes(app: Flask) -> None:
             filtered_places = apply_distance_filter(places, filters)
             message = "No exact filter matches found, so showing nearby restaurants instead."
 
+        annotate_restaurant_confidence(filtered_places, filters)
         return jsonify({"places": filtered_places, "source": source, "message": message})
 
     @app.post("/save_restaurant")
@@ -800,6 +809,43 @@ def get_school_theme_for_email(email: str | None) -> dict[str, str | None] | Non
     return build_generated_school_theme(domain)
 
 
+def get_school_theme_for_domain(domain: str | None) -> dict[str, str | None] | None:
+    domain = str(domain or "").strip().lower()
+    if not domain:
+        return None
+
+    if domain in SCHOOL_THEMES:
+        return dict(SCHOOL_THEMES[domain], domain=domain, is_generated="false")
+
+    if domain.endswith(".edu"):
+        return build_generated_school_theme(domain)
+
+    return None
+
+
+def get_user_school_theme_domain(user: Users | None) -> str:
+    if user is None:
+        return ""
+
+    selected_domain = str(getattr(user, "campus_theme_domain", "") or "").strip().lower()
+    if selected_domain:
+        return selected_domain
+
+    detected_theme = get_school_theme_for_email(user.email)
+    return str(detected_theme.get("domain", "")) if detected_theme else ""
+
+
+def get_school_theme_options() -> list[dict[str, str | None]]:
+    return [
+        {
+            "domain": domain,
+            "name": str(theme["name"]),
+            "short_name": str(theme["short_name"]),
+        }
+        for domain, theme in sorted(SCHOOL_THEMES.items(), key=lambda item: str(item[1]["name"]))
+    ]
+
+
 def build_generated_school_theme(domain: str) -> dict[str, str | None]:
     digest = hashlib.sha256(domain.encode("utf-8")).digest()
     hue = int.from_bytes(digest[:2], "big") % 360
@@ -839,7 +885,8 @@ def build_school_theme_payload(user: Users | None) -> dict[str, str | None] | No
     if user is None:
         return None
 
-    theme = get_school_theme_for_email(user.email)
+    selected_domain = str(getattr(user, "campus_theme_domain", "") or "").strip().lower()
+    theme = get_school_theme_for_domain(selected_domain) if selected_domain else get_school_theme_for_email(user.email)
     if theme is None:
         return None
 
@@ -970,6 +1017,18 @@ def add_user_hobby_interest(user: Users) -> None:
     db.session.commit()
     sync_session_filters_from_user(user)
     flash(f"Added {interest} to your profile interests.")
+
+
+def update_user_campus_theme(user: Users) -> None:
+    domain = str(request.form.get("campus_theme_domain", "")).strip().lower()
+
+    if domain and get_school_theme_for_domain(domain) is None:
+        flash("That campus theme is not available yet.")
+        return
+
+    user.campus_theme_domain = domain or None
+    db.session.commit()
+    flash("Campus mode updated.")
 
 
 def remove_user_interest(user: Users) -> None:
@@ -1162,6 +1221,22 @@ def get_current_group_session() -> GroupSwipeSession | None:
     return GroupSwipeSession.query.filter_by(code=code, is_active=True).first()
 
 
+def join_group_from_invite(user: Users) -> None:
+    code = normalize_group_code(request.args.get("group", ""))
+    if not code:
+        return
+
+    group_session = GroupSwipeSession.query.filter_by(code=code, is_active=True).first()
+    if group_session is None:
+        flash("That group invite is no longer active.")
+        return
+
+    add_group_member(group_session, user)
+    db.session.commit()
+    session["group_swipe_code"] = group_session.code
+    flash(f"Joined group {group_session.code}.")
+
+
 def sanitize_group_restaurant_payload(payload: dict[str, Any]) -> dict[str, Any]:
     allowed_keys = {
         "name",
@@ -1217,6 +1292,7 @@ def serialize_group_session(group_session: GroupSwipeSession, user: Users | None
 
     return {
         "code": group_session.code,
+        "invite_path": url_for("home", group=group_session.code),
         "is_host": bool(user and user.id == group_session.host_user_id),
         "member_count": member_count,
         "members": [
@@ -1398,6 +1474,109 @@ def restaurant_matches_allergens(place: dict[str, Any], filters: dict[str, Any])
             return False
 
     return True
+
+
+def annotate_restaurant_confidence(places: list[dict[str, Any]], filters: dict[str, Any]) -> None:
+    for place in places:
+        place["bite_confidence"] = build_bite_confidence(place, filters)
+        allergy_confidence = build_allergy_confidence(place, filters)
+        if allergy_confidence:
+            place["allergy_confidence"] = allergy_confidence
+
+
+def build_bite_confidence(place: dict[str, Any], filters: dict[str, Any]) -> dict[str, Any]:
+    score = 48
+    reasons: list[str] = []
+
+    distance = normalize_optional_float(place.get("distance_meters"))
+    if distance is not None:
+        miles = distance / METERS_PER_MILE
+        if miles <= 0.5:
+            score += 18
+            reasons.append("very close")
+        elif miles <= 1.5:
+            score += 12
+            reasons.append("nearby")
+        elif miles <= filters["distance"]:
+            score += 6
+            reasons.append("inside your distance")
+
+    rating = normalize_optional_float(place.get("rating"))
+    if rating is not None:
+        if rating >= 4.5:
+            score += 16
+            reasons.append("strong rating")
+        elif rating >= 4.0:
+            score += 10
+            reasons.append("solid rating")
+        elif rating >= 3.5:
+            score += 4
+
+    price_level = place.get("price_level")
+    if selected_price_levels(filters) and price_level in selected_price_levels(filters):
+        score += 10
+        reasons.append("price match")
+
+    food_preferences = sanitize_interest_values(filters.get("foodPreferences", []))
+    if food_preferences and restaurant_matches_food_preferences(place, food_preferences):
+        score += 12
+        reasons.append("craving match")
+
+    allergy_confidence = build_allergy_confidence(place, filters)
+    if allergy_confidence and allergy_confidence["level"] == "strong":
+        score += 8
+        reasons.append("clear allergy signal")
+
+    score = min(max(score, 0), 99)
+    label = "Great fit" if score >= 82 else "Good fit" if score >= 68 else "Possible fit"
+    return {"score": score, "label": label, "reasons": reasons[:4]}
+
+
+def build_allergy_confidence(place: dict[str, Any], filters: dict[str, Any]) -> dict[str, Any] | None:
+    active_filters = [
+        (key, config)
+        for key, config in ALLERGEN_FILTERS.items()
+        if filters.get(key)
+    ]
+    if not active_filters:
+        return None
+
+    dietary_tags = place.get("dietary_tags") or {}
+    matched_labels = []
+    unknown_labels = []
+
+    for _key, config in active_filters:
+        tag_names = config["diet_tags"]
+        known_values = [
+            dietary_tags.get(tag_name)
+            for tag_name in tag_names
+            if dietary_tags.get(tag_name) is not None
+        ]
+
+        if any(value in {"yes", "only"} for value in known_values):
+            matched_labels.append(str(config["label"]))
+        else:
+            unknown_labels.append(str(config["label"]))
+
+    if matched_labels and not unknown_labels:
+        return {
+            "level": "strong",
+            "label": "Strong allergy signal",
+            "detail": f"Tagged for {', '.join(matched_labels)}. Still confirm ingredients before ordering.",
+        }
+
+    if matched_labels:
+        return {
+            "level": "mixed",
+            "label": "Partial allergy signal",
+            "detail": f"Tagged for {', '.join(matched_labels)}, but {', '.join(unknown_labels)} still needs checking.",
+        }
+
+    return {
+        "level": "unknown",
+        "label": "Verify allergy safety",
+        "detail": "No public allergy tags were found for your selected filters. Ask the restaurant before ordering.",
+    }
 
 
 def extract_dietary_tags(tags: dict[str, Any]) -> dict[str, str]:

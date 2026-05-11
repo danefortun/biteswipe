@@ -3613,6 +3613,51 @@ body.deck-focus-mode .card-stage {
   margin-top: 10px;
 }
 
+.campus-mode-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 32%, var(--border-color));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-soft-color) 45%, var(--surface-color));
+}
+
+.campus-mode-form label {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+
+.campus-mode-form label span {
+  color: var(--accent-color);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.campus-mode-form label strong {
+  color: var(--surface-text-color);
+  font-size: 16px;
+}
+
+.campus-mode-form > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.campus-mode-form select {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+  color: var(--surface-text-color);
+  font: inherit;
+}
+
 .form-buttons small {
   margin-right: auto;
   color: var(--surface-muted-color);

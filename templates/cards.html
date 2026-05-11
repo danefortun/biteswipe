@@ -8,6 +8,7 @@ window.restaurantCardStorageKey = `biteswipe.restaurantStack.${restaurantCardSto
 window.restaurantRatingStorageKey = `biteswipe.userRatings.${restaurantCardStorageUser}`;
 window.restaurantStatsStorageKey = `biteswipe.deckStats.${restaurantCardStorageUser}`;
 window.restaurantPassHistoryStorageKey = `biteswipe.passHistory.${restaurantCardStorageUser}`;
+window.restaurantAvoidStorageKey = `biteswipe.avoidRepeats.${restaurantCardStorageUser}`;
 window.currentRestaurantCards = [];
 window.restaurantDecisionHistory = [];
 window.restaurantToastTimeout = null;
@@ -467,6 +468,51 @@ function clearDeckHistory() {
     showBiteToast("Pass history cleared", "success");
 }
 
+function getRestaurantIdentity(restaurant) {
+    return String(restaurant?.place || restaurant?.name || "").trim().toLowerCase();
+}
+
+function readAvoidedRestaurants() {
+    try {
+        const rawAvoided = localStorage.getItem(window.restaurantAvoidStorageKey);
+        const avoided = rawAvoided ? JSON.parse(rawAvoided) : [];
+        return Array.isArray(avoided) ? avoided : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function writeAvoidedRestaurants(avoided) {
+    try {
+        localStorage.setItem(window.restaurantAvoidStorageKey, JSON.stringify(avoided.slice(0, 120)));
+    } catch (error) {
+        // Repeat avoidance should never block deck use.
+    }
+}
+
+function rememberAvoidedRestaurant(restaurant) {
+    const identity = getRestaurantIdentity(restaurant);
+    if (!identity) {
+        return;
+    }
+
+    const avoided = readAvoidedRestaurants().filter((item) => item.key !== identity);
+    avoided.unshift({
+        key: identity,
+        name: restaurant?.name || "Restaurant",
+        savedAt: new Date().toISOString(),
+    });
+    writeAvoidedRestaurants(avoided);
+}
+
+function filterAvoidedRestaurants(places) {
+    const cards = Array.isArray(places) ? places : [];
+    const avoidedKeys = new Set(readAvoidedRestaurants().map((item) => item.key));
+    const filtered = cards.filter((place) => !avoidedKeys.has(getRestaurantIdentity(place)));
+
+    return filtered.length ? filtered : cards;
+}
+
 async function createGroupSession() {
     try {
         const response = await fetch("/group_session/create", { method: "POST" });
@@ -523,6 +569,24 @@ async function leaveGroupSession() {
     window.clearInterval(window.groupStatusTimer);
     updateGroupPanel(null);
     showBiteToast("Left group mode", "success");
+}
+
+async function copyGroupInviteLink() {
+    const group = window.activeGroupSession;
+    if (!group?.code) {
+        setRestaurantStatus("Start or join a group first.");
+        return;
+    }
+
+    const invitePath = group.invite_path || `/?group=${encodeURIComponent(group.code)}`;
+    const inviteUrl = new URL(invitePath, window.location.origin).href;
+
+    try {
+        await navigator.clipboard.writeText(inviteUrl);
+        showBiteToast("Group invite copied", "success");
+    } catch (error) {
+        setRestaurantStatus(inviteUrl);
+    }
 }
 
 async function refreshGroupSession() {
@@ -811,11 +875,17 @@ async function get_restaurant(options = {}) {
 
         window.restaurantDecisionHistory = [];
         resetSessionStats();
-        renderRestaurantCards(data.places || []);
+        const rawPlaces = data.places || [];
+        const displayPlaces = filterAvoidedRestaurants(rawPlaces);
+        renderRestaurantCards(displayPlaces);
+
+        const repeatMessage = rawPlaces.length > displayPlaces.length
+            ? ` Hidden ${rawPlaces.length - displayPlaces.length} place${rawPlaces.length - displayPlaces.length === 1 ? "" : "s"} you already swiped.`
+            : "";
         setRestaurantStatus(
             data.message ||
-            (data.places && data.places.length
-                ? `Loaded ${data.places.length} nearby spots. Swipe right to save, left to pass.`
+            (displayPlaces.length
+                ? `Loaded ${displayPlaces.length} nearby spots. Swipe right to save, left to pass.${repeatMessage}`
                 : "No nearby restaurants found. Try widening your distance filter.")
         );
     } catch (error) {
@@ -942,12 +1012,14 @@ function buildCardChips(result) {
     chips.classList.add("card-chip-row");
 
     [
+        formatBiteConfidence(result),
+        formatAllergyConfidence(result),
         formatDistance(result.distance_meters),
         result.price_text || formatPriceLevel(result.price_level),
         formatOpenStatus(result),
         formatCuisine(result.cuisine),
         formatShortRating(result),
-    ].filter(Boolean).slice(0, 4).forEach((value) => {
+    ].filter(Boolean).slice(0, 5).forEach((value) => {
         const chip = document.createElement("span");
         chip.textContent = value;
         chips.appendChild(chip);
@@ -973,6 +1045,8 @@ function buildCardBack(result) {
     addDetail(detailList, "Hours", result.opening_hours_text || formatOpenStatus(result));
     addDetail(detailList, "Address", result.address);
     addDetail(detailList, "Distance", formatDistance(result.distance_meters));
+    addDetail(detailList, "BiteSwipe score", formatBiteConfidence(result, true));
+    addDetail(detailList, "Allergy confidence", formatAllergyConfidence(result, true));
     addDetail(detailList, "Source", formatSource(result.source));
     back.appendChild(detailList);
 
@@ -1060,6 +1134,11 @@ function buildMatchPanel(result) {
 
 function getMatchReasons(result) {
     const reasons = [];
+    const confidence = result.bite_confidence || {};
+    if (Number.isFinite(Number(confidence.score))) {
+        reasons.push(`${Number(confidence.score)}% BiteSwipe fit`);
+    }
+
     const distance = formatDistance(result.distance_meters);
     const cuisine = formatCuisine(result.cuisine);
     const rating = Number(result.rating);
@@ -1081,6 +1160,31 @@ function getMatchReasons(result) {
     }
 
     return reasons.slice(0, 4).length ? reasons.slice(0, 4) : ["nearby discovery", "tap for details"];
+}
+
+function formatBiteConfidence(result, detailed = false) {
+    const confidence = result?.bite_confidence || {};
+    const score = Number(confidence.score);
+
+    if (!Number.isFinite(score)) {
+        return "";
+    }
+
+    const label = confidence.label || "BiteSwipe fit";
+    const reasons = Array.isArray(confidence.reasons) ? confidence.reasons.filter(Boolean) : [];
+    return detailed && reasons.length
+        ? `${score}/100 ${label} (${reasons.join(", ")})`
+        : `${score}% ${label}`;
+}
+
+function formatAllergyConfidence(result, detailed = false) {
+    const confidence = result?.allergy_confidence;
+
+    if (!confidence?.label) {
+        return "";
+    }
+
+    return detailed && confidence.detail ? confidence.detail : confidence.label;
 }
 
 function buildRatingPanel(result) {
@@ -1439,6 +1543,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <strong>Group <span id="groupCodeLabel"></span></strong>
           <span id="groupMemberCount">1 member</span>
         </div>
+        <button type="button" onclick="copyGroupInviteLink()">Invite</button>
         <button type="button" onclick="leaveGroupSession()">Leave</button>
       </div>
       <div class="group-mode-results">

@@ -94,6 +94,10 @@ function recordRestaurantDecision(action, restaurant, index) {
     addPassedRestaurantToHistory(restaurant);
   }
 
+  if (typeof rememberAvoidedRestaurant === "function") {
+    rememberAvoidedRestaurant(restaurant);
+  }
+
   if (typeof recordGroupSwipe === "function") {
     recordGroupSwipe(action, restaurant);
   }

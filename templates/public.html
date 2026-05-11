@@ -131,6 +131,23 @@
         <div class="verification-item{% if food_preferences %} is-complete{% endif %}"><span aria-hidden="true">3</span><div><strong>Add cravings</strong><p>Pick cuisines so the deck starts closer to what you want.</p></div></div>
         <div class="verification-item{% if saved_restaurant_count %} is-complete{% endif %}"><span aria-hidden="true">4</span><div><strong>Save a few options</strong><p>Build a board for tonight or your next study break.</p></div></div>
       </div>
+
+      <form method="POST" class="campus-mode-form">
+        <input type="hidden" name="action" value="update_campus_theme">
+        <label for="campus-theme-domain">
+          <span>Campus mode</span>
+          <strong>{{ (school_theme.short_name if school_theme else 'BiteSwipe') }} deck theme</strong>
+        </label>
+        <div>
+          <select id="campus-theme-domain" name="campus_theme_domain">
+            <option value="">Auto from .edu{% if detected_school_theme %} ({{ detected_school_theme.short_name }}){% endif %}</option>
+            {% for option in school_theme_options %}
+              <option value="{{ option.domain }}" {% if option.domain == selected_campus_theme_domain %}selected{% endif %}>{{ option.name }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit">Save</button>
+        </div>
+      </form>
     </section>
   </div>
 

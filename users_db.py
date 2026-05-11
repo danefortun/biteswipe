@@ -16,6 +16,7 @@ class Users(db.Model):
     pfp_file_path = db.Column(db.String(255), default="transparentnewdefaultpicture.png")
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
+    campus_theme_domain = db.Column(db.String(255))
     allergen_interests_json = db.Column(db.Text, default="[]")
     food_preferences_json = db.Column(db.Text, default="[]")
     hobby_interests_json = db.Column(db.Text, default="[]")

@@ -132,6 +132,21 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertIn(b"schools/backdrops/penn.webp", response.data)
         self.assertIn(b"schools/upenn%20logo.webp", response.data)
 
+    def test_profile_campus_mode_can_override_email_theme(self) -> None:
+        self.login(email="student@drexel.edu")
+
+        response = self.client.post(
+            "/profile",
+            data={"action": "update_campus_theme", "campus_theme_domain": "temple.edu"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'data-school-theme="temple"', response.data)
+        self.assertIn(b"Temple mode", response.data)
+
     def test_filters_are_sanitized_and_persisted_in_session(self) -> None:
         self.login()
         response = self.client.post(
@@ -324,6 +339,10 @@ class LifeSwipeAppTestCase(unittest.TestCase):
             [place["name"] for place in response.get_json()["places"]],
             ["Safe Bistro", "Unknown Bistro"],
         )
+        places = response.get_json()["places"]
+        self.assertEqual(places[0]["allergy_confidence"]["level"], "strong")
+        self.assertEqual(places[1]["allergy_confidence"]["level"], "unknown")
+        self.assertIn("bite_confidence", places[0])
 
     def test_restaurant_route_falls_back_when_filters_have_no_exact_matches(self) -> None:
         self.login()
@@ -402,6 +421,7 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         response = self.client.post("/group_session/create")
         self.assertEqual(response.status_code, 200)
         code = response.get_json()["group"]["code"]
+        self.assertEqual(response.get_json()["group"]["invite_path"], f"/?group={code}")
 
         self.client.get("/logout")
         self.login("two@example.com")
@@ -425,6 +445,22 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         group = response.get_json()["group"]
         self.assertEqual(group["consensus"][0]["name"], "Shared Pizza")
         self.assertEqual(group["consensus"][0]["saved_count"], 2)
+
+    def test_group_invite_link_joins_session_from_home(self) -> None:
+        self.login("one@example.com")
+        response = self.client.post("/group_session/create")
+        self.assertEqual(response.status_code, 200)
+        code = response.get_json()["group"]["code"]
+
+        self.client.get("/logout")
+        self.login("two@example.com")
+        response = self.client.get(f"/?group={code}")
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.get("/group_session/current")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["group"]["code"], code)
+        self.assertEqual(response.get_json()["group"]["member_count"], 2)
 
     def test_openstreetmap_helpers_format_places(self) -> None:
         query = build_overpass_query(39.9566, -75.1899, 2000, 12, 25)
