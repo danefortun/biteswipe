@@ -16,6 +16,7 @@ from main import (
     format_osm_place,
     format_price_text,
     get_school_theme_for_email,
+    merge_osm_places_with_google_enrichment,
     normalize_google_price_level,
     normalize_price_level,
 )
@@ -265,6 +266,101 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(payload["source"], "openstreetmap")
         self.assertEqual(payload["places"][0]["name"], "Test Cafe")
+
+    def test_restaurant_route_uses_osm_location_with_google_enrichment(self) -> None:
+        self.login()
+        self.app.config.update({"GOOGLE_PLACES_API_KEY": "test-key"})
+        response = self.client.post("/save_location", json={"latitude": 39.9566, "longitude": -75.1899})
+        self.assertEqual(response.status_code, 200)
+
+        with (
+            patch(
+                "main.search_restaurants_with_openstreetmap",
+                return_value=[
+                    {
+                        "name": "Test Cafe",
+                        "place": "osm:node:1",
+                        "photo": "/static/restaurant-fallbacks/general.webp",
+                        "photo_source": "biteswipe_fallback",
+                        "source": "openstreetmap",
+                        "address": "123 Campus Walk",
+                        "distance_meters": 123.4,
+                        "walking_minutes": 1,
+                        "price_level": None,
+                        "price_text": None,
+                        "dietary_tags": {},
+                    }
+                ],
+            ),
+            patch(
+                "main.search_restaurants_with_google",
+                return_value=[
+                    {
+                        "name": "Test Cafe",
+                        "place": "google-place-1",
+                        "photo": "https://places.googleapis.com/v1/photo/media",
+                        "photo_source": "google_places",
+                        "source": "google",
+                        "address": "123 Campus Walk Philadelphia PA",
+                        "price_level": 2,
+                        "price_text": "$$",
+                        "rating": 4.5,
+                        "review_count": 20,
+                        "website": "https://example.com",
+                    }
+                ],
+            ) as google_search,
+        ):
+            response = self.client.get("/get_restaurant")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        place = payload["places"][0]
+        self.assertEqual(payload["source"], "hybrid")
+        self.assertEqual(place["source"], "hybrid")
+        self.assertEqual(place["place"], "osm:node:1")
+        self.assertEqual(place["google_place_id"], "google-place-1")
+        self.assertEqual(place["distance_meters"], 123.4)
+        self.assertEqual(place["walking_minutes"], 1)
+        self.assertEqual(place["photo_source"], "google_places")
+        self.assertEqual(place["price_text"], "$$")
+        self.assertEqual(place["rating"], 4.5)
+        google_search.assert_called_once()
+
+    def test_restaurant_route_skips_google_enrichment_at_usage_limit(self) -> None:
+        self.login()
+        self.app.config.update(
+            {
+                "GOOGLE_PLACES_API_KEY": "test-key",
+                "GOOGLE_PLACES_MONTHLY_SPEND_USD": 120,
+                "GOOGLE_PLACES_MONTHLY_CREDIT_USD": 200,
+                "GOOGLE_PLACES_DISABLE_AT_USAGE_RATIO": 0.6,
+            }
+        )
+        response = self.client.post("/save_location", json={"latitude": 39.9566, "longitude": -75.1899})
+        self.assertEqual(response.status_code, 200)
+
+        with (
+            patch(
+                "main.search_restaurants_with_openstreetmap",
+                return_value=[
+                    {
+                        "name": "Budget Cafe",
+                        "place": "osm:node:2",
+                        "photo": "/static/restaurant-fallbacks/general.webp",
+                        "source": "openstreetmap",
+                        "address": None,
+                        "distance_meters": 50,
+                    }
+                ],
+            ),
+            patch("main.search_restaurants_with_google") as google_search,
+        ):
+            response = self.client.get("/get_restaurant")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["source"], "openstreetmap")
+        google_search.assert_not_called()
 
     def test_restaurant_route_applies_distance_and_food_filters(self) -> None:
         self.login()
@@ -564,6 +660,42 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertEqual(fallback_photo["photo_source"], "biteswipe_fallback")
         self.assertIn("restaurant-fallbacks/mexican.webp", fallback_photo["photo"])
         self.assertIsNone(fallback_photo["walking_minutes"])
+
+    def test_hybrid_merge_keeps_osm_distance_and_google_price_photo(self) -> None:
+        merged = merge_osm_places_with_google_enrichment(
+            [
+                {
+                    "name": "Campus Pizza",
+                    "place": "osm:node:3",
+                    "photo": "/static/restaurant-fallbacks/pizza.webp",
+                    "photo_source": "biteswipe_fallback",
+                    "source": "openstreetmap",
+                    "address": "10 Market Street",
+                    "distance_meters": 88,
+                    "walking_minutes": 1,
+                    "price_text": None,
+                }
+            ],
+            [
+                {
+                    "name": "Campus Pizza",
+                    "place": "google-place-3",
+                    "photo": "https://places.googleapis.com/photo",
+                    "photo_source": "google_places",
+                    "source": "google",
+                    "address": "10 Market Street Philadelphia PA",
+                    "price_text": "$",
+                    "price_level": 1,
+                }
+            ],
+        )
+
+        self.assertEqual(merged[0]["source"], "hybrid")
+        self.assertEqual(merged[0]["place"], "osm:node:3")
+        self.assertEqual(merged[0]["google_place_id"], "google-place-3")
+        self.assertEqual(merged[0]["distance_meters"], 88)
+        self.assertEqual(merged[0]["photo_source"], "google_places")
+        self.assertEqual(merged[0]["price_text"], "$")
 
     def test_restaurant_price_helpers_do_not_show_free_for_unknown_cost(self) -> None:
         self.assertEqual(normalize_price_level("$"), 1)

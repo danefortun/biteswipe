@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import re
 import secrets
 import string
 from functools import wraps
@@ -626,14 +627,16 @@ def register_routes(app: Flask) -> None:
         api_key = current_app.config.get("GOOGLE_PLACES_API_KEY")
 
         try:
-            if provider == "google" or (provider == "auto" and api_key):
+            if provider == "google":
                 if not api_key:
                     return jsonify({"places": [], "error": "Google Places API key is not configured."}), 503
                 places = search_restaurants_with_google(user, api_key, filters, radius_meters)
                 source = "google"
-            else:
+            elif provider == "openstreetmap":
                 places = search_restaurants_with_openstreetmap(user.latitude, user.longitude, radius_meters)
                 source = "openstreetmap"
+            else:
+                places, source = search_restaurants_hybrid(user, api_key, filters, radius_meters)
         except Exception:
             current_app.logger.exception("Restaurant search failed.")
             return jsonify({"places": [], "error": "Restaurant search failed. Please try again."}), 502
@@ -1764,6 +1767,125 @@ def search_restaurants_with_google(
 
     results = post_json(url, json_body=payload, headers=search_headers, timeout=10).get("places", [])
     return [format_google_place(result, api_key) for result in results]
+
+
+def search_restaurants_hybrid(
+    user: Users,
+    api_key: str | None,
+    filters: dict[str, Any] | None = None,
+    radius_meters: int | None = None,
+) -> tuple[list[dict[str, Any]], str]:
+    osm_places = search_restaurants_with_openstreetmap(user.latitude, user.longitude, radius_meters)
+
+    if not api_key or not google_places_enrichment_allowed():
+        return osm_places, "openstreetmap"
+
+    try:
+        google_places = search_restaurants_with_google(user, api_key, filters, radius_meters)
+    except Exception:
+        current_app.logger.exception("Google Places enrichment failed; using OpenStreetMap results.")
+        return osm_places, "openstreetmap"
+
+    if not google_places:
+        return osm_places, "openstreetmap"
+
+    merged_places = merge_osm_places_with_google_enrichment(osm_places, google_places)
+    source = "hybrid" if any(place.get("source") == "hybrid" for place in merged_places) else "openstreetmap"
+    return merged_places, source
+
+
+def google_places_enrichment_allowed() -> bool:
+    configured_ratio = normalize_optional_float(current_app.config.get("GOOGLE_PLACES_USAGE_RATIO"))
+    spend = normalize_optional_float(current_app.config.get("GOOGLE_PLACES_MONTHLY_SPEND_USD")) or 0.0
+    credit = normalize_optional_float(current_app.config.get("GOOGLE_PLACES_MONTHLY_CREDIT_USD")) or 200.0
+    disable_at = normalize_optional_float(current_app.config.get("GOOGLE_PLACES_DISABLE_AT_USAGE_RATIO")) or 0.6
+
+    usage_ratio = configured_ratio if configured_ratio is not None and configured_ratio >= 0 else spend / credit
+    return usage_ratio < disable_at
+
+
+def merge_osm_places_with_google_enrichment(
+    osm_places: list[dict[str, Any]],
+    google_places: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    enriched_places: list[dict[str, Any]] = []
+
+    for osm_place in osm_places:
+        google_place = best_google_enrichment_match(osm_place, google_places)
+
+        if google_place is None:
+            enriched_places.append(osm_place)
+            continue
+
+        merged_place = dict(osm_place)
+        merged_place["source"] = "hybrid"
+        merged_place["google_place_id"] = google_place.get("place")
+
+        if google_place.get("photo"):
+            merged_place["photo"] = google_place["photo"]
+            merged_place["photo_source"] = google_place.get("photo_source") or "google_places"
+            merged_place["photo_category"] = google_place.get("photo_category") or "google_places"
+
+        for key in ("price_level", "price_text", "rating", "review_count", "website", "is_open", "opening_hours_text"):
+            if google_place.get(key) is not None:
+                merged_place[key] = google_place[key]
+
+        if not merged_place.get("cuisine") and google_place.get("cuisine"):
+            merged_place["cuisine"] = google_place["cuisine"]
+
+        if not merged_place.get("address") and google_place.get("address"):
+            merged_place["address"] = google_place["address"]
+
+        enriched_places.append(merged_place)
+
+    return enriched_places
+
+
+def best_google_enrichment_match(
+    osm_place: dict[str, Any],
+    google_places: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    best_place: dict[str, Any] | None = None
+    best_score = 0
+
+    for google_place in google_places:
+        score = score_place_enrichment_match(osm_place, google_place)
+        if score > best_score:
+            best_score = score
+            best_place = google_place
+
+    return best_place if best_score >= 8 else None
+
+
+def score_place_enrichment_match(osm_place: dict[str, Any], google_place: dict[str, Any]) -> int:
+    osm_name = normalize_place_match_text(osm_place.get("name"))
+    google_name = normalize_place_match_text(google_place.get("name"))
+
+    if not osm_name or not google_name:
+        return 0
+
+    score = 0
+    if osm_name == google_name:
+        score += 10
+    elif osm_name in google_name or google_name in osm_name:
+        score += 7
+    else:
+        shared_tokens = set(osm_name.split()) & set(google_name.split())
+        score += min(len(shared_tokens), 3) * 2
+
+    score += min(address_token_overlap(osm_place.get("address"), google_place.get("address")), 4)
+    return score
+
+
+def address_token_overlap(first: Any, second: Any) -> int:
+    first_tokens = set(normalize_place_match_text(first).split())
+    second_tokens = set(normalize_place_match_text(second).split())
+    return len(first_tokens & second_tokens)
+
+
+def normalize_place_match_text(value: Any) -> str:
+    text_value = str(value or "").lower()
+    return " ".join(re.findall(r"[a-z0-9]+", text_value))
 
 
 def search_restaurants_with_openstreetmap(

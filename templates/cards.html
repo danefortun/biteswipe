@@ -1915,6 +1915,10 @@ function formatOpenStatus(result) {
 }
 
 function formatSource(source) {
+    if (source === "hybrid") {
+        return "OSM + Google";
+    }
+
     if (source === "google") {
         return "Google Places";
     }
