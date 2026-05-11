@@ -90,6 +90,7 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertEqual(subdomain_theme["slug"], "drexel")
 
         self.assertEqual(get_school_theme_for_email("student@princeton.edu")["card_image_file"], "schools/badges/princeton.webp")
+        self.assertEqual(get_school_theme_for_email("student@princeton.edu")["image_file"], "schools/backdrops/princeton.webp")
         self.assertEqual(get_school_theme_for_email("student@mit.edu")["card_image_file"], "schools/badges/mit.webp")
         self.assertEqual(get_school_theme_for_email("student@temple.edu")["image_file"], "schools/temple.webp")
         upenn_theme = get_school_theme_for_email("student@upenn.edu")
@@ -104,6 +105,15 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertEqual(generated["is_generated"], "true")
 
         self.assertIsNone(get_school_theme_for_email("person@example.com"))
+
+    def test_school_theme_image_assets_exist(self) -> None:
+        static_root = Path(__file__).resolve().parents[1] / "static"
+
+        for domain, theme in SCHOOL_THEMES.items():
+            for key in ("image_file", "card_image_file"):
+                value = theme.get(key)
+                if value:
+                    self.assertTrue((static_root / value).exists(), f"{domain} missing {value}")
 
     def test_home_applies_school_theme_to_cards_page(self) -> None:
         self.login(email="student@drexel.edu")

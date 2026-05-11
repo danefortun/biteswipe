@@ -274,7 +274,7 @@ def build_school_theme_map() -> dict[str, dict[str, str | None]]:
             "primary": primary,
             "secondary": secondary,
             "accent": accent,
-            "image_file": None,
+            "image_file": f"schools/backdrops/{slug}.webp",
             "card_image_file": f"schools/badges/{slug}.webp",
         }
         theme.update(SCHOOL_THEME_ASSET_OVERRIDES.get(domain, {}))
