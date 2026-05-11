@@ -4036,7 +4036,7 @@ body[data-route="home"][data-school-theme]::before {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background-image: var(--school-bg-image);
+  background-image: var(--school-card-image);
   background-repeat: no-repeat;
   background-position: center 52%;
   background-size: min(620px, 72vw);

@@ -173,6 +173,7 @@ SCHOOL_THEMES: dict[str, dict[str, str | None]] = {
         "secondary": "#990000",
         "accent": "#2F6DB3",
         "image_file": "schools/upenn.webp",
+        "card_image_file": "schools/upenn logo.webp",
     },
     "wcupa.edu": {
         "slug": "west-chester",
@@ -746,6 +747,7 @@ def build_generated_school_theme(domain: str) -> dict[str, str | None]:
         "secondary": f"hsl({secondary_hue} 72% 52%)",
         "accent": f"hsl({hue} 74% 42%)",
         "image_file": None,
+        "card_image_file": None,
         "domain": domain,
         "is_generated": "true",
     }
@@ -774,8 +776,11 @@ def build_school_theme_payload(user: Users | None) -> dict[str, str | None] | No
     if theme is None:
         return None
 
-    image_file = theme.get("image_file")
-    theme["image_url"] = url_for("static", filename=str(image_file)) if image_file else None
+    backdrop_file = theme.get("backdrop_file") or theme.get("image_file")
+    card_image_file = theme.get("card_image_file") or theme.get("image_file")
+    theme["backdrop_url"] = url_for("static", filename=str(backdrop_file)) if backdrop_file else None
+    theme["card_image_url"] = url_for("static", filename=str(card_image_file)) if card_image_file else None
+    theme["image_url"] = theme["card_image_url"]
     return theme
 
 

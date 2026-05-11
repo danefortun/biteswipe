@@ -87,7 +87,9 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertEqual(subdomain_theme["slug"], "drexel")
 
         self.assertEqual(get_school_theme_for_email("student@temple.edu")["image_file"], "schools/temple.webp")
-        self.assertEqual(get_school_theme_for_email("student@upenn.edu")["image_file"], "schools/upenn.webp")
+        upenn_theme = get_school_theme_for_email("student@upenn.edu")
+        self.assertEqual(upenn_theme["image_file"], "schools/upenn.webp")
+        self.assertEqual(upenn_theme["card_image_file"], "schools/upenn logo.webp")
         self.assertEqual(get_school_theme_for_email("student@wcupa.edu")["image_file"], "schools/west-chester.webp")
 
         generated = get_school_theme_for_email("student@examplecollege.edu")
@@ -105,6 +107,14 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertIn(b'data-school-theme="drexel"', response.data)
         self.assertIn(b"--school-primary: #07294D", response.data)
         self.assertIn(b"Drexel mode", response.data)
+
+    def test_home_uses_separate_upenn_backdrop_and_card_images(self) -> None:
+        self.login(email="student@upenn.edu")
+
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"schools/upenn.webp", response.data)
+        self.assertIn(b"schools/upenn%20logo.webp", response.data)
 
     def test_filters_are_sanitized_and_persisted_in_session(self) -> None:
         self.login()

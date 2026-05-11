@@ -19,7 +19,7 @@
   data-route="{{ request.endpoint or '' }}"
   {% if active_school_theme %}
     data-school-theme="{{ active_school_theme.slug }}"
-    style="--school-primary: {{ active_school_theme.primary }}; --school-secondary: {{ active_school_theme.secondary }}; --school-accent: {{ active_school_theme.accent }}; --school-bg-image: {% if active_school_theme.image_url %}url('{{ active_school_theme.image_url }}'){% else %}none{% endif %};"
+    style="--school-primary: {{ active_school_theme.primary }}; --school-secondary: {{ active_school_theme.secondary }}; --school-accent: {{ active_school_theme.accent }}; --school-bg-image: {% if active_school_theme.backdrop_url %}url('{{ active_school_theme.backdrop_url }}'){% else %}none{% endif %}; --school-card-image: {% if active_school_theme.card_image_url %}url('{{ active_school_theme.card_image_url }}'){% else %}var(--school-bg-image){% endif %};"
   {% endif %}>
   <a class="skip-link" href="#mainContent">Skip to content</a>
 

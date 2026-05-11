@@ -1426,8 +1426,8 @@ document.addEventListener("DOMContentLoaded", () => {
   <div class="card-stage is-empty">
     {% if school_theme %}
       <div class="school-theme-chip" aria-label="Active school theme">
-        {% if school_theme.image_url %}
-          <img src="{{ school_theme.image_url }}" alt="">
+        {% if school_theme.card_image_url %}
+          <img src="{{ school_theme.card_image_url }}" alt="">
         {% else %}
           <span class="school-theme-monogram" aria-hidden="true">{{ school_theme.short_name[:1] }}</span>
         {% endif %}
