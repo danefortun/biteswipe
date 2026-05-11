@@ -35,45 +35,65 @@
     </div>
 
     <div class="profile-identity">
-      <p class="profile-kicker">BiteSwipe profile</p>
+      <div
+        class="profile-identity-banner{% if u.profile_banner_file_path %} has-banner-image{% endif %}"
+        {% if u.profile_banner_file_path %}
+          style="--profile-banner-image: url('{{ url_for('static', filename='uploads/' + u.profile_banner_file_path) }}')"
+        {% endif %}>
+        <div class="profile-banner-content">
+          <p class="profile-kicker">BiteSwipe profile</p>
 
-      <div class="name-display">
-        <h1 id="username-display">{{ u.name or 'Your Name' }}</h1>
-        <button type="button" id="edit-name-btn" class="profile-small-button">Edit</button>
-      </div>
+          <div class="name-display">
+            <h1 id="username-display">{{ u.name or 'Your Name' }}</h1>
+            <button type="button" id="edit-name-btn" class="profile-small-button">Edit</button>
+          </div>
 
-      <form id="username-form" method="POST" class="profile-inline-form" hidden>
-        <input type="hidden" name="action" value="update_name">
-        <input
-          type="text"
-          name="name"
-          value="{{ u.name or '' }}"
-          minlength="2"
-          maxlength="32"
-          required
-          aria-label="Profile name">
-        <button type="submit">Save</button>
-        <button type="button" id="cancel-name-btn">Cancel</button>
-      </form>
+          <form id="username-form" method="POST" class="profile-inline-form" hidden>
+            <input type="hidden" name="action" value="update_name">
+            <input
+              type="text"
+              name="name"
+              value="{{ u.name or '' }}"
+              minlength="2"
+              maxlength="32"
+              required
+              aria-label="Profile name">
+            <button type="submit">Save</button>
+            <button type="button" id="cancel-name-btn">Cancel</button>
+          </form>
 
-      <p class="profile-email">{{ u.email }}</p>
+          <p class="profile-email">{{ u.email }}</p>
 
-      <div class="profile-stats" aria-label="Profile stats">
-        <div>
-          <strong>{{ saved_restaurant_count }}</strong>
-          <span>saved pick{% if saved_restaurant_count != 1 %}s{% endif %}</span>
-        </div>
-        <div>
-          <strong>{{ food_preferences|length }}</strong>
-          <span>craving{% if food_preferences|length != 1 %}s{% endif %}</span>
-        </div>
-        <div>
-          <strong>{{ allergen_interests|length }}</strong>
-          <span>allergy signal{% if allergen_interests|length != 1 %}s{% endif %}</span>
-        </div>
-        <div>
-          <strong>{{ hobby_interests|length }}</strong>
-          <span>interest{% if hobby_interests|length != 1 %}s{% endif %}</span>
+          <div class="profile-stats" aria-label="Profile stats">
+            <div>
+              <strong>{{ saved_restaurant_count }}</strong>
+              <span>saved pick{% if saved_restaurant_count != 1 %}s{% endif %}</span>
+            </div>
+            <div>
+              <strong>{{ food_preferences|length }}</strong>
+              <span>craving{% if food_preferences|length != 1 %}s{% endif %}</span>
+            </div>
+            <div>
+              <strong>{{ allergen_interests|length }}</strong>
+              <span>allergy signal{% if allergen_interests|length != 1 %}s{% endif %}</span>
+            </div>
+            <div>
+              <strong>{{ hobby_interests|length }}</strong>
+              <span>interest{% if hobby_interests|length != 1 %}s{% endif %}</span>
+            </div>
+          </div>
+
+          <form method="POST" enctype="multipart/form-data" class="profile-banner-upload">
+            <input type="hidden" name="action" value="upload_banner">
+            <label class="file-upload-label" for="profile-banner-image">Update banner</label>
+            <input
+              id="profile-banner-image"
+              type="file"
+              name="banner_image"
+              accept=".gif,.jpeg,.jpg,.png,.webp,image/*"
+              required>
+            <button type="submit">Upload</button>
+          </form>
         </div>
       </div>
 
@@ -313,6 +333,14 @@ document.getElementById("profile-image")?.addEventListener("change", (event) => 
   const preview = document.getElementById("profilePreview");
   if (!file || !preview) return;
   preview.src = URL.createObjectURL(file);
+});
+
+document.getElementById("profile-banner-image")?.addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  const banner = document.querySelector(".profile-identity-banner");
+  if (!file || !banner) return;
+  banner.style.setProperty("--profile-banner-image", `url("${URL.createObjectURL(file)}")`);
+  banner.classList.add("has-banner-image");
 });
 </script>
 {% endblock %}

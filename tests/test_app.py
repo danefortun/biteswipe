@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 import shutil
+from io import BytesIO
 from unittest.mock import patch
 from uuid import uuid4
 from pathlib import Path
@@ -200,6 +201,25 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         response = self.client.get("/profile")
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Music", response.data)
+
+    def test_profile_banner_upload_updates_identity_banner(self) -> None:
+        self.login()
+
+        response = self.client.post(
+            "/profile",
+            data={
+                "action": "upload_banner",
+                "banner_image": (BytesIO(b"banner-image"), "banner.webp"),
+            },
+            content_type="multipart/form-data",
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+
+        response = self.client.get("/profile")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"profile-identity-banner has-banner-image", response.data)
+        self.assertIn(b"user-banner-", response.data)
 
     def test_chat_posts_return_user_names(self) -> None:
         self.login()

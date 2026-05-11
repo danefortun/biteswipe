@@ -1112,6 +1112,7 @@ span.restaurant-website-link {
 .profile-inline-form button,
 .bio-form button,
 .food-preference-form button,
+.profile-banner-upload button,
 .interest-chip button {
   border: 1px solid var(--accent-color);
   border-radius: 8px;
@@ -1142,7 +1143,8 @@ span.restaurant-website-link {
 .profile-small-button,
 .profile-inline-form button,
 .bio-form button,
-.food-preference-form button {
+.food-preference-form button,
+.profile-banner-upload button {
   min-height: 36px;
   padding: 0 12px;
 }
@@ -1152,6 +1154,47 @@ span.restaurant-website-link {
   flex-direction: column;
   justify-content: center;
   min-width: 0;
+}
+
+.profile-identity-banner {
+  position: relative;
+  min-height: 252px;
+  padding: 26px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 24%, var(--border-color));
+  border-radius: 10px;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent-soft-color) 72%, var(--surface-color)), var(--surface-color));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.07);
+}
+
+.profile-identity-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--profile-banner-image);
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transform: scale(1.01);
+}
+
+.profile-identity-banner.has-banner-image::before {
+  opacity: 0.72;
+}
+
+.profile-identity-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.76) 56%, rgba(255, 255, 255, 0.58)),
+    linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.5));
+}
+
+.profile-banner-content {
+  position: relative;
+  z-index: 1;
 }
 
 .profile-kicker,
@@ -1221,9 +1264,9 @@ span.restaurant-website-link {
 
 .profile-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
-  width: min(640px, 100%);
+  width: min(760px, 100%);
   margin-top: 24px;
 }
 
@@ -1231,8 +1274,9 @@ span.restaurant-website-link {
   padding: 14px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: var(--surface-color);
+  background: color-mix(in srgb, var(--surface-color) 88%, transparent);
   color: var(--surface-text-color);
+  backdrop-filter: blur(10px);
 }
 
 .profile-stats strong {
@@ -1246,6 +1290,21 @@ span.restaurant-website-link {
   margin-top: 5px;
   color: var(--surface-muted-color);
   font-size: 13px;
+}
+
+.profile-banner-upload {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: min(560px, 100%);
+  margin-top: 14px;
+}
+
+.profile-banner-upload input[type="file"] {
+  min-width: 0;
+  color: var(--surface-muted-color);
+  font-size: 12px;
 }
 
 .profile-layout {
@@ -1436,6 +1495,10 @@ span.restaurant-website-link {
   }
 
   .profile-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-banner-upload {
     grid-template-columns: 1fr;
   }
 

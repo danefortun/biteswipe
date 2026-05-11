@@ -354,6 +354,7 @@ def register_cli(app: Flask) -> None:
 def ensure_user_interest_columns() -> None:
     column_names = get_table_column_names("users")
     required_columns = {
+        "profile_banner_file_path": "VARCHAR(255)",
         "campus_theme_domain": "VARCHAR(255)",
         "allergen_interests_json": "TEXT DEFAULT '[]'",
         "food_preferences_json": "TEXT DEFAULT '[]'",
@@ -452,6 +453,8 @@ def register_routes(app: Flask) -> None:
 
             if action == "upload_pic":
                 handle_profile_picture_upload(user)
+            elif action == "upload_banner":
+                handle_profile_banner_upload(user)
             elif action == "update_bio":
                 update_user_bio(user)
             elif action == "update_name":
@@ -958,29 +961,67 @@ def default_name_from_email(email: str) -> str:
 
 
 def handle_profile_picture_upload(user: Users) -> None:
+    upload_profile_image(
+        user=user,
+        request_field="image",
+        file_prefix="user",
+        user_field="pfp_file_path",
+        missing_message="Choose an image before uploading.",
+        invalid_message="Profile pictures must be GIF, JPEG, PNG, or WebP images.",
+        success_message="Profile picture updated.",
+        error_message="Unable to save profile picture. Please try again.",
+    )
+
+
+def handle_profile_banner_upload(user: Users) -> None:
+    upload_profile_image(
+        user=user,
+        request_field="banner_image",
+        file_prefix="user-banner",
+        user_field="profile_banner_file_path",
+        missing_message="Choose a banner image before uploading.",
+        invalid_message="Profile banners must be GIF, JPEG, PNG, or WebP images.",
+        success_message="Profile banner updated.",
+        error_message="Unable to save profile banner. Please try again.",
+    )
+
+
+def upload_profile_image(
+    user: Users,
+    request_field: str,
+    file_prefix: str,
+    user_field: str,
+    missing_message: str,
+    invalid_message: str,
+    success_message: str,
+    error_message: str,
+) -> None:
     file = request.files.get("image")
     if file is None or not file.filename:
-        flash("Choose an image before uploading.")
+        file = request.files.get(request_field)
+
+    if file is None or not file.filename:
+        flash(missing_message)
         return
 
     original_name = secure_filename(file.filename)
     extension = Path(original_name).suffix.lower().lstrip(".")
     if extension not in ALLOWED_UPLOAD_EXTENSIONS:
-        flash("Profile pictures must be GIF, JPEG, PNG, or WebP images.")
+        flash(invalid_message)
         return
 
-    file_name = f"user-{user.id}.{extension}"
+    file_name = f"{file_prefix}-{user.id}.{extension}"
     file_path = Path(current_app.config["UPLOAD_FOLDER"]) / file_name
 
     try:
         file.save(file_path)
-        user.pfp_file_path = file_name
+        setattr(user, user_field, file_name)
         db.session.commit()
-        flash("Profile picture updated.")
+        flash(success_message)
     except OSError:
         db.session.rollback()
-        current_app.logger.exception("Unable to save uploaded profile picture.")
-        flash("Unable to save profile picture. Please try again.")
+        current_app.logger.exception(error_message)
+        flash(error_message)
 
 
 def update_user_bio(user: Users) -> None:
