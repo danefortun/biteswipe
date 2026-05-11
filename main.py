@@ -146,6 +146,20 @@ FOOD_KEYWORDS: dict[str, tuple[str, ...]] = {
     "thai": ("thai", "pad thai", "curry"),
 }
 
+RESTAURANT_FALLBACK_IMAGE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("coffee", ("coffee", "cafe", "espresso", "tea", "bakery")),
+    ("pizza", ("pizza", "pizzeria")),
+    ("mexican", ("mexican", "taco", "burrito", "tex-mex")),
+    ("asian", ("chinese", "japanese", "korean", "thai", "vietnamese", "sushi", "ramen", "asian")),
+    ("indian", ("indian", "curry", "tandoori")),
+    ("mediterranean", ("mediterranean", "greek", "middle eastern", "falafel", "halal", "kebab")),
+    ("vegan", ("vegan", "vegetarian", "salad", "healthy")),
+    ("dessert", ("dessert", "ice cream", "donut", "pastry", "sweet")),
+    ("breakfast", ("breakfast", "brunch", "diner", "bagel")),
+    ("american", ("american", "burger", "bbq", "barbecue", "sandwich", "fast food", "chicken")),
+)
+DEFAULT_RESTAURANT_FALLBACK_IMAGE = "general"
+
 SCHOOL_THEME_ROWS: tuple[tuple[str, str, str, str, str, str, str], ...] = (
     ("princeton.edu", "princeton", "Princeton University", "Princeton", "#E77500", "#000000", "#FFB347"),
     ("mit.edu", "mit", "Massachusetts Institute of Technology", "MIT", "#A31F34", "#8A8B8C", "#A31F34"),
@@ -1629,6 +1643,20 @@ def format_price_text(price_level: int | None) -> str | None:
     return "$" * min(price_level, 4)
 
 
+def restaurant_fallback_image_category(*values: Any) -> str:
+    searchable = " ".join(str(value or "") for value in values).replace("_", " ").lower()
+
+    for category, keywords in RESTAURANT_FALLBACK_IMAGE_KEYWORDS:
+        if any(keyword in searchable for keyword in keywords):
+            return category
+
+    return DEFAULT_RESTAURANT_FALLBACK_IMAGE
+
+
+def restaurant_fallback_image_url(category: str) -> str:
+    return url_for("static", filename=f"restaurant-fallbacks/{category}.webp")
+
+
 def normalize_website_url(value: Any) -> str | None:
     website = normalize_optional_string(value, 512)
     if website is None:
@@ -1730,14 +1758,18 @@ def format_osm_place(
     longitude = element.get("lon") or (element.get("center") or {}).get("lon")
     place_type = tags.get("amenity", "restaurant").replace("_", " ")
     name = tags.get("name") or tags.get("brand") or tags.get("operator") or place_type.title()
+    cuisine = tags.get("cuisine")
+    fallback_category = restaurant_fallback_image_category(cuisine, name, place_type)
 
     return {
         "name": name,
         "place": f"osm:{element.get('type')}:{element.get('id')}",
-        "photo": url_for("static", filename="biteswipe.png"),
+        "photo": restaurant_fallback_image_url(fallback_category),
+        "photo_source": "biteswipe_fallback",
+        "photo_category": fallback_category,
         "source": "openstreetmap",
         "address": format_osm_address(tags),
-        "cuisine": tags.get("cuisine"),
+        "cuisine": cuisine,
         "price_level": normalize_price_level(tags.get("price") or tags.get("price:range")),
         "price_text": format_price_text(normalize_price_level(tags.get("price") or tags.get("price:range"))),
         "dietary_tags": extract_dietary_tags(tags),
@@ -1786,6 +1818,8 @@ def format_google_place(place: dict[str, Any], api_key: str) -> dict[str, Any]:
     photo_name = photos[0].get("name") if photos else None
     opening_hours = place.get("currentOpeningHours") or {}
     weekday_descriptions = opening_hours.get("weekdayDescriptions") or []
+    cuisine = " ".join(place.get("types") or [])
+    fallback_category = restaurant_fallback_image_category(cuisine, display_name.get("text", ""))
 
     return {
         "name": display_name.get("text", "Unknown restaurant"),
@@ -1793,11 +1827,13 @@ def format_google_place(place: dict[str, Any], api_key: str) -> dict[str, Any]:
         "photo": (
             f"https://places.googleapis.com/v1/{photo_name}/media?maxHeightPx=500&key={api_key}"
             if photo_name
-            else url_for("static", filename="biteswipe.png")
+            else restaurant_fallback_image_url(fallback_category)
         ),
+        "photo_source": "google_places" if photo_name else "biteswipe_fallback",
+        "photo_category": "google_places" if photo_name else fallback_category,
         "source": "google",
         "address": place.get("formattedAddress"),
-        "cuisine": " ".join(place.get("types") or []),
+        "cuisine": cuisine,
         "price_level": normalize_google_price_level(place.get("priceLevel")),
         "price_text": format_price_text(normalize_google_price_level(place.get("priceLevel"))),
         "dietary_tags": {},

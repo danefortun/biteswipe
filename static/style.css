@@ -1972,6 +1972,10 @@ span.restaurant-website-link {
   box-sizing: border-box;
 }
 
+.card-image[src*="restaurant-fallbacks"] {
+  object-fit: cover;
+}
+
 .card-source-pill {
   position: absolute;
   left: 12px;

@@ -7,7 +7,14 @@ from uuid import uuid4
 from pathlib import Path
 
 from db import db
-from main import SCHOOL_THEMES, build_overpass_query, create_app, format_osm_place, get_school_theme_for_email
+from main import (
+    SCHOOL_THEMES,
+    build_overpass_query,
+    create_app,
+    format_google_place,
+    format_osm_place,
+    get_school_theme_for_email,
+)
 from users_db import SavedRestaurant, Users
 
 
@@ -486,7 +493,52 @@ class LifeSwipeAppTestCase(unittest.TestCase):
 
         self.assertEqual(place["name"], "Test Restaurant")
         self.assertEqual(place["source"], "openstreetmap")
+        self.assertEqual(place["photo_source"], "biteswipe_fallback")
+        self.assertIn("restaurant-fallbacks/general.webp", place["photo"])
         self.assertIn("Market St", place["address"])
+
+        with self.app.test_request_context():
+            pizza_place = format_osm_place(
+                {
+                    "type": "node",
+                    "id": 124,
+                    "lat": 39.9567,
+                    "lon": -75.1898,
+                    "tags": {
+                        "amenity": "restaurant",
+                        "name": "Slice House",
+                        "cuisine": "pizza",
+                    },
+                },
+                39.9566,
+                -75.1899,
+            )
+        self.assertIn("restaurant-fallbacks/pizza.webp", pizza_place["photo"])
+
+    def test_google_places_keep_live_photos_and_fallback_without_one(self) -> None:
+        with self.app.test_request_context():
+            live_photo = format_google_place(
+                {
+                    "id": "abc123",
+                    "displayName": {"text": "Real Photo Cafe"},
+                    "photos": [{"name": "places/photo-name"}],
+                    "types": ["cafe"],
+                },
+                "test-key",
+            )
+            fallback_photo = format_google_place(
+                {
+                    "id": "xyz123",
+                    "displayName": {"text": "No Photo Taco"},
+                    "types": ["mexican_restaurant"],
+                },
+                "test-key",
+            )
+
+        self.assertEqual(live_photo["photo_source"], "google_places")
+        self.assertIn("places.googleapis.com", live_photo["photo"])
+        self.assertEqual(fallback_photo["photo_source"], "biteswipe_fallback")
+        self.assertIn("restaurant-fallbacks/mexican.webp", fallback_photo["photo"])
 
     def test_save_restaurant_sends_card_to_my_stuff(self) -> None:
         self.login()
