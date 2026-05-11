@@ -1117,6 +1117,10 @@ span.restaurant-website-link {
   display: inline-flex;
 }
 
+.profile-hero.is-editing .hero-edit-control[hidden] {
+  display: none;
+}
+
 .file-upload-label,
 .upload-form button,
 .profile-small-button,
