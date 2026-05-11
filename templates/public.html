@@ -18,6 +18,8 @@
         {% if u.profile_banner_file_path %}
           style="--profile-banner-image: url('{{ url_for('static', filename='uploads/' + u.profile_banner_file_path) }}')"
         {% endif %}>
+        <button type="button" id="hero-edit-btn" class="profile-small-button profile-hero-toggle" aria-expanded="false">Edit</button>
+
         <div class="profile-avatar-panel">
           <div class="profile-avatar-frame">
             <img
@@ -29,7 +31,6 @@
 
           <form method="POST" enctype="multipart/form-data" class="upload-form hero-edit-control">
             <input type="hidden" name="action" value="upload_pic">
-            <label class="file-upload-label" for="profile-image">Update photo</label>
             <input
               id="profile-image"
               type="file"
@@ -45,10 +46,7 @@
 
           <div class="name-display">
             <h1 id="username-display">{{ u.name or 'Your Name' }}</h1>
-            <div class="profile-hero-edit-actions">
-              <button type="button" id="hero-edit-btn" class="profile-small-button" aria-expanded="false">Edit</button>
-              <button type="button" id="edit-name-btn" class="profile-small-button hero-edit-control">Edit name</button>
-            </div>
+            <button type="button" id="edit-name-btn" class="profile-small-button profile-name-edit-button hero-edit-control">Edit name</button>
           </div>
 
           <form id="username-form" method="POST" class="profile-inline-form" hidden>
