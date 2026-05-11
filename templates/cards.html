@@ -1478,12 +1478,11 @@ document.addEventListener("DOMContentLoaded", () => {
       <button type="button" onclick="sortRemainingDeck('rating')">Top rated</button>
     </div>
 
-    <div class="card-empty-state" aria-hidden="true">
-      <strong>Build your BiteSwipe deck.</strong>
-      <span>Use your location, set filters, then refresh cards to discover nearby places.</span>
-    </div>
-
     <div class="card-container" aria-live="polite">
+      <div class="card-empty-state" aria-hidden="true">
+        <strong>Build your BiteSwipe deck.</strong>
+        <span>Use your location, set filters, then refresh cards to discover nearby places.</span>
+      </div>
       <div class="cards" id="cards"></div>
     </div>
 

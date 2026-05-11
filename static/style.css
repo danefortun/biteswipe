@@ -2064,11 +2064,11 @@ span.restaurant-website-link {
 
 .card-empty-state {
   position: absolute;
-  top: 88px;
+  top: 50%;
   left: 50%;
   z-index: 2;
   width: min(280px, calc(100% - 44px));
-  min-height: 290px;
+  min-height: 250px;
   display: none;
   flex-direction: column;
   justify-content: center;
@@ -2079,7 +2079,7 @@ span.restaurant-website-link {
   background: color-mix(in srgb, var(--surface-color) 82%, var(--accent-soft-color));
   color: var(--surface-text-color);
   text-align: center;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
 }
 
 .card-empty-state strong {
