@@ -1423,37 +1423,48 @@ document.addEventListener("DOMContentLoaded", () => {
     </div>
   </div>
 
+  <section class="group-mode-panel" id="groupModePanel" aria-label="Group swipe mode">
+    <div id="groupModeInactive">
+      <strong>Group mode</strong>
+      <p>Start or join a session. Only restaurants everyone saves make the final shortlist.</p>
+      <div class="group-mode-actions">
+        <button type="button" onclick="createGroupSession()">Start group</button>
+        <input id="groupCodeInput" type="text" maxlength="12" placeholder="Code" aria-label="Group code">
+        <button type="button" onclick="joinGroupSession()">Join</button>
+      </div>
+    </div>
+    <div id="groupModeActive" hidden>
+      <div class="group-mode-active-header">
+        <div>
+          <strong>Group <span id="groupCodeLabel"></span></strong>
+          <span id="groupMemberCount">1 member</span>
+        </div>
+        <button type="button" onclick="leaveGroupSession()">Leave</button>
+      </div>
+      <div class="group-mode-results">
+        <div>
+          <span>Everyone saved</span>
+          <ul id="groupConsensusList"></ul>
+        </div>
+        <div>
+          <span>Almost there</span>
+          <ul id="groupAlmostList"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <div class="card-stage is-empty">
-    <section class="group-mode-panel" id="groupModePanel" aria-label="Group swipe mode">
-      <div id="groupModeInactive">
-        <strong>Group mode</strong>
-        <p>Start or join a session. Only restaurants everyone saves make the final shortlist.</p>
-        <div class="group-mode-actions">
-          <button type="button" onclick="createGroupSession()">Start group</button>
-          <input id="groupCodeInput" type="text" maxlength="12" placeholder="Code" aria-label="Group code">
-          <button type="button" onclick="joinGroupSession()">Join</button>
-        </div>
+    {% if school_theme %}
+      <div class="school-theme-chip" aria-label="Active school theme">
+        {% if school_theme.card_image_url %}
+          <img src="{{ school_theme.card_image_url }}" alt="">
+        {% else %}
+          <span class="school-theme-monogram" aria-hidden="true">{{ school_theme.short_name[:1] }}</span>
+        {% endif %}
+        <span>{{ school_theme.short_name }} mode</span>
       </div>
-      <div id="groupModeActive" hidden>
-        <div class="group-mode-active-header">
-          <div>
-            <strong>Group <span id="groupCodeLabel"></span></strong>
-            <span id="groupMemberCount">1 member</span>
-          </div>
-          <button type="button" onclick="leaveGroupSession()">Leave</button>
-        </div>
-        <div class="group-mode-results">
-          <div>
-            <span>Everyone saved</span>
-            <ul id="groupConsensusList"></ul>
-          </div>
-          <div>
-            <span>Almost there</span>
-            <ul id="groupAlmostList"></ul>
-          </div>
-        </div>
-      </div>
-    </section>
+    {% endif %}
 
     <div class="deck-sort-row" aria-label="Deck sorting tools">
       <button type="button" onclick="sortRemainingDeck('best')">Best match</button>
@@ -1462,16 +1473,6 @@ document.addEventListener("DOMContentLoaded", () => {
     </div>
 
     <div class="card-container" aria-live="polite">
-      {% if school_theme %}
-        <div class="school-theme-chip" aria-label="Active school theme">
-          {% if school_theme.card_image_url %}
-            <img src="{{ school_theme.card_image_url }}" alt="">
-          {% else %}
-            <span class="school-theme-monogram" aria-hidden="true">{{ school_theme.short_name[:1] }}</span>
-          {% endif %}
-          <span>{{ school_theme.short_name }} mode</span>
-        </div>
-      {% endif %}
       <div class="card-empty-state" aria-hidden="true">
         <strong>Build your BiteSwipe deck.</strong>
         <span>Use your location, set filters, then refresh cards to discover nearby places.</span>
