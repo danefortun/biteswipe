@@ -7,6 +7,13 @@ from typing import Any
 from db import db
 
 
+INTEREST_FIELD_TO_CATEGORY = {
+    "allergen_interests_json": "allergen",
+    "food_preferences_json": "food",
+    "hobby_interests_json": "hobby",
+}
+
+
 class Users(db.Model):
     id = db.Column("id", db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -44,6 +51,16 @@ class Users(db.Model):
         )
 
     def get_interest_list(self, field_name: str) -> list[str]:
+        category = INTEREST_FIELD_TO_CATEGORY.get(field_name)
+        if category and self.id:
+            rows = (
+                UserInterest.query.filter_by(user_id=self.id, category=category)
+                .order_by(UserInterest.id.asc())
+                .all()
+            )
+            if rows:
+                return [row.value for row in rows]
+
         value = getattr(self, field_name, "[]") or "[]"
         try:
             parsed = json.loads(value)
@@ -69,7 +86,39 @@ class Users(db.Model):
             cleaned.append(text[:64])
             seen.add(key)
 
-        setattr(self, field_name, json.dumps(cleaned[:30]))
+        cleaned = cleaned[:30]
+        setattr(self, field_name, json.dumps(cleaned))
+
+        category = INTEREST_FIELD_TO_CATEGORY.get(field_name)
+        if not category or not self.id:
+            return
+
+        UserInterest.query.filter_by(user_id=self.id, category=category).delete()
+        for value in cleaned:
+            db.session.add(UserInterest(user_id=self.id, category=category, value=value))
+
+
+class UserInterest(db.Model):
+    __tablename__ = "user_interests"
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "category", "value_key", name="uq_user_interest_category_value"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    category = db.Column(db.String(32), nullable=False, index=True)
+    value = db.Column(db.String(64), nullable=False)
+    value_key = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(db.String(40), nullable=False, index=True)
+
+    user = db.relationship("Users", backref=db.backref("interest_rows", lazy=True, cascade="all, delete-orphan"))
+
+    def __init__(self, user_id: int, category: str, value: str) -> None:
+        self.user_id = user_id
+        self.category = category
+        self.value = value[:64]
+        self.value_key = value.strip().lower()[:64]
+        self.created_at = datetime.now(timezone.utc).isoformat()
 
 
 class SavedRestaurant(db.Model):

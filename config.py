@@ -54,8 +54,16 @@ class Config:
             sqlite_uri(INSTANCE_DIR / "blogPosts.db"),
         )
     }
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": int(os.environ.get("DATABASE_POOL_RECYCLE_SECONDS", 1800)),
+    }
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", str(BASE_DIR / "static" / "uploads"))
+    UPLOAD_STORAGE_PROVIDER = os.environ.get("UPLOAD_STORAGE_PROVIDER", "local").strip().lower()
+    UPLOADS_PUBLIC_BASE_URL = os.environ.get("UPLOADS_PUBLIC_BASE_URL", "").strip()
+    UPLOADS_S3_BUCKET = os.environ.get("UPLOADS_S3_BUCKET", "").strip()
+    UPLOADS_S3_PREFIX = os.environ.get("UPLOADS_S3_PREFIX", "profile-uploads").strip().strip("/")
     MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH", 2 * 1024 * 1024))
     GOOGLE_PLACES_API_KEY = os.environ.get("GOOGLE_PLACES_API_KEY", "")
     GOOGLE_PLACES_MONTHLY_CREDIT_USD = env_float("GOOGLE_PLACES_MONTHLY_CREDIT_USD", 200.0)

@@ -20,7 +20,7 @@ from main import (
     normalize_google_price_level,
     normalize_price_level,
 )
-from users_db import SavedRestaurant, Users
+from users_db import SavedRestaurant, UserInterest, Users
 
 
 class LifeSwipeAppTestCase(unittest.TestCase):
@@ -206,6 +206,12 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Music", response.data)
 
+        with self.app.app_context():
+            user = Users.query.filter_by(email="person@example.com").first()
+            self.assertIsNotNone(user)
+            row = UserInterest.query.filter_by(user_id=user.id, category="hobby", value_key="music").first()
+            self.assertIsNotNone(row)
+
     def test_profile_banner_upload_updates_identity_banner(self) -> None:
         self.login()
 
@@ -244,6 +250,24 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertIn(b"profile-showcase-card", response.data)
         self.assertIn(b"user-showcase-", response.data)
         self.assertIn(b"profile-showcase-upload-btn", response.data)
+
+    def test_public_user_id_profile_route_renders_public_profile(self) -> None:
+        self.login()
+        self.client.post(
+            "/profile",
+            data={"action": "add_food_preference", "food_preference": "Pizza"},
+            follow_redirects=False,
+        )
+
+        with self.app.app_context():
+            user = Users.query.filter_by(email="person@example.com").first()
+            user_id = user.id
+
+        response = self.client.get(f"/userID={user_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"User ID", response.data)
+        self.assertIn(b"Pizza", response.data)
+        self.assertNotIn(b"Edit filters", response.data)
 
     def test_chat_posts_return_user_names(self) -> None:
         self.login()

@@ -47,7 +47,7 @@
           <span class="header-settings-avatar-wrap">
             <img
               class="header-settings-avatar"
-              src="{{ url_for('static', filename='uploads/' + ((template_user.pfp_file_path if template_user else '') or 'transparentnewdefaultpicture.png')) }}"
+              src="{{ uploaded_file_url(template_user.pfp_file_path if template_user else None, 'transparentnewdefaultpicture.png') }}"
               alt="">
           </span>
           <span class="header-settings-label">Settings</span>

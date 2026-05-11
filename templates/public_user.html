@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}{{ u.name }} on BiteSwipe{% endblock %}
+
+{% block content %}
+<script>document.body.classList.add("profile-page");</script>
+
+<section class="profile-shell profile-shell-upgraded public-profile-shell" aria-labelledby="public-profile-title">
+  <header class="profile-hero public-profile-hero">
+    <div class="profile-identity">
+      <div
+        class="profile-identity-banner{% if u.profile_banner_file_path %} has-banner-image{% endif %}"
+        {% if u.profile_banner_file_path %}
+          style="--profile-banner-image: url('{{ uploaded_file_url(u.profile_banner_file_path) }}')"
+        {% endif %}>
+        <div class="profile-avatar-panel">
+          <div class="profile-avatar-frame">
+            <img
+              src="{{ uploaded_file_url(u.pfp_file_path, 'transparentnewdefaultpicture.png') }}"
+              alt="{{ u.name or 'Profile' }} picture"
+              class="profile-pic">
+          </div>
+        </div>
+
+        <div class="profile-banner-content">
+          <p class="profile-kicker">BiteSwipe profile</p>
+          <div class="name-display">
+            <h1 id="public-profile-title">{{ u.name or 'BiteSwipe user' }}</h1>
+          </div>
+          <p class="profile-email">User ID {{ u.id }}</p>
+
+          <div class="profile-stats" aria-label="Profile stats">
+            <div>
+              <strong>{{ saved_restaurant_count }}</strong>
+              <span>saved pick{% if saved_restaurant_count != 1 %}s{% endif %}</span>
+            </div>
+            <div>
+              <strong>{{ food_preferences|length }}</strong>
+              <span>craving{% if food_preferences|length != 1 %}s{% endif %}</span>
+            </div>
+            <div>
+              <strong>{{ allergen_interests|length }}</strong>
+              <span>allergy signal{% if allergen_interests|length != 1 %}s{% endif %}</span>
+            </div>
+            <div>
+              <strong>{{ hobby_interests|length }}</strong>
+              <span>interest{% if hobby_interests|length != 1 %}s{% endif %}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="profile-layout">
+    <section class="profile-panel about-panel" aria-labelledby="about-title">
+      <div class="section-heading-row">
+        <div>
+          <p class="profile-section-kicker">About</p>
+          <h2 id="about-title">Food intro</h2>
+        </div>
+      </div>
+      <p class="bio-copy">{{ u.bio if u.bio and u.bio != 'this is a placeholder!' else 'This BiteSwipe user has not added a food intro yet.' }}</p>
+    </section>
+
+    <section class="profile-showcase-card public-showcase-card" aria-label="Profile showcase image">
+      <div class="profile-showcase-frame">
+        {% if u.profile_showcase_file_path %}
+          <img
+            src="{{ uploaded_file_url(u.profile_showcase_file_path) }}"
+            alt="{{ u.name or 'Profile' }} showcase">
+        {% else %}
+          <div class="profile-showcase-placeholder" aria-hidden="true">
+            <span>BiteSwipe</span>
+          </div>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+
+  <section class="profile-panel profile-interests" aria-labelledby="interests-title">
+    <div class="profile-interests-header">
+      <div>
+        <p class="profile-section-kicker">Taste & profile</p>
+        <h2 id="interests-title">Signals</h2>
+      </div>
+    </div>
+
+    <div class="interest-groups">
+      <article class="interest-group">
+        <h3>Allergens</h3>
+        {% if allergen_interests %}
+          <div class="interest-chip-list">
+            {% for interest in allergen_interests %}
+              <span class="interest-chip"><span>{{ interest }}</span></span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="interest-empty">No allergy signals listed.</p>
+        {% endif %}
+      </article>
+
+      <article class="interest-group">
+        <h3>Cravings</h3>
+        {% if food_preferences %}
+          <div class="interest-chip-list">
+            {% for interest in food_preferences %}
+              <span class="interest-chip"><span>{{ interest }}</span></span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="interest-empty">No cravings listed.</p>
+        {% endif %}
+      </article>
+
+      <article class="interest-group">
+        <h3>Interests</h3>
+        {% if hobby_interests %}
+          <div class="interest-chip-list">
+            {% for interest in hobby_interests %}
+              <span class="interest-chip"><span>{{ interest }}</span></span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="interest-empty">No interests listed.</p>
+        {% endif %}
+      </article>
+    </div>
+  </section>
+</section>
+{% endblock %}

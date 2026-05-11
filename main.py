@@ -25,15 +25,15 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 from blog_db import BlogPosts
 from config import Config
-from db import db
-from users_db import GroupSwipeMember, GroupSwipeSession, GroupSwipeVote, SavedRestaurant, Users
+from db import db, migrate
+from users_db import GroupSwipeMember, GroupSwipeSession, GroupSwipeVote, SavedRestaurant, UserInterest, Users
 
 
 ALLOWED_UPLOAD_EXTENSIONS = {"gif", "jpeg", "jpg", "png", "webp"}
@@ -331,6 +331,9 @@ def create_app(config_object: type[Config] = Config, config_overrides: dict[str,
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
 
     db.init_app(app)
+    if migrate is not None:
+        migrate.init_app(app, db)
+    app.jinja_env.globals["uploaded_file_url"] = uploaded_file_url
     register_routes(app)
     register_cli(app)
 
@@ -339,6 +342,7 @@ def create_app(config_object: type[Config] = Config, config_overrides: dict[str,
             db.create_all()
             ensure_user_interest_columns()
             ensure_saved_restaurant_detail_columns()
+            ensure_user_interest_rows()
 
     return app
 
@@ -350,6 +354,7 @@ def register_cli(app: Flask) -> None:
         db.create_all()
         ensure_user_interest_columns()
         ensure_saved_restaurant_detail_columns()
+        ensure_user_interest_rows()
         print("Initialized the database.")
 
 
@@ -386,6 +391,39 @@ def ensure_saved_restaurant_detail_columns() -> None:
             db.session.execute(text(f"ALTER TABLE saved_restaurants ADD COLUMN {column_name} {column_type}"))
 
     db.session.commit()
+
+
+def ensure_user_interest_rows() -> None:
+    if not inspect(db.engine).has_table("user_interests"):
+        return
+
+    for user in Users.query.all():
+        for field_name, category in {
+            "allergen_interests_json": "allergen",
+            "food_preferences_json": "food",
+            "hobby_interests_json": "hobby",
+        }.items():
+            existing = UserInterest.query.filter_by(user_id=user.id, category=category).first()
+            if existing is not None:
+                continue
+
+            values = parse_legacy_interest_json(getattr(user, field_name, "[]"))
+            if values:
+                user.set_interest_list(field_name, values)
+
+    db.session.commit()
+
+
+def parse_legacy_interest_json(value: Any) -> list[str]:
+    try:
+        parsed = json.loads(value or "[]")
+    except (TypeError, json.JSONDecodeError):
+        return []
+
+    if not isinstance(parsed, list):
+        return []
+
+    return [normalize_interest_label(item) for item in parsed if normalize_interest_label(item)]
 
 
 def get_table_column_names(table_name: str) -> set[str]:
@@ -477,19 +515,15 @@ def register_routes(app: Flask) -> None:
 
             return redirect(url_for("profile"))
 
+        return render_template("public.html", **build_profile_template_context(user))
+
+    @app.get("/userID=<int:user_id>")
+    @app.get("/user/<int:user_id>")
+    def public_user_profile(user_id: int) -> Any:
+        user = Users.query.get_or_404(user_id)
         return render_template(
-            "public.html",
-            u=user,
-            saved_restaurant_count=len(user.saved_restaurants),
-            allergen_interests=user.get_interest_list("allergen_interests_json"),
-            food_preferences=user.get_interest_list("food_preferences_json"),
-            hobby_interests=user.get_interest_list("hobby_interests_json"),
-            food_preference_presets=FOOD_PREFERENCE_PRESETS,
-            hobby_interest_presets=HOBBY_INTEREST_PRESETS,
-            school_theme_options=get_school_theme_options(),
-            current_school_theme_domain=get_user_school_theme_domain(user),
-            selected_campus_theme_domain=str(user.campus_theme_domain or ""),
-            detected_school_theme=get_school_theme_for_email(user.email),
+            "public_user.html",
+            **build_profile_template_context(user, is_public_profile=True),
         )
 
     @app.get("/credits")
@@ -967,6 +1001,23 @@ def default_name_from_email(email: str) -> str:
     return (name.title() or "New User")[:MAX_NAME_LENGTH]
 
 
+def build_profile_template_context(user: Users, is_public_profile: bool = False) -> dict[str, Any]:
+    return {
+        "u": user,
+        "is_public_profile": is_public_profile,
+        "saved_restaurant_count": len(user.saved_restaurants),
+        "allergen_interests": user.get_interest_list("allergen_interests_json"),
+        "food_preferences": user.get_interest_list("food_preferences_json"),
+        "hobby_interests": user.get_interest_list("hobby_interests_json"),
+        "food_preference_presets": FOOD_PREFERENCE_PRESETS,
+        "hobby_interest_presets": HOBBY_INTEREST_PRESETS,
+        "school_theme_options": get_school_theme_options(),
+        "current_school_theme_domain": get_user_school_theme_domain(user),
+        "selected_campus_theme_domain": str(user.campus_theme_domain or ""),
+        "detected_school_theme": get_school_theme_for_email(user.email),
+    }
+
+
 def handle_profile_picture_upload(user: Users) -> None:
     upload_profile_image(
         user=user,
@@ -1031,14 +1082,13 @@ def upload_profile_image(
         return
 
     file_name = f"{file_prefix}-{user.id}.{extension}"
-    file_path = Path(current_app.config["UPLOAD_FOLDER"]) / file_name
 
     try:
-        file.save(file_path)
-        setattr(user, user_field, file_name)
+        file_reference = save_profile_upload_file(file, file_name)
+        setattr(user, user_field, file_reference)
         db.session.commit()
         flash(success_message)
-    except OSError:
+    except (OSError, RuntimeError):
         db.session.rollback()
         current_app.logger.exception(error_message)
         flash(error_message)
@@ -1749,6 +1799,56 @@ def normalize_website_url(value: Any) -> str | None:
         return website
 
     return f"https://{website}"
+
+
+def is_external_upload_reference(value: Any) -> bool:
+    return str(value or "").startswith(("http://", "https://"))
+
+
+def uploaded_file_url(value: Any, fallback: str | None = None) -> str:
+    file_reference = str(value or fallback or "").strip()
+    if not file_reference:
+        file_reference = "transparentnewdefaultpicture.png"
+
+    if is_external_upload_reference(file_reference):
+        return file_reference
+
+    return url_for("static", filename=f"uploads/{file_reference}")
+
+
+def save_profile_upload_file(file: Any, file_name: str) -> str:
+    provider = str(current_app.config.get("UPLOAD_STORAGE_PROVIDER", "local")).lower()
+
+    if provider == "s3":
+        return save_profile_upload_to_s3(file, file_name)
+
+    file_path = Path(current_app.config["UPLOAD_FOLDER"]) / file_name
+    file.save(file_path)
+    return file_name
+
+
+def save_profile_upload_to_s3(file: Any, file_name: str) -> str:
+    bucket = str(current_app.config.get("UPLOADS_S3_BUCKET", "")).strip()
+    public_base_url = str(current_app.config.get("UPLOADS_PUBLIC_BASE_URL", "")).strip().rstrip("/")
+    prefix = str(current_app.config.get("UPLOADS_S3_PREFIX", "profile-uploads")).strip().strip("/")
+
+    if not bucket or not public_base_url:
+        raise RuntimeError("S3 uploads require UPLOADS_S3_BUCKET and UPLOADS_PUBLIC_BASE_URL.")
+
+    try:
+        import boto3
+    except ImportError as exc:
+        raise RuntimeError("S3 uploads require boto3. Install requirements.txt first.") from exc
+
+    key = f"{prefix}/{file_name}" if prefix else file_name
+    file.stream.seek(0)
+    boto3.client("s3").upload_fileobj(
+        file.stream,
+        bucket,
+        key,
+        ExtraArgs={"ContentType": file.mimetype or "application/octet-stream"},
+    )
+    return f"{public_base_url}/{key}"
 
 
 def search_restaurants_with_google(

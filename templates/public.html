@@ -16,14 +16,14 @@
       <div
         class="profile-identity-banner{% if u.profile_banner_file_path %} has-banner-image{% endif %}"
         {% if u.profile_banner_file_path %}
-          style="--profile-banner-image: url('{{ url_for('static', filename='uploads/' + u.profile_banner_file_path) }}')"
+          style="--profile-banner-image: url('{{ uploaded_file_url(u.profile_banner_file_path) }}')"
         {% endif %}>
         <button type="button" id="hero-edit-btn" class="profile-small-button profile-hero-toggle" aria-expanded="false">Edit</button>
 
         <div class="profile-avatar-panel">
           <div class="profile-avatar-frame">
             <img
-              src="{{ url_for('static', filename='uploads/' + (u.pfp_file_path or 'transparentnewdefaultpicture.png')) }}"
+              src="{{ uploaded_file_url(u.pfp_file_path, 'transparentnewdefaultpicture.png') }}"
               alt="{{ u.name or 'Profile' }} picture"
               class="profile-pic"
               id="profilePreview">
@@ -144,7 +144,7 @@
       <div class="profile-showcase-frame">
         {% if u.profile_showcase_file_path %}
           <img
-            src="{{ url_for('static', filename='uploads/' + u.profile_showcase_file_path) }}"
+            src="{{ uploaded_file_url(u.profile_showcase_file_path) }}"
             alt="{{ u.name or 'Profile' }} showcase"
             id="profileShowcasePreview">
         {% else %}

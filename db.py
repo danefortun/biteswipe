@@ -1,4 +1,11 @@
-# extensions.py
 from flask_sqlalchemy import SQLAlchemy
 
-db = SQLAlchemy()  # single shared DB object
+
+try:
+    from flask_migrate import Migrate
+except ImportError:  # pragma: no cover - lets old local envs still boot before deps are installed.
+    Migrate = None
+
+
+db = SQLAlchemy()
+migrate = Migrate() if Migrate is not None else None
