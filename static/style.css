@@ -4046,10 +4046,15 @@ body[data-route="home"][data-school-theme]::before {
 }
 
 body[data-route="home"][data-school-theme] > .app-header,
-body[data-route="home"][data-school-theme] > .main,
-body[data-route="home"][data-school-theme] > .site-footer {
+body[data-route="home"][data-school-theme] > .main {
   position: relative;
   z-index: 1;
+}
+
+body[data-route="home"][data-school-theme] > .site-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1002;
 }
 
 body[data-route="home"][data-school-theme] .cards-page-shell .card-stage {
