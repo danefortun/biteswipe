@@ -3890,14 +3890,6 @@ body.deck-focus-mode .card-stage {
   border-radius: 22px;
 }
 
-.profile-tools-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 0.64fr) minmax(260px, 0.36fr);
-  gap: 18px;
-  align-items: start;
-  margin-top: 18px;
-}
-
 .taste-primer-panel .verification-item + .verification-item {
   margin-top: 10px;
 }
@@ -3926,7 +3918,9 @@ body.deck-focus-mode .card-stage {
 .profile-showcase-card {
   position: relative;
   display: grid;
-  align-self: start;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: stretch;
   gap: 10px;
   padding: 0;
   border: 1px solid var(--border-color);
@@ -3937,7 +3931,8 @@ body.deck-focus-mode .card-stage {
 
 .profile-showcase-frame {
   position: relative;
-  height: clamp(145px, 18vw, 240px);
+  height: 100%;
+  min-height: 100%;
   background:
     radial-gradient(circle at 18% 12%, color-mix(in srgb, var(--accent-color) 22%, transparent), transparent 36%),
     linear-gradient(135deg, color-mix(in srgb, var(--accent-soft-color) 68%, #ffffff), var(--surface-color));
@@ -4046,8 +4041,14 @@ body.deck-focus-mode .card-stage {
 }
 
 @media (max-width: 860px) {
-  .profile-tools-layout {
-    grid-template-columns: 1fr;
+  .profile-showcase-card {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .profile-showcase-frame {
+    height: clamp(145px, 45vw, 260px);
+    min-height: 145px;
   }
 
   .profile-action-strip .campus-mode-form {
