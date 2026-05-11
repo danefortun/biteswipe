@@ -87,7 +87,7 @@ ALLERGEN_FILTERS: dict[str, dict[str, str | tuple[str, ...]]] = {
 }
 
 PRICE_FILTERS: dict[str, dict[str, Any]] = {
-    "cheapPrice": {"label": "$5 - $20", "levels": {0, 1}},
+    "cheapPrice": {"label": "$5 - $20", "levels": {1}},
     "mediumPrice": {"label": "$25 - $40", "levels": {2}},
     "expensivePrice": {"label": "$40+", "levels": {3, 4}},
 }
@@ -1202,7 +1202,9 @@ def save_selected_restaurant(user: Users, payload: dict[str, Any]) -> tuple[bool
     photo = normalize_optional_string(payload.get("photo"), 512)
     distance_meters = normalize_optional_float(payload.get("distance_meters"))
     cuisine = normalize_optional_string(payload.get("cuisine"), 255)
-    price_text = normalize_optional_string(payload.get("price_text"), 64) or format_price_text(normalize_price_level(payload.get("price_level")))
+    price_text = normalize_price_text(payload.get("price_text")) or format_price_text(
+        normalize_price_level(payload.get("price_level"))
+    )
     rating = normalize_optional_float(payload.get("rating"))
     review_count = normalize_optional_int(payload.get("review_count"))
     website = normalize_website_url(payload.get("website"))
@@ -1652,12 +1654,17 @@ def normalize_price_level(value: Any) -> int | None:
         return None
 
     if set(text_value) <= {"$"}:
-        return min(max(len(text_value) - 1, 0), 4)
+        return min(max(len(text_value), 1), 4)
 
     try:
-        return min(max(int(text_value), 0), 4)
+        numeric_level = int(text_value)
     except ValueError:
         return None
+
+    if numeric_level <= 0:
+        return None
+
+    return min(numeric_level, 4)
 
 
 def normalize_google_price_level(value: Any) -> int | None:
@@ -1665,7 +1672,7 @@ def normalize_google_price_level(value: Any) -> int | None:
         return None
 
     price_map = {
-        "PRICE_LEVEL_FREE": 0,
+        "PRICE_LEVEL_FREE": None,
         "PRICE_LEVEL_INEXPENSIVE": 1,
         "PRICE_LEVEL_MODERATE": 2,
         "PRICE_LEVEL_EXPENSIVE": 3,
@@ -1680,9 +1687,24 @@ def format_price_text(price_level: int | None) -> str | None:
         return None
 
     if price_level <= 0:
-        return "Free"
+        return None
 
     return "$" * min(price_level, 4)
+
+
+def normalize_price_text(value: Any) -> str | None:
+    text_value = normalize_optional_string(value, 64)
+
+    if text_value is None:
+        return None
+
+    if text_value.strip().lower() in {"free", "0", "unknown", "price not listed"}:
+        return None
+
+    if set(text_value.strip()) <= {"$"}:
+        return format_price_text(normalize_price_level(text_value))
+
+    return text_value
 
 
 def restaurant_fallback_image_category(*values: Any) -> str:

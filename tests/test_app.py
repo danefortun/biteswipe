@@ -14,7 +14,10 @@ from main import (
     create_app,
     format_google_place,
     format_osm_place,
+    format_price_text,
     get_school_theme_for_email,
+    normalize_google_price_level,
+    normalize_price_level,
 )
 from users_db import SavedRestaurant, Users
 
@@ -561,6 +564,43 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertEqual(fallback_photo["photo_source"], "biteswipe_fallback")
         self.assertIn("restaurant-fallbacks/mexican.webp", fallback_photo["photo"])
         self.assertIsNone(fallback_photo["walking_minutes"])
+
+    def test_restaurant_price_helpers_do_not_show_free_for_unknown_cost(self) -> None:
+        self.assertEqual(normalize_price_level("$"), 1)
+        self.assertEqual(format_price_text(normalize_price_level("$")), "$")
+        self.assertIsNone(normalize_price_level("0"))
+        self.assertIsNone(format_price_text(normalize_price_level("0")))
+        self.assertIsNone(normalize_google_price_level("PRICE_LEVEL_FREE"))
+
+        with self.app.test_request_context():
+            osm_place = format_osm_place(
+                {
+                    "type": "node",
+                    "id": 125,
+                    "lat": 39.9567,
+                    "lon": -75.1898,
+                    "tags": {
+                        "amenity": "restaurant",
+                        "name": "Dollar Slice",
+                        "price": "$",
+                    },
+                },
+                39.9566,
+                -75.1899,
+            )
+            google_place = format_google_place(
+                {
+                    "id": "free-level-place",
+                    "displayName": {"text": "Unknown Cost Cafe"},
+                    "priceLevel": "PRICE_LEVEL_FREE",
+                },
+                "test-key",
+            )
+
+        self.assertEqual(osm_place["price_level"], 1)
+        self.assertEqual(osm_place["price_text"], "$")
+        self.assertIsNone(google_place["price_level"])
+        self.assertIsNone(google_place["price_text"])
 
     def test_save_restaurant_sends_card_to_my_stuff(self) -> None:
         self.login()

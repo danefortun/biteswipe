@@ -122,7 +122,7 @@
               {% else %}
                 <span>Distance pending</span>
               {% endif %}
-              {% if restaurant.price_text %}
+              {% if restaurant.price_text and restaurant.price_text|lower != 'free' %}
                 <span>{{ restaurant.price_text }}</span>
               {% endif %}
               {% if restaurant.cuisine %}

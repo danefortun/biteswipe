@@ -130,7 +130,7 @@ function updateTasteProfile(action, restaurant) {
         profile.cuisines[token] = Math.max(-8, Math.min(24, (Number(profile.cuisines[token]) || 0) + weight));
     });
 
-    const price = restaurant.price_text || formatPriceLevel(restaurant.price_level);
+    const price = getRestaurantPrice(restaurant);
     if (price && price !== "Price not listed") {
         profile.prices[price] = Math.max(-8, Math.min(24, (Number(profile.prices[price]) || 0) + weight));
     }
@@ -170,7 +170,7 @@ function scoreTasteAffinity(restaurant) {
         score += Number(profile.cuisines[token]) || 0;
     });
 
-    const price = restaurant?.price_text || formatPriceLevel(restaurant?.price_level);
+    const price = getRestaurantPrice(restaurant);
     if (price && price !== "Price not listed") {
         score += (Number(profile.prices[price]) || 0) * 0.8;
     }
@@ -596,7 +596,7 @@ function renderDailyBite(restaurant) {
     }
 
     title.textContent = restaurant.name || "Today's pick";
-    meta.textContent = [formatWalkingTime(restaurant), formatCuisine(restaurant.cuisine), restaurant.price_text || formatPriceLevel(restaurant.price_level)].filter(Boolean).join(" - ");
+    meta.textContent = [formatWalkingTime(restaurant), formatCuisine(restaurant.cuisine), getRestaurantPrice(restaurant)].filter(Boolean).join(" - ");
     const confidence = formatBiteConfidence(restaurant);
     const affinity = scoreTasteAffinity(restaurant);
     reason.textContent = [confidence, affinity > 0 ? `+${affinity} from your taste profile` : "", buildRestaurantMemoryText(restaurant)].filter(Boolean).join(" - ");
@@ -815,7 +815,7 @@ function rememberRestaurantDecision(action, restaurant) {
     current.lastAction = action;
     current.lastActionAt = new Date().toISOString();
     current.cuisine = formatCuisine(restaurant?.cuisine);
-    current.price = restaurant?.price_text || formatPriceLevel(restaurant?.price_level);
+    current.price = getRestaurantPrice(restaurant);
     current.distance = formatWalkingTime(restaurant);
 
     if (action === "save") {
@@ -1556,7 +1556,7 @@ function buildCardChips(result) {
         formatBiteConfidence(result),
         formatAllergyConfidence(result),
         formatWalkingTime(result),
-        result.price_text || formatPriceLevel(result.price_level),
+        getRestaurantPrice(result),
         formatOpenStatus(result),
         formatCuisine(result.cuisine),
         formatShortRating(result),
@@ -1582,7 +1582,7 @@ function buildCardBack(result) {
     const detailList = document.createElement("dl");
     detailList.classList.add("restaurant-details");
     addDetail(detailList, "Food", formatCuisine(result.cuisine));
-    addDetail(detailList, "Cost", result.price_text || formatPriceLevel(result.price_level));
+    addDetail(detailList, "Cost", getRestaurantPrice(result));
     addDetail(detailList, "Hours", result.opening_hours_text || formatOpenStatus(result));
     addDetail(detailList, "Address", result.address);
     addDetail(detailList, "Walk", formatWalkingTime(result));
@@ -1694,7 +1694,7 @@ function getMatchReasons(result) {
     const distance = formatWalkingTime(result);
     const cuisine = formatCuisine(result.cuisine);
     const rating = Number(result.rating);
-    const price = result.price_text || formatPriceLevel(result.price_level);
+    const price = getRestaurantPrice(result);
 
     if (distance) {
         reasons.push(distance);
@@ -1837,10 +1837,27 @@ function formatPriceLevel(value) {
     }
 
     if (level <= 0) {
-        return "Free";
+        return "Price not listed";
     }
 
     return "$".repeat(Math.min(level, 4));
+}
+
+function normalizeRestaurantPriceText(value) {
+    if (!value) {
+        return null;
+    }
+
+    const text = String(value).trim();
+    if (!text || ["free", "0", "unknown", "price not listed"].includes(text.toLowerCase())) {
+        return null;
+    }
+
+    return text;
+}
+
+function getRestaurantPrice(result) {
+    return normalizeRestaurantPriceText(result?.price_text) || formatPriceLevel(result?.price_level);
 }
 
 function formatWalkingTime(resultOrMeters) {
@@ -1922,8 +1939,9 @@ function buildRestaurantSummary(result) {
         parts.push(`Serves ${cuisine}.`);
     }
 
-    if (result.price_text || Number.isFinite(Number(result.price_level))) {
-        parts.push(`Typical cost: ${result.price_text || formatPriceLevel(result.price_level)}.`);
+    const price = getRestaurantPrice(result);
+    if (price && price !== "Price not listed") {
+        parts.push(`Typical cost: ${price}.`);
     }
 
     if (result.rating) {
