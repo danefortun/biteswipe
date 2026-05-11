@@ -4045,10 +4045,19 @@ body[data-route="home"][data-school-theme]::before {
   pointer-events: none;
 }
 
-body[data-route="home"][data-school-theme] > .app-header,
 body[data-route="home"][data-school-theme] > .main {
   position: relative;
   z-index: 1;
+}
+
+body[data-route="home"][data-school-theme] > .app-header {
+  position: sticky;
+  top: 0;
+  z-index: 1300;
+}
+
+body[data-route="home"][data-school-theme] .header-settings-dropdown {
+  z-index: 1400;
 }
 
 body[data-route="home"][data-school-theme] > .site-footer {
