@@ -80,10 +80,15 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertIsNotNone(theme)
         self.assertEqual(theme["slug"], "drexel")
         self.assertEqual(theme["short_name"], "Drexel")
+        self.assertEqual(theme["image_file"], "schools/drexel.webp")
 
         subdomain_theme = get_school_theme_for_email("student@mail.drexel.edu")
         self.assertIsNotNone(subdomain_theme)
         self.assertEqual(subdomain_theme["slug"], "drexel")
+
+        self.assertEqual(get_school_theme_for_email("student@temple.edu")["image_file"], "schools/temple.webp")
+        self.assertEqual(get_school_theme_for_email("student@upenn.edu")["image_file"], "schools/upenn.webp")
+        self.assertEqual(get_school_theme_for_email("student@wcupa.edu")["image_file"], "schools/west-chester.webp")
 
         generated = get_school_theme_for_email("student@examplecollege.edu")
         self.assertIsNotNone(generated)

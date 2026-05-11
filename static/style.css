@@ -4067,6 +4067,7 @@ body[data-route="home"][data-school-theme] > .site-footer {
 }
 
 body[data-route="home"][data-school-theme] .cards-page-shell .card-stage {
+  overflow: hidden;
   padding: 10px;
   border: 1px solid color-mix(in srgb, var(--school-primary, #178f79) 22%, var(--border-color));
   border-radius: 30px;
@@ -4076,6 +4077,25 @@ body[data-route="home"][data-school-theme] .cards-page-shell .card-stage {
   box-shadow:
     0 26px 70px color-mix(in srgb, var(--school-primary, #178f79) 18%, transparent),
     inset 0 0 0 1px color-mix(in srgb, var(--school-secondary, #ffffff) 12%, transparent);
+}
+
+body[data-route="home"][data-school-theme] .cards-page-shell .card-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image: var(--school-bg-image);
+  background-repeat: no-repeat;
+  background-position: center 58%;
+  background-size: min(520px, 112%);
+  opacity: 0.11;
+  filter: saturate(0.9) contrast(1.03);
+  pointer-events: none;
+}
+
+body[data-route="home"][data-school-theme] .cards-page-shell .card-stage > * {
+  position: relative;
+  z-index: 1;
 }
 
 .school-theme-chip {

@@ -154,7 +154,7 @@ SCHOOL_THEMES: dict[str, dict[str, str | None]] = {
         "primary": "#07294D",
         "secondary": "#FFC600",
         "accent": "#007A78",
-        "image_file": "drexelxfizz.png",
+        "image_file": "schools/drexel.webp",
     },
     "temple.edu": {
         "slug": "temple",
@@ -163,7 +163,7 @@ SCHOOL_THEMES: dict[str, dict[str, str | None]] = {
         "primary": "#9D2235",
         "secondary": "#FFFFFF",
         "accent": "#222222",
-        "image_file": None,
+        "image_file": "schools/temple.webp",
     },
     "upenn.edu": {
         "slug": "penn",
@@ -172,7 +172,16 @@ SCHOOL_THEMES: dict[str, dict[str, str | None]] = {
         "primary": "#011F5B",
         "secondary": "#990000",
         "accent": "#2F6DB3",
-        "image_file": None,
+        "image_file": "schools/upenn.webp",
+    },
+    "wcupa.edu": {
+        "slug": "west-chester",
+        "name": "West Chester University",
+        "short_name": "West Chester",
+        "primary": "#4B116F",
+        "secondary": "#F2C75C",
+        "accent": "#6F2DA8",
+        "image_file": "schools/west-chester.webp",
     },
     "princeton.edu": {
         "slug": "princeton",
