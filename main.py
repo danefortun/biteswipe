@@ -146,81 +146,144 @@ FOOD_KEYWORDS: dict[str, tuple[str, ...]] = {
     "thai": ("thai", "pad thai", "curry"),
 }
 
-SCHOOL_THEMES: dict[str, dict[str, str | None]] = {
-    "drexel.edu": {
-        "slug": "drexel",
-        "name": "Drexel University",
-        "short_name": "Drexel",
-        "primary": "#07294D",
-        "secondary": "#FFC600",
-        "accent": "#007A78",
-        "image_file": "schools/drexel.webp",
-    },
-    "temple.edu": {
-        "slug": "temple",
-        "name": "Temple University",
-        "short_name": "Temple",
-        "primary": "#9D2235",
-        "secondary": "#FFFFFF",
-        "accent": "#222222",
-        "image_file": "schools/temple.webp",
-    },
-    "upenn.edu": {
-        "slug": "penn",
-        "name": "University of Pennsylvania",
-        "short_name": "Penn",
-        "primary": "#011F5B",
-        "secondary": "#990000",
-        "accent": "#2F6DB3",
-        "image_file": "schools/upenn.webp",
-        "card_image_file": "schools/upenn logo.webp",
-    },
-    "wcupa.edu": {
-        "slug": "west-chester",
-        "name": "West Chester University",
-        "short_name": "West Chester",
-        "primary": "#4B116F",
-        "secondary": "#F2C75C",
-        "accent": "#6F2DA8",
-        "image_file": "schools/west-chester.webp",
-    },
-    "princeton.edu": {
-        "slug": "princeton",
-        "name": "Princeton University",
-        "short_name": "Princeton",
-        "primary": "#E77500",
-        "secondary": "#000000",
-        "accent": "#FFB347",
-        "image_file": None,
-    },
-    "rutgers.edu": {
-        "slug": "rutgers",
-        "name": "Rutgers University",
-        "short_name": "Rutgers",
-        "primary": "#CC0033",
-        "secondary": "#5F6A72",
-        "accent": "#CC0033",
-        "image_file": None,
-    },
-    "psu.edu": {
-        "slug": "penn-state",
-        "name": "Penn State",
-        "short_name": "Penn State",
-        "primary": "#1E407C",
-        "secondary": "#96BEE6",
-        "accent": "#009CDE",
-        "image_file": None,
-    },
-    "villanova.edu": {
-        "slug": "villanova",
-        "name": "Villanova University",
-        "short_name": "Villanova",
-        "primary": "#00205B",
-        "secondary": "#13B5EA",
-        "accent": "#0072CE",
-        "image_file": None,
-    },
+SCHOOL_THEME_ROWS: tuple[tuple[str, str, str, str, str, str, str], ...] = (
+    ("princeton.edu", "princeton", "Princeton University", "Princeton", "#E77500", "#000000", "#FFB347"),
+    ("mit.edu", "mit", "Massachusetts Institute of Technology", "MIT", "#A31F34", "#8A8B8C", "#A31F34"),
+    ("harvard.edu", "harvard", "Harvard University", "Harvard", "#A51C30", "#FFFFFF", "#A51C30"),
+    ("stanford.edu", "stanford", "Stanford University", "Stanford", "#8C1515", "#B83A4B", "#8C1515"),
+    ("yale.edu", "yale", "Yale University", "Yale", "#00356B", "#63A8E1", "#286DC0"),
+    ("uchicago.edu", "uchicago", "University of Chicago", "UChicago", "#800000", "#767676", "#800000"),
+    ("duke.edu", "duke", "Duke University", "Duke", "#012169", "#00539B", "#00539B"),
+    ("jhu.edu", "johns-hopkins", "Johns Hopkins University", "Johns Hopkins", "#002D72", "#68ACE5", "#0072CE"),
+    ("northwestern.edu", "northwestern", "Northwestern University", "Northwestern", "#4E2A84", "#836EAA", "#4E2A84"),
+    ("upenn.edu", "penn", "University of Pennsylvania", "Penn", "#011F5B", "#990000", "#2F6DB3"),
+    ("caltech.edu", "caltech", "California Institute of Technology", "Caltech", "#FF6C0C", "#76777B", "#FF6C0C"),
+    ("cornell.edu", "cornell", "Cornell University", "Cornell", "#B31B1B", "#222222", "#B31B1B"),
+    ("brown.edu", "brown", "Brown University", "Brown", "#4E3629", "#ED1C24", "#ED1C24"),
+    ("dartmouth.edu", "dartmouth", "Dartmouth College", "Dartmouth", "#00693E", "#12312B", "#00693E"),
+    ("columbia.edu", "columbia", "Columbia University", "Columbia", "#B9D9EB", "#003865", "#003865"),
+    ("berkeley.edu", "uc-berkeley", "University of California, Berkeley", "UC Berkeley", "#003262", "#FDB515", "#3B7EA1"),
+    ("rice.edu", "rice", "Rice University", "Rice", "#00205B", "#C1C6C8", "#00205B"),
+    ("ucla.edu", "ucla", "University of California, Los Angeles", "UCLA", "#2774AE", "#FFD100", "#2774AE"),
+    ("vanderbilt.edu", "vanderbilt", "Vanderbilt University", "Vanderbilt", "#866D4B", "#000000", "#866D4B"),
+    ("cmu.edu", "carnegie-mellon", "Carnegie Mellon University", "Carnegie Mellon", "#C41230", "#1D1D1D", "#C41230"),
+    ("umich.edu", "michigan", "University of Michigan-Ann Arbor", "Michigan", "#00274C", "#FFCB05", "#00274C"),
+    ("nd.edu", "notre-dame", "University of Notre Dame", "Notre Dame", "#0C2340", "#C99700", "#0C2340"),
+    ("wustl.edu", "washu", "Washington University in St. Louis", "WashU", "#A51417", "#007360", "#A51417"),
+    ("emory.edu", "emory", "Emory University", "Emory", "#012169", "#C5A057", "#012169"),
+    ("georgetown.edu", "georgetown", "Georgetown University", "Georgetown", "#041E42", "#8D817B", "#041E42"),
+    ("unc.edu", "unc", "University of North Carolina-Chapel Hill", "UNC", "#4B9CD3", "#13294B", "#4B9CD3"),
+    ("virginia.edu", "virginia", "University of Virginia", "UVA", "#232D4B", "#E57200", "#E57200"),
+    ("usc.edu", "usc", "University of Southern California", "USC", "#990000", "#FFCC00", "#990000"),
+    ("ucsd.edu", "uc-san-diego", "University of California, San Diego", "UC San Diego", "#00629B", "#FFCD00", "#00629B"),
+    ("ufl.edu", "florida", "University of Florida", "Florida", "#0021A5", "#FA4616", "#FA4616"),
+    ("utexas.edu", "texas", "The University of Texas-Austin", "UT Austin", "#BF5700", "#333F48", "#BF5700"),
+    ("gatech.edu", "georgia-tech", "Georgia Institute of Technology", "Georgia Tech", "#B3A369", "#003057", "#B3A369"),
+    ("nyu.edu", "nyu", "New York University", "NYU", "#57068C", "#FFFFFF", "#57068C"),
+    ("ucdavis.edu", "uc-davis", "University of California, Davis", "UC Davis", "#022851", "#FFBF00", "#022851"),
+    ("uci.edu", "uc-irvine", "University of California, Irvine", "UC Irvine", "#0064A4", "#FFD200", "#0064A4"),
+    ("bc.edu", "boston-college", "Boston College", "Boston College", "#8A100B", "#B29D6C", "#8A100B"),
+    ("tufts.edu", "tufts", "Tufts University", "Tufts", "#3E8EDE", "#0E1E2F", "#3E8EDE"),
+    ("illinois.edu", "illinois", "University of Illinois Urbana-Champaign", "Illinois", "#13294B", "#FF5F05", "#FF5F05"),
+    ("wisc.edu", "wisconsin", "University of Wisconsin-Madison", "Wisconsin", "#C5050C", "#646569", "#C5050C"),
+    ("ucsb.edu", "uc-santa-barbara", "University of California, Santa Barbara", "UC Santa Barbara", "#003660", "#FEBC11", "#003660"),
+    ("osu.edu", "ohio-state", "The Ohio State University", "Ohio State", "#BB0000", "#666666", "#BB0000"),
+    ("bu.edu", "boston-university", "Boston University", "Boston University", "#CC0000", "#2D2926", "#CC0000"),
+    ("rutgers.edu", "rutgers-new-brunswick", "Rutgers University-New Brunswick", "Rutgers", "#CC0033", "#5F6A72", "#CC0033"),
+    ("umd.edu", "maryland", "University of Maryland, College Park", "Maryland", "#E21833", "#FFD200", "#E21833"),
+    ("washington.edu", "washington", "University of Washington", "Washington", "#4B2E83", "#B7A57A", "#4B2E83"),
+    ("lehigh.edu", "lehigh", "Lehigh University", "Lehigh", "#653819", "#A28E6A", "#653819"),
+    ("northeastern.edu", "northeastern", "Northeastern University", "Northeastern", "#C8102E", "#000000", "#C8102E"),
+    ("purdue.edu", "purdue", "Purdue University", "Purdue", "#CEB888", "#000000", "#CEB888"),
+    ("uga.edu", "georgia", "University of Georgia", "Georgia", "#BA0C2F", "#000000", "#BA0C2F"),
+    ("rochester.edu", "rochester", "University of Rochester", "Rochester", "#003B71", "#FFD100", "#003B71"),
+    ("case.edu", "case-western", "Case Western Reserve University", "Case Western", "#0A304E", "#C8D2D9", "#0A304E"),
+    ("fsu.edu", "florida-state", "Florida State University", "Florida State", "#782F40", "#CEB888", "#782F40"),
+    ("tamu.edu", "texas-am", "Texas A&M University", "Texas A&M", "#500000", "#D6D3C4", "#500000"),
+    ("vt.edu", "virginia-tech", "Virginia Tech", "Virginia Tech", "#861F41", "#E5751F", "#E5751F"),
+    ("wfu.edu", "wake-forest", "Wake Forest University", "Wake Forest", "#9E7E38", "#000000", "#9E7E38"),
+    ("wm.edu", "william-and-mary", "William & Mary", "William & Mary", "#115740", "#B9975B", "#115740"),
+    ("ucmerced.edu", "uc-merced", "University of California, Merced", "UC Merced", "#002856", "#DAA900", "#002856"),
+    ("villanova.edu", "villanova", "Villanova University", "Villanova", "#00205B", "#13B5EA", "#0072CE"),
+    ("gwu.edu", "george-washington", "George Washington University", "GW", "#033C5A", "#AA9868", "#033C5A"),
+    ("psu.edu", "penn-state", "The Pennsylvania State University-University Park", "Penn State", "#1E407C", "#96BEE6", "#009CDE"),
+    ("scu.edu", "santa-clara", "Santa Clara University", "Santa Clara", "#862633", "#FFFFFF", "#862633"),
+    ("stonybrook.edu", "stony-brook", "Stony Brook University-SUNY", "Stony Brook", "#990000", "#5B6770", "#990000"),
+    ("umn.edu", "minnesota", "University of Minnesota-Twin Cities", "Minnesota", "#7A0019", "#FFCC33", "#7A0019"),
+    ("msu.edu", "michigan-state", "Michigan State University", "Michigan State", "#18453B", "#FFFFFF", "#18453B"),
+    ("ncsu.edu", "nc-state", "North Carolina State University", "NC State", "#CC0000", "#000000", "#CC0000"),
+    ("rpi.edu", "rpi", "Rensselaer Polytechnic Institute", "RPI", "#D6001C", "#54585A", "#D6001C"),
+    ("umass.edu", "umass-amherst", "University of Massachusetts-Amherst", "UMass Amherst", "#881C1C", "#212721", "#881C1C"),
+    ("miami.edu", "miami", "University of Miami", "Miami", "#F47321", "#005030", "#F47321"),
+    ("brandeis.edu", "brandeis", "Brandeis University", "Brandeis", "#003478", "#FFFFFF", "#003478"),
+    ("tulane.edu", "tulane", "Tulane University of Louisiana", "Tulane", "#006747", "#418FDE", "#006747"),
+    ("uconn.edu", "uconn", "University of Connecticut", "UConn", "#000E2F", "#7C878E", "#000E2F"),
+    ("pitt.edu", "pittsburgh", "University of Pittsburgh", "Pitt", "#003594", "#FFB81C", "#003594"),
+    ("binghamton.edu", "binghamton", "Binghamton University-SUNY", "Binghamton", "#005A43", "#B2B4B2", "#005A43"),
+    ("indiana.edu", "indiana", "Indiana University-Bloomington", "Indiana", "#990000", "#EEEDEB", "#990000"),
+    ("clemson.edu", "clemson", "Clemson University", "Clemson", "#F56600", "#522D80", "#F56600"),
+    ("newark.rutgers.edu", "rutgers-newark", "Rutgers University-Newark", "Rutgers Newark", "#CC0033", "#5F6A72", "#CC0033"),
+    ("syracuse.edu", "syracuse", "Syracuse University", "Syracuse", "#D44500", "#000E54", "#D44500"),
+    ("buffalo.edu", "buffalo", "University at Buffalo-SUNY", "Buffalo", "#005BBB", "#E56A54", "#005BBB"),
+    ("ucr.edu", "uc-riverside", "University of California, Riverside", "UC Riverside", "#003DA5", "#FFB81C", "#003DA5"),
+    ("mines.edu", "colorado-mines", "Colorado School of Mines", "Colorado Mines", "#21314D", "#B3A369", "#21314D"),
+    ("drexel.edu", "drexel", "Drexel University", "Drexel", "#07294D", "#FFC600", "#007A78"),
+    ("njit.edu", "njit", "New Jersey Institute of Technology", "NJIT", "#CC0000", "#58595B", "#CC0000"),
+    ("stevens.edu", "stevens", "Stevens Institute of Technology", "Stevens", "#A32638", "#9EA2A2", "#A32638"),
+    ("pepperdine.edu", "pepperdine", "Pepperdine University", "Pepperdine", "#00205C", "#F4C300", "#00205C"),
+    ("uic.edu", "uic", "University of Illinois Chicago", "UIC", "#001E62", "#D50032", "#D50032"),
+    ("wpi.edu", "wpi", "Worcester Polytechnic Institute", "WPI", "#AC2B37", "#5B6770", "#AC2B37"),
+    ("yu.edu", "yeshiva", "Yeshiva University", "Yeshiva", "#0033A0", "#FFFFFF", "#0033A0"),
+    ("american.edu", "american", "American University", "American", "#004FA3", "#D11242", "#D11242"),
+    ("baylor.edu", "baylor", "Baylor University", "Baylor", "#154734", "#FFB81C", "#154734"),
+    ("howard.edu", "howard", "Howard University", "Howard", "#003A70", "#E51937", "#003A70"),
+    ("marquette.edu", "marquette", "Marquette University", "Marquette", "#003366", "#FDB933", "#003366"),
+    ("rit.edu", "rit", "Rochester Institute of Technology", "RIT", "#F76902", "#000000", "#F76902"),
+    ("smu.edu", "smu", "Southern Methodist University", "SMU", "#0033A0", "#CC0035", "#CC0035"),
+    ("ucsc.edu", "uc-santa-cruz", "University of California, Santa Cruz", "UC Santa Cruz", "#003C6C", "#F2A900", "#003C6C"),
+    ("udel.edu", "delaware", "University of Delaware", "Delaware", "#00539F", "#FFD200", "#00539F"),
+    ("usf.edu", "south-florida", "University of South Florida", "USF", "#006747", "#CFC493", "#006747"),
+    ("fiu.edu", "fiu", "Florida International University", "FIU", "#081E3F", "#B6862C", "#081E3F"),
+    ("fordham.edu", "fordham", "Fordham University", "Fordham", "#900028", "#B9975B", "#900028"),
+    ("camden.rutgers.edu", "rutgers-camden", "Rutgers University-Camden", "Rutgers Camden", "#CC0033", "#5F6A72", "#CC0033"),
+    ("tcu.edu", "tcu", "Texas Christian University", "TCU", "#4D1979", "#A3A9AC", "#4D1979"),
+    ("colorado.edu", "colorado-boulder", "University of Colorado Boulder", "Colorado Boulder", "#CFB87C", "#000000", "#CFB87C"),
+)
+
+SCHOOL_THEME_EXTRAS: tuple[tuple[str, str, str, str, str, str, str], ...] = (
+    ("temple.edu", "temple", "Temple University", "Temple", "#9D2235", "#FFFFFF", "#222222"),
+    ("wcupa.edu", "west-chester", "West Chester University", "West Chester", "#4B116F", "#F2C75C", "#6F2DA8"),
+)
+
+SCHOOL_THEME_ASSET_OVERRIDES: dict[str, dict[str, str | None]] = {
+    "drexel.edu": {"image_file": "schools/drexel.webp"},
+    "temple.edu": {"image_file": "schools/temple.webp"},
+    "upenn.edu": {"image_file": "schools/upenn.webp", "card_image_file": "schools/upenn logo.webp"},
+    "wcupa.edu": {"image_file": "schools/west-chester.webp"},
 }
+
+
+def build_school_theme_map() -> dict[str, dict[str, str | None]]:
+    themes: dict[str, dict[str, str | None]] = {}
+
+    for domain, slug, name, short_name, primary, secondary, accent in SCHOOL_THEME_ROWS + SCHOOL_THEME_EXTRAS:
+        theme = {
+            "slug": slug,
+            "name": name,
+            "short_name": short_name,
+            "primary": primary,
+            "secondary": secondary,
+            "accent": accent,
+            "image_file": None,
+            "card_image_file": f"schools/badges/{slug}.webp",
+        }
+        theme.update(SCHOOL_THEME_ASSET_OVERRIDES.get(domain, {}))
+        themes[domain] = theme
+
+    return themes
+
+
+SCHOOL_THEMES = build_school_theme_map()
 
 DEFAULT_FILTERS: dict[str, Any] = {
     "celiac": False,
@@ -726,8 +789,12 @@ def get_school_theme_for_email(email: str | None) -> dict[str, str | None] | Non
     if not domain.endswith(".edu"):
         return None
 
-    for school_domain, theme in SCHOOL_THEMES.items():
-        if domain == school_domain or domain.endswith(f".{school_domain}"):
+    if domain in SCHOOL_THEMES:
+        return dict(SCHOOL_THEMES[domain], domain=domain, is_generated="false")
+
+    for school_domain in sorted(SCHOOL_THEMES, key=len, reverse=True):
+        theme = SCHOOL_THEMES[school_domain]
+        if domain.endswith(f".{school_domain}"):
             return dict(theme, domain=school_domain, is_generated="false")
 
     return build_generated_school_theme(domain)

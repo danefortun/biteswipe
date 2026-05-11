@@ -7,7 +7,7 @@ from uuid import uuid4
 from pathlib import Path
 
 from db import db
-from main import build_overpass_query, create_app, format_osm_place, get_school_theme_for_email
+from main import SCHOOL_THEMES, build_overpass_query, create_app, format_osm_place, get_school_theme_for_email
 from users_db import SavedRestaurant, Users
 
 
@@ -76,21 +76,27 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_school_theme_matches_edu_email_domains(self) -> None:
+        self.assertGreaterEqual(len(SCHOOL_THEMES), 100)
+
         theme = get_school_theme_for_email("student@drexel.edu")
         self.assertIsNotNone(theme)
         self.assertEqual(theme["slug"], "drexel")
         self.assertEqual(theme["short_name"], "Drexel")
         self.assertEqual(theme["image_file"], "schools/drexel.webp")
+        self.assertEqual(theme["card_image_file"], "schools/badges/drexel.webp")
 
         subdomain_theme = get_school_theme_for_email("student@mail.drexel.edu")
         self.assertIsNotNone(subdomain_theme)
         self.assertEqual(subdomain_theme["slug"], "drexel")
 
+        self.assertEqual(get_school_theme_for_email("student@princeton.edu")["card_image_file"], "schools/badges/princeton.webp")
+        self.assertEqual(get_school_theme_for_email("student@mit.edu")["card_image_file"], "schools/badges/mit.webp")
         self.assertEqual(get_school_theme_for_email("student@temple.edu")["image_file"], "schools/temple.webp")
         upenn_theme = get_school_theme_for_email("student@upenn.edu")
         self.assertEqual(upenn_theme["image_file"], "schools/upenn.webp")
         self.assertEqual(upenn_theme["card_image_file"], "schools/upenn logo.webp")
         self.assertEqual(get_school_theme_for_email("student@wcupa.edu")["image_file"], "schools/west-chester.webp")
+        self.assertEqual(get_school_theme_for_email("student@mail.newark.rutgers.edu")["slug"], "rutgers-newark")
 
         generated = get_school_theme_for_email("student@examplecollege.edu")
         self.assertIsNotNone(generated)
