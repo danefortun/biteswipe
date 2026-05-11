@@ -1063,16 +1063,15 @@ span.restaurant-website-link {
 
 .profile-hero {
   position: static;
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 28px;
-  align-items: stretch;
+  display: block;
   width: 100%;
   padding: 26px 0 30px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .profile-avatar-panel {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1081,8 +1080,8 @@ span.restaurant-website-link {
 }
 
 .profile-avatar-frame {
-  width: 220px;
-  height: 220px;
+  width: clamp(154px, 18vw, 220px);
+  height: clamp(154px, 18vw, 220px);
   padding: 10px;
   border: 1px solid color-mix(in srgb, var(--accent-color) 42%, transparent);
   border-radius: 50%;
@@ -1166,12 +1165,17 @@ span.restaurant-website-link {
   flex-direction: column;
   justify-content: center;
   min-width: 0;
+  width: 100%;
 }
 
 .profile-identity-banner {
   position: relative;
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: clamp(20px, 4vw, 44px);
+  align-items: center;
   min-height: 252px;
-  padding: 26px;
+  padding: clamp(22px, 3.2vw, 34px);
   border: 1px solid color-mix(in srgb, var(--accent-color) 24%, var(--border-color));
   border-radius: 10px;
   overflow: hidden;
@@ -1207,6 +1211,7 @@ span.restaurant-website-link {
 .profile-banner-content {
   position: relative;
   z-index: 1;
+  min-width: 0;
 }
 
 .profile-kicker,
@@ -1503,14 +1508,30 @@ span.restaurant-website-link {
 }
 
 @media (max-width: 860px) {
-  .profile-hero,
   .profile-layout,
   .interest-groups {
     grid-template-columns: 1fr;
   }
 
+  .profile-identity-banner {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
   .profile-avatar-panel {
-    align-items: flex-start;
+    align-items: center;
+  }
+
+  .profile-banner-content,
+  .profile-stats,
+  .profile-banner-upload {
+    width: 100%;
+  }
+
+  .name-display,
+  .profile-hero-edit-actions {
+    justify-content: center;
   }
 
   .profile-stats {

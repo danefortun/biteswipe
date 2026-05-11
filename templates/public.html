@@ -12,34 +12,34 @@
 
 <section class="profile-shell profile-shell-upgraded" aria-labelledby="profile-title">
   <header class="profile-hero">
-    <div class="profile-avatar-panel">
-      <div class="profile-avatar-frame">
-        <img
-          src="{{ url_for('static', filename='uploads/' + (u.pfp_file_path or 'transparentnewdefaultpicture.png')) }}"
-          alt="{{ u.name or 'Profile' }} picture"
-          class="profile-pic"
-          id="profilePreview">
-      </div>
-
-      <form method="POST" enctype="multipart/form-data" class="upload-form hero-edit-control">
-        <input type="hidden" name="action" value="upload_pic">
-        <label class="file-upload-label" for="profile-image">Update photo</label>
-        <input
-          id="profile-image"
-          type="file"
-          name="image"
-          accept=".gif,.jpeg,.jpg,.png,.webp,image/*"
-          required>
-        <button type="submit">Upload</button>
-      </form>
-    </div>
-
     <div class="profile-identity">
       <div
         class="profile-identity-banner{% if u.profile_banner_file_path %} has-banner-image{% endif %}"
         {% if u.profile_banner_file_path %}
           style="--profile-banner-image: url('{{ url_for('static', filename='uploads/' + u.profile_banner_file_path) }}')"
         {% endif %}>
+        <div class="profile-avatar-panel">
+          <div class="profile-avatar-frame">
+            <img
+              src="{{ url_for('static', filename='uploads/' + (u.pfp_file_path or 'transparentnewdefaultpicture.png')) }}"
+              alt="{{ u.name or 'Profile' }} picture"
+              class="profile-pic"
+              id="profilePreview">
+          </div>
+
+          <form method="POST" enctype="multipart/form-data" class="upload-form hero-edit-control">
+            <input type="hidden" name="action" value="upload_pic">
+            <label class="file-upload-label" for="profile-image">Update photo</label>
+            <input
+              id="profile-image"
+              type="file"
+              name="image"
+              accept=".gif,.jpeg,.jpg,.png,.webp,image/*"
+              required>
+            <button type="submit">Upload</button>
+          </form>
+        </div>
+
         <div class="profile-banner-content">
           <p class="profile-kicker">BiteSwipe profile</p>
 
