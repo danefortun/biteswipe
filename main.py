@@ -41,6 +41,7 @@ MAX_NAME_LENGTH = 32
 MAX_BIO_LENGTH = 256
 OSM_AMENITIES = ("restaurant", "fast_food", "cafe", "food_court")
 METERS_PER_MILE = 1609.344
+WALKING_SPEED_METERS_PER_MINUTE = 83
 
 ALLERGEN_FILTERS: dict[str, dict[str, str | tuple[str, ...]]] = {
     "celiac": {
@@ -1801,6 +1802,11 @@ def format_osm_place(
     name = tags.get("name") or tags.get("brand") or tags.get("operator") or place_type.title()
     cuisine = tags.get("cuisine")
     fallback_category = restaurant_fallback_image_category(cuisine, name, place_type)
+    distance = (
+        distance_meters(origin_latitude, origin_longitude, latitude, longitude)
+        if latitude is not None and longitude is not None
+        else None
+    )
 
     return {
         "name": name,
@@ -1819,9 +1825,8 @@ def format_osm_place(
         "website": normalize_website_url(tags.get("website") or tags.get("contact:website")),
         "is_open": None,
         "opening_hours_text": tags.get("opening_hours"),
-        "distance_meters": distance_meters(origin_latitude, origin_longitude, latitude, longitude)
-        if latitude is not None and longitude is not None
-        else None,
+        "distance_meters": distance,
+        "walking_minutes": walking_minutes_from_meters(distance),
     }
 
 
@@ -1851,6 +1856,14 @@ def distance_meters(
     a = sin(delta_lat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(delta_lon / 2) ** 2
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return round(earth_radius_meters * c, 1)
+
+
+def walking_minutes_from_meters(meters: Any) -> int | None:
+    distance = normalize_optional_float(meters)
+    if distance is None:
+        return None
+
+    return max(1, round(distance / WALKING_SPEED_METERS_PER_MINUTE))
 
 
 def format_google_place(place: dict[str, Any], api_key: str) -> dict[str, Any]:
@@ -1884,6 +1897,7 @@ def format_google_place(place: dict[str, Any], api_key: str) -> dict[str, Any]:
         "is_open": opening_hours.get("openNow"),
         "opening_hours_text": "; ".join(weekday_descriptions[:2]) if weekday_descriptions else None,
         "distance_meters": None,
+        "walking_minutes": None,
     }
 
 

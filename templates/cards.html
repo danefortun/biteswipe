@@ -596,7 +596,7 @@ function renderDailyBite(restaurant) {
     }
 
     title.textContent = restaurant.name || "Today's pick";
-    meta.textContent = [formatDistance(restaurant.distance_meters), formatCuisine(restaurant.cuisine), restaurant.price_text || formatPriceLevel(restaurant.price_level)].filter(Boolean).join(" - ");
+    meta.textContent = [formatWalkingTime(restaurant), formatCuisine(restaurant.cuisine), restaurant.price_text || formatPriceLevel(restaurant.price_level)].filter(Boolean).join(" - ");
     const confidence = formatBiteConfidence(restaurant);
     const affinity = scoreTasteAffinity(restaurant);
     reason.textContent = [confidence, affinity > 0 ? `+${affinity} from your taste profile` : "", buildRestaurantMemoryText(restaurant)].filter(Boolean).join(" - ");
@@ -685,7 +685,7 @@ function updateDeckHistoryPanel() {
         item.appendChild(title);
 
         const meta = document.createElement("span");
-        meta.textContent = [formatDistance(restaurant.distance_meters), formatCuisine(restaurant.cuisine)].filter(Boolean).join(" - ") || "Passed pick";
+        meta.textContent = [formatWalkingTime(restaurant), formatCuisine(restaurant.cuisine)].filter(Boolean).join(" - ") || "Passed pick";
         item.appendChild(meta);
 
         const actions = document.createElement("div");
@@ -816,7 +816,7 @@ function rememberRestaurantDecision(action, restaurant) {
     current.lastActionAt = new Date().toISOString();
     current.cuisine = formatCuisine(restaurant?.cuisine);
     current.price = restaurant?.price_text || formatPriceLevel(restaurant?.price_level);
-    current.distance = formatDistance(restaurant?.distance_meters);
+    current.distance = formatWalkingTime(restaurant);
 
     if (action === "save") {
         current.saveCount = Number(current.saveCount || 0) + 1;
@@ -1555,7 +1555,7 @@ function buildCardChips(result) {
     [
         formatBiteConfidence(result),
         formatAllergyConfidence(result),
-        formatDistance(result.distance_meters),
+        formatWalkingTime(result),
         result.price_text || formatPriceLevel(result.price_level),
         formatOpenStatus(result),
         formatCuisine(result.cuisine),
@@ -1585,7 +1585,7 @@ function buildCardBack(result) {
     addDetail(detailList, "Cost", result.price_text || formatPriceLevel(result.price_level));
     addDetail(detailList, "Hours", result.opening_hours_text || formatOpenStatus(result));
     addDetail(detailList, "Address", result.address);
-    addDetail(detailList, "Distance", formatDistance(result.distance_meters));
+    addDetail(detailList, "Walk", formatWalkingTime(result));
     addDetail(detailList, "BiteSwipe score", formatBiteConfidence(result, true));
     addDetail(detailList, "Your history", buildRestaurantMemoryText(result));
     addDetail(detailList, "Allergy confidence", formatAllergyConfidence(result, true));
@@ -1691,7 +1691,7 @@ function getMatchReasons(result) {
         reasons.push(memoryText.replace(".", ""));
     }
 
-    const distance = formatDistance(result.distance_meters);
+    const distance = formatWalkingTime(result);
     const cuisine = formatCuisine(result.cuisine);
     const rating = Number(result.rating);
     const price = result.price_text || formatPriceLevel(result.price_level);
@@ -1843,15 +1843,26 @@ function formatPriceLevel(value) {
     return "$".repeat(Math.min(level, 4));
 }
 
-function formatDistance(value) {
+function formatWalkingTime(resultOrMeters) {
+    const explicitMinutes = Number(resultOrMeters?.walking_minutes);
+    if (Number.isFinite(explicitMinutes) && explicitMinutes > 0) {
+        const rounded = Math.max(1, Math.round(explicitMinutes));
+        return `${rounded} min walk`;
+    }
+
+    const value = typeof resultOrMeters === "object" ? resultOrMeters?.distance_meters : resultOrMeters;
     const meters = Number(value);
 
     if (!Number.isFinite(meters)) {
         return null;
     }
 
-    const miles = meters / 1609.344;
-    return miles < 0.1 ? "Very close" : `${miles.toFixed(1)} mi away`;
+    const minutes = Math.max(1, Math.round(meters / 83));
+    return `${minutes} min walk`;
+}
+
+function formatDistance(value) {
+    return formatWalkingTime(value);
 }
 
 function formatOnlineRating(result) {
@@ -1943,7 +1954,7 @@ function updateCurrentCardMeta() {
 
     const parts = [
         result.name,
-        formatDistance(result.distance_meters),
+        formatWalkingTime(result),
         formatShortRating(result),
     ].filter(Boolean);
     label.textContent = parts.join(" - ");

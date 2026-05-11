@@ -515,6 +515,7 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertEqual(place["source"], "openstreetmap")
         self.assertEqual(place["photo_source"], "biteswipe_fallback")
         self.assertIn("restaurant-fallbacks/general.webp", place["photo"])
+        self.assertEqual(place["walking_minutes"], 1)
         self.assertIn("Market St", place["address"])
 
         with self.app.test_request_context():
@@ -559,6 +560,7 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertIn("places.googleapis.com", live_photo["photo"])
         self.assertEqual(fallback_photo["photo_source"], "biteswipe_fallback")
         self.assertIn("restaurant-fallbacks/mexican.webp", fallback_photo["photo"])
+        self.assertIsNone(fallback_photo["walking_minutes"])
 
     def test_save_restaurant_sends_card_to_my_stuff(self) -> None:
         self.login()
