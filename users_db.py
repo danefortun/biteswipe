@@ -15,6 +15,7 @@ class Users(db.Model):
     bio = db.Column(db.String(256), default="this is a placeholder!")
     pfp_file_path = db.Column(db.String(255), default="transparentnewdefaultpicture.png")
     profile_banner_file_path = db.Column(db.String(255))
+    profile_showcase_file_path = db.Column(db.String(255))
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
     campus_theme_domain = db.Column(db.String(255))

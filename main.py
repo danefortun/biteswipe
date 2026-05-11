@@ -357,6 +357,7 @@ def ensure_user_interest_columns() -> None:
     column_names = get_table_column_names("users")
     required_columns = {
         "profile_banner_file_path": "VARCHAR(255)",
+        "profile_showcase_file_path": "VARCHAR(255)",
         "campus_theme_domain": "VARCHAR(255)",
         "allergen_interests_json": "TEXT DEFAULT '[]'",
         "food_preferences_json": "TEXT DEFAULT '[]'",
@@ -457,6 +458,8 @@ def register_routes(app: Flask) -> None:
                 handle_profile_picture_upload(user)
             elif action == "upload_banner":
                 handle_profile_banner_upload(user)
+            elif action == "upload_showcase":
+                handle_profile_showcase_upload(user)
             elif action == "update_bio":
                 update_user_bio(user)
             elif action == "update_name":
@@ -987,6 +990,19 @@ def handle_profile_banner_upload(user: Users) -> None:
         invalid_message="Profile banners must be GIF, JPEG, PNG, or WebP images.",
         success_message="Profile banner updated.",
         error_message="Unable to save profile banner. Please try again.",
+    )
+
+
+def handle_profile_showcase_upload(user: Users) -> None:
+    upload_profile_image(
+        user=user,
+        request_field="showcase_image",
+        file_prefix="user-showcase",
+        user_field="profile_showcase_file_path",
+        missing_message="Choose a showcase image before uploading.",
+        invalid_message="Showcase images must be GIF, JPEG, PNG, or WebP images.",
+        success_message="Profile showcase image updated.",
+        error_message="Unable to save profile showcase image. Please try again.",
     )
 
 

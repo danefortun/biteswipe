@@ -225,6 +225,26 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertIn(b"profile-identity-banner has-banner-image", response.data)
         self.assertIn(b"user-banner-", response.data)
 
+    def test_profile_showcase_upload_updates_side_image(self) -> None:
+        self.login()
+
+        response = self.client.post(
+            "/profile",
+            data={
+                "action": "upload_showcase",
+                "showcase_image": (BytesIO(b"showcase-image"), "showcase.gif"),
+            },
+            content_type="multipart/form-data",
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+
+        response = self.client.get("/profile")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"profile-showcase-card", response.data)
+        self.assertIn(b"user-showcase-", response.data)
+        self.assertIn(b"profile-showcase-upload-btn", response.data)
+
     def test_chat_posts_return_user_names(self) -> None:
         self.login()
         response = self.client.post("/chat", data={"message": "hello"}, follow_redirects=False)

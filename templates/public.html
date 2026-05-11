@@ -115,26 +115,51 @@
     </div>
   </header>
 
-  <div class="profile-action-strip" aria-label="Profile quick actions">
-    <a href="{{ url_for('home') }}">Open card deck</a>
-    <a href="{{ url_for('credits') }}">Review saved picks</a>
-    <button type="button" onclick="toggleFooterPanel('filters')">Edit filters</button>
-    <button type="button" onclick="toggleFooterPanel('interests')">Edit interests</button>
-    <form method="POST" class="campus-mode-form">
-      <input type="hidden" name="action" value="update_campus_theme">
-      <label for="campus-theme-domain">
-        <span>Campus mode</span>
-        <strong>{{ (school_theme.short_name if school_theme else 'BiteSwipe') }} deck theme</strong>
-      </label>
-      <div>
-        <select id="campus-theme-domain" name="campus_theme_domain">
-          <option value="">Auto from .edu{% if detected_school_theme %} ({{ detected_school_theme.short_name }}){% endif %}</option>
-          {% for option in school_theme_options %}
-            <option value="{{ option.domain }}" {% if option.domain == selected_campus_theme_domain %}selected{% endif %}>{{ option.name }}</option>
-          {% endfor %}
-        </select>
-        <button type="submit">Save</button>
+  <div class="profile-tools-layout">
+    <div class="profile-action-strip" aria-label="Profile quick actions">
+      <a href="{{ url_for('home') }}">Open card deck</a>
+      <a href="{{ url_for('credits') }}">Review saved picks</a>
+      <button type="button" onclick="toggleFooterPanel('filters')">Edit filters</button>
+      <button type="button" onclick="toggleFooterPanel('interests')">Edit interests</button>
+      <form method="POST" class="campus-mode-form">
+        <input type="hidden" name="action" value="update_campus_theme">
+        <label for="campus-theme-domain">
+          <span>Campus mode</span>
+          <strong>{{ (school_theme.short_name if school_theme else 'BiteSwipe') }} deck theme</strong>
+        </label>
+        <div>
+          <select id="campus-theme-domain" name="campus_theme_domain">
+            <option value="">Auto from .edu{% if detected_school_theme %} ({{ detected_school_theme.short_name }}){% endif %}</option>
+            {% for option in school_theme_options %}
+              <option value="{{ option.domain }}" {% if option.domain == selected_campus_theme_domain %}selected{% endif %}>{{ option.name }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data" class="profile-showcase-card" aria-label="Profile showcase image">
+      <input type="hidden" name="action" value="upload_showcase">
+      <div class="profile-showcase-frame">
+        {% if u.profile_showcase_file_path %}
+          <img
+            src="{{ url_for('static', filename='uploads/' + u.profile_showcase_file_path) }}"
+            alt="{{ u.name or 'Profile' }} showcase"
+            id="profileShowcasePreview">
+        {% else %}
+          <div class="profile-showcase-placeholder" id="profileShowcasePreview" aria-hidden="true">
+            <span>BiteSwipe</span>
+          </div>
+        {% endif %}
+        <label class="profile-showcase-edit" for="profile-showcase-image" aria-label="Edit profile showcase image">✎</label>
       </div>
+      <input
+        id="profile-showcase-image"
+        type="file"
+        name="showcase_image"
+        accept=".gif,.jpeg,.jpg,.png,.webp,image/*">
+      <button type="submit" id="profile-showcase-upload-btn" hidden>Upload</button>
     </form>
   </div>
 
@@ -365,6 +390,32 @@ document.getElementById("profile-banner-image")?.addEventListener("change", (eve
   if (!file || !banner) return;
   banner.style.setProperty("--profile-banner-image", `url("${URL.createObjectURL(file)}")`);
   banner.classList.add("has-banner-image");
+});
+
+document.getElementById("profile-showcase-image")?.addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  const uploadButton = document.getElementById("profile-showcase-upload-btn");
+  const preview = document.getElementById("profileShowcasePreview");
+
+  if (!file) {
+    if (uploadButton) uploadButton.hidden = true;
+    return;
+  }
+
+  if (uploadButton) uploadButton.hidden = false;
+
+  if (preview) {
+    const src = URL.createObjectURL(file);
+    if (preview.tagName === "IMG") {
+      preview.src = src;
+    } else {
+      const image = document.createElement("img");
+      image.id = "profileShowcasePreview";
+      image.alt = "Selected profile showcase";
+      image.src = src;
+      preview.replaceWith(image);
+    }
+  }
 });
 
 function settleProfileCompletionCard() {
