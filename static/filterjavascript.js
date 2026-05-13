@@ -75,7 +75,7 @@ function getFilters() {
 
   const distance = document.getElementById("myRange");
 
-  filters.distance = distance ? Number(distance.value) : 50;
+  filters.distance = distance ? Number(distance.value) : 2;
   filters.foodPreferences = getCheckedValues("foodPreferences");
   filters.hobbyInterests = getCheckedValues("hobbyInterests");
 

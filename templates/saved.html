@@ -152,7 +152,7 @@
                 Directions
               </a>
               <button type="button" onclick="copySingleSavedRestaurant(this)">Copy</button>
-              <form method="POST" action="{{ url_for('remove_restaurant', restaurant_id=restaurant.id) }}" onsubmit="return confirm('Remove {{ restaurant.name }} from Saved picks?')">
+              <form method="POST" action="{{ url_for('remove_restaurant', restaurant_id=restaurant.id) }}" onsubmit="return confirmRemoveSavedRestaurant(this)" data-restaurant-name="{{ restaurant.name }}">
                 <button type="submit" class="saved-remove">Remove</button>
               </form>
             </div>
@@ -169,10 +169,10 @@
     <div class="empty-stuff empty-stuff-upgraded">
       <img src="{{ url_for('static', filename='biteswipe.png') }}" alt="BiteSwipe">
       <p class="my-stuff-kicker">Start your board</p>
-      <h2>No saved bites yet</h2>
-      <p>Head back to Cards and press Save on a restaurant. Your picks will show up here for sorting, notes, and group decisions.</p>
+      <h2>You haven't saved anything yet</h2>
+      <p>Nothing is broken. Head back to the deck, swipe through nearby options, and press Save on anything you would actually eat.</p>
       <div class="empty-actions">
-        <a href="{{ url_for('home') }}">Browse cards</a>
+        <a href="{{ url_for('home') }}">Go swipe</a>
         <button type="button" onclick="toggleFooterPanel('filters', event)">Set filters first</button>
       </div>
     </div>
@@ -186,6 +186,11 @@ function getVisibleSavedCards() {
 
 function getSavedNoteStorageKey(card) {
   return `biteswipe.savedNote.${card.dataset.placeId || card.dataset.name || "unknown"}`;
+}
+
+function confirmRemoveSavedRestaurant(form) {
+  const name = form?.dataset.restaurantName || "this saved pick";
+  return window.confirm(`Remove ${name} from Saved picks?`);
 }
 
 function updateSavedResultCount() {

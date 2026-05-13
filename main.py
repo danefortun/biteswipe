@@ -33,7 +33,15 @@ from werkzeug.utils import secure_filename
 from blog_db import BlogPosts
 from config import Config
 from db import db, migrate
-from users_db import GroupSwipeMember, GroupSwipeSession, GroupSwipeVote, SavedRestaurant, UserInterest, Users
+from users_db import (
+    GroupSwipeMember,
+    GroupSwipeSession,
+    GroupSwipeVote,
+    SavedRestaurant,
+    UserInterest,
+    UserRestaurantRating,
+    Users,
+)
 
 
 ALLOWED_UPLOAD_EXTENSIONS = {"gif", "jpeg", "jpg", "png", "webp"}
@@ -313,7 +321,7 @@ DEFAULT_FILTERS: dict[str, Any] = {
     "cheapPrice": False,
     "mediumPrice": False,
     "expensivePrice": False,
-    "distance": 50,
+    "distance": 2,
     "openNow": False,
     "foodPreferences": [],
     "hobbyInterests": [],
@@ -364,6 +372,7 @@ def ensure_user_interest_columns() -> None:
         "profile_banner_file_path": "VARCHAR(255)",
         "profile_showcase_file_path": "VARCHAR(255)",
         "campus_theme_domain": "VARCHAR(255)",
+        "transportation_mode": "VARCHAR(16)",
         "allergen_interests_json": "TEXT DEFAULT '[]'",
         "food_preferences_json": "TEXT DEFAULT '[]'",
         "hobby_interests_json": "TEXT DEFAULT '[]'",
@@ -732,6 +741,7 @@ def register_routes(app: Flask) -> None:
             filtered_places = apply_distance_filter(places, filters)
             message = "No exact filter matches found, so showing nearby restaurants instead."
 
+        annotate_travel_times(filtered_places, user.transportation_mode)
         annotate_restaurant_confidence(filtered_places, filters)
         return jsonify({"places": filtered_places, "source": source, "message": message})
 
@@ -848,6 +858,61 @@ def register_routes(app: Flask) -> None:
         db.session.commit()
         flash(f"Removed {saved.name} from My Stuff.")
         return redirect(url_for("credits"))
+
+    @app.get("/user_ratings")
+    @login_required
+    def user_ratings() -> Any:
+        user_id = session.get("id")
+        ratings = (
+            UserRestaurantRating.query.filter_by(user_id=user_id).all()
+            if user_id
+            else []
+        )
+        return jsonify({"ratings": {row.place_id: row.rating for row in ratings}})
+
+    @app.post("/user_rating")
+    @login_required
+    def user_rating() -> Any:
+        user = current_user()
+        if user is None:
+            abort(401)
+
+        payload = request.get_json(silent=True) or {}
+        place_id = normalize_optional_string(payload.get("place") or payload.get("place_id") or payload.get("name"), 255)
+        rating = normalize_optional_int(payload.get("rating"))
+
+        if not place_id or rating is None or rating < 1 or rating > 5:
+            return jsonify({"ok": False, "message": "Choose a 1-5 star rating."}), 400
+
+        saved_rating = UserRestaurantRating.query.filter_by(user_id=user.id, place_id=place_id).first()
+        if saved_rating is None:
+            saved_rating = UserRestaurantRating(user_id=user.id, place_id=place_id, rating=rating)
+            db.session.add(saved_rating)
+        else:
+            saved_rating.update_rating(rating)
+
+        db.session.commit()
+        return jsonify({"ok": True, "place": place_id, "rating": saved_rating.rating})
+
+    @app.post("/save_transportation")
+    @login_required
+    def save_transportation() -> Any:
+        user = current_user()
+        if user is None:
+            abort(401)
+
+        payload = request.get_json(silent=True) or {}
+        mode = str(payload.get("mode", "")).strip().lower()
+        if mode not in {"walking", "driving", "both"}:
+            return jsonify({"ok": False, "message": "Choose walking, driving, or both."}), 400
+
+        user.transportation_mode = mode
+        filters = sanitize_filters(session.get("filters") or filters_from_user_interests(user))
+        filters["distance"] = 1 if mode == "walking" else 10
+        session["filters"] = filters
+        db.session.commit()
+
+        return jsonify({"ok": True, "mode": mode, "filters": filters})
 
     @app.post("/save_filters")
     def save_filters() -> Any:
@@ -2134,6 +2199,7 @@ def format_osm_place(
         "opening_hours_text": tags.get("opening_hours"),
         "distance_meters": distance,
         "walking_minutes": walking_minutes_from_meters(distance),
+        "driving_minutes": driving_minutes_from_meters(distance),
     }
 
 
@@ -2173,6 +2239,24 @@ def walking_minutes_from_meters(meters: Any) -> int | None:
     return max(1, round(distance / WALKING_SPEED_METERS_PER_MINUTE))
 
 
+def driving_minutes_from_meters(meters: Any) -> int | None:
+    distance = normalize_optional_float(meters)
+    if distance is None:
+        return None
+
+    return max(2, round(distance / 800))
+
+
+def annotate_travel_times(places: list[dict[str, Any]], transportation_mode: str | None) -> None:
+    mode = transportation_mode if transportation_mode in {"walking", "driving", "both"} else "walking"
+
+    for place in places:
+        distance = place.get("distance_meters")
+        place["walking_minutes"] = walking_minutes_from_meters(distance)
+        place["driving_minutes"] = driving_minutes_from_meters(distance)
+        place["transportation_mode"] = mode
+
+
 def format_google_place(place: dict[str, Any], api_key: str) -> dict[str, Any]:
     display_name = place.get("displayName") or {}
     photos = place.get("photos") or []
@@ -2205,6 +2289,7 @@ def format_google_place(place: dict[str, Any], api_key: str) -> dict[str, Any]:
         "opening_hours_text": "; ".join(weekday_descriptions[:2]) if weekday_descriptions else None,
         "distance_meters": None,
         "walking_minutes": None,
+        "driving_minutes": None,
     }
 
 

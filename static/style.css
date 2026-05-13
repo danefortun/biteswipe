@@ -2037,6 +2037,7 @@ span.restaurant-website-link {
   height: 100%;
   border-radius: 30px;
   transition: transform 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+  touch-action: pan-y;
   will-change: transform;
 }
 
@@ -2233,6 +2234,83 @@ span.restaurant-website-link {
   color: var(--surface-text-color);
   font-size: 13px;
   box-shadow: none;
+}
+
+.transportation-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(8, 20, 18, 0.34);
+  backdrop-filter: blur(10px);
+}
+
+.transportation-prompt[hidden] {
+  display: none;
+}
+
+.transportation-card {
+  width: min(520px, 94vw);
+  padding: 24px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 34%, var(--border-color));
+  border-radius: 28px;
+  background: var(--surface-color);
+  color: var(--surface-text-color);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.3);
+}
+
+.transportation-card h2 {
+  margin: 4px 0 8px;
+  font-size: clamp(28px, 5vw, 42px);
+  line-height: 0.98;
+}
+
+.transportation-card p:not(.cards-kicker) {
+  margin: 0;
+  color: var(--surface-muted-color);
+  line-height: 1.45;
+}
+
+.transportation-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.transportation-actions button {
+  min-height: 104px;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface-color) 80%, var(--accent-soft-color));
+  color: var(--surface-text-color);
+  text-align: left;
+  cursor: pointer;
+}
+
+.transportation-actions button:hover,
+.transportation-actions button:focus-visible {
+  border-color: color-mix(in srgb, var(--accent-color) 58%, transparent);
+  background: var(--accent-soft-color);
+  outline: none;
+}
+
+.transportation-actions strong,
+.transportation-actions span {
+  display: block;
+}
+
+.transportation-actions strong {
+  color: var(--accent-color);
+  font-size: 16px;
+}
+
+.transportation-actions span {
+  margin-top: 6px;
+  font-size: 13px;
 }
 
 .arrow {
@@ -2720,6 +2798,10 @@ body.footer-panel-open::before {
 }
 
 @media (max-width: 560px) {
+  .transportation-actions {
+    grid-template-columns: 1fr;
+  }
+
   .dropup-content {
     position: fixed;
     left: 10px;

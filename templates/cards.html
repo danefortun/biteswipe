@@ -4,6 +4,8 @@
 <script>
 const RESTAURANT_STACK_STORAGE_VERSION = 3;
 const restaurantCardStorageUser = {{ session.get("id", "guest") | tojson }};
+window.userTransportationMode = {{ (template_user.transportation_mode if template_user else "") | tojson }};
+window.serverRestaurantRatings = {};
 window.restaurantCardStorageKey = `biteswipe.restaurantStack.${restaurantCardStorageUser}`;
 window.restaurantRatingStorageKey = `biteswipe.userRatings.${restaurantCardStorageUser}`;
 window.restaurantStatsStorageKey = `biteswipe.deckStats.${restaurantCardStorageUser}`;
@@ -293,7 +295,7 @@ function getActiveFilterLabels() {
     });
 
     const slider = document.getElementById("myRange");
-    if (slider && Number(slider.value) !== 50) {
+    if (slider && Number(slider.value) !== 2) {
         labels.unshift(`${slider.value} mi radius`);
     }
 
@@ -1282,7 +1284,7 @@ async function clearRestaurantFilters() {
         mediumPrice: false,
         expensivePrice: false,
         openNow: false,
-        distance: 50,
+        distance: 2,
         foodPreferences: [],
         hobbyInterests: typeof getCheckedValues === "function" ? getCheckedValues("hobbyInterests") : [],
     };
@@ -1303,8 +1305,8 @@ async function clearRestaurantFilters() {
         const slider = document.getElementById("myRange");
         const distanceValue = document.getElementById("distanceValue");
         if (slider && distanceValue) {
-            slider.value = 50;
-            distanceValue.textContent = "50";
+            slider.value = 2;
+            distanceValue.textContent = "2";
         }
 
         if (typeof updateFooterFilterCounts === "function") {
@@ -1585,7 +1587,7 @@ function buildCardBack(result) {
     addDetail(detailList, "Cost", getRestaurantPrice(result));
     addDetail(detailList, "Hours", result.opening_hours_text || formatOpenStatus(result));
     addDetail(detailList, "Address", result.address);
-    addDetail(detailList, "Walk", formatWalkingTime(result));
+    addDetail(detailList, "Travel", formatWalkingTime(result));
     addDetail(detailList, "BiteSwipe score", formatBiteConfidence(result, true));
     addDetail(detailList, "Your history", buildRestaurantMemoryText(result));
     addDetail(detailList, "Allergy confidence", formatAllergyConfidence(result, true));
@@ -1784,13 +1786,54 @@ function getUserRating(result) {
     return Number(ratings[getRestaurantRatingKey(result)] || 0);
 }
 
+async function loadUserRatings() {
+    try {
+        const response = await fetch("/user_ratings");
+        const data = await response.json();
+        window.serverRestaurantRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
+        await migrateLocalUserRatingsToServer();
+    } catch (error) {
+        window.serverRestaurantRatings = {};
+    }
+}
+
+async function migrateLocalUserRatingsToServer() {
+    const localRatings = readLocalUserRatings();
+    const entries = Object.entries(localRatings).filter(([key]) => !window.serverRestaurantRatings[key]);
+
+    await Promise.all(entries.slice(0, 40).map(([place, rating]) => {
+        return fetch("/user_rating", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ place, rating }),
+        }).catch(() => null);
+    }));
+}
+
 function saveUserRating(result, rating) {
+    const key = getRestaurantRatingKey(result);
     const ratings = readUserRatings();
-    ratings[getRestaurantRatingKey(result)] = rating;
+    ratings[key] = rating;
+    window.serverRestaurantRatings[key] = rating;
     localStorage.setItem(window.restaurantRatingStorageKey, JSON.stringify(ratings));
+
+    fetch("/user_rating", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ place: key, name: result?.name, rating }),
+    }).catch(() => {
+        setRestaurantStatus("Rating saved on this browser. It will sync when the connection works.");
+    });
 }
 
 function readUserRatings() {
+    return {
+        ...readLocalUserRatings(),
+        ...(window.serverRestaurantRatings || {}),
+    };
+}
+
+function readLocalUserRatings() {
     try {
         return JSON.parse(localStorage.getItem(window.restaurantRatingStorageKey) || "{}");
     } catch (error) {
@@ -1862,20 +1905,46 @@ function getRestaurantPrice(result) {
 
 function formatWalkingTime(resultOrMeters) {
     const explicitMinutes = Number(resultOrMeters?.walking_minutes);
-    if (Number.isFinite(explicitMinutes) && explicitMinutes > 0) {
-        const rounded = Math.max(1, Math.round(explicitMinutes));
-        return `${rounded} min walk`;
-    }
-
     const value = typeof resultOrMeters === "object" ? resultOrMeters?.distance_meters : resultOrMeters;
     const meters = Number(value);
+
+    if (!Number.isFinite(explicitMinutes) && !Number.isFinite(meters)) {
+        return null;
+    }
+
+    const walkMinutes = Number.isFinite(explicitMinutes) && explicitMinutes > 0
+        ? Math.max(1, Math.round(explicitMinutes))
+        : Math.max(1, Math.round(meters / 83));
+    const driveMinutes = formatDrivingMinutes(resultOrMeters, meters);
+    const miles = Number.isFinite(meters) ? meters / 1609.344 : 0;
+    const mode = resultOrMeters?.transportation_mode || window.userTransportationMode || "walking";
+
+    if (mode === "driving") {
+        return driveMinutes ? `${driveMinutes} min drive` : `${walkMinutes} min walk`;
+    }
+
+    if (mode === "both" && miles > 1.1 && driveMinutes) {
+        return `${walkMinutes} min walk / ${driveMinutes} min drive`;
+    }
+
+    return `${walkMinutes} min walk`;
+}
+
+function formatDrivingMinutes(resultOrMeters, metersFallback) {
+    const explicitMinutes = Number(resultOrMeters?.driving_minutes);
+    if (Number.isFinite(explicitMinutes) && explicitMinutes > 0) {
+        return Math.max(2, Math.round(explicitMinutes));
+    }
+
+    const meters = Number.isFinite(metersFallback)
+        ? metersFallback
+        : Number(typeof resultOrMeters === "object" ? resultOrMeters?.distance_meters : resultOrMeters);
 
     if (!Number.isFinite(meters)) {
         return null;
     }
 
-    const minutes = Math.max(1, Math.round(meters / 83));
-    return `${minutes} min walk`;
+    return Math.max(2, Math.round(meters / 800));
 }
 
 function formatDistance(value) {
@@ -2039,13 +2108,61 @@ function updateCardProgress() {
     }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function setupTransportationPrompt() {
+    const prompt = document.getElementById("transportationPrompt");
+    if (!prompt || window.userTransportationMode) {
+        return;
+    }
+
+    prompt.hidden = false;
+}
+
+async function chooseTransportationMode(mode) {
+    try {
+        const response = await fetch("/save_transportation", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode }),
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            setRestaurantStatus(data.message || "Unable to save transportation mode.");
+            return;
+        }
+
+        window.userTransportationMode = data.mode;
+        document.getElementById("transportationPrompt")?.setAttribute("hidden", "");
+
+        const slider = document.getElementById("myRange");
+        const distanceValue = document.getElementById("distanceValue");
+        if (slider && data.filters?.distance) {
+            slider.value = data.filters.distance;
+        }
+        if (distanceValue && data.filters?.distance) {
+            distanceValue.textContent = String(data.filters.distance);
+        }
+
+        if (typeof updateFooterFilterCounts === "function") {
+            updateFooterFilterCounts();
+        }
+        updateActiveFilterSummary();
+        clearCachedRestaurantStack?.();
+        showBiteToast(mode === "walking" ? "Walking mode set" : mode === "driving" ? "Driving mode set" : "Walk and drive mode set", "success");
+    } catch (error) {
+        setRestaurantStatus("Unable to save transportation mode right now.");
+    }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
     restoreDeckCoach();
     setupDraggableGroupPanel();
+    await loadUserRatings();
     restoreRestaurantCardStack();
     updateSessionStats();
     updateActiveFilterSummary();
     updateDeckHistoryPanel();
+    setupTransportationPrompt();
     refreshGroupSession().then(() => {
         if (window.activeGroupSession) {
             startGroupStatusPolling();
@@ -2053,6 +2170,28 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 </script>
+
+<aside class="transportation-prompt" id="transportationPrompt" hidden aria-label="Choose usual transportation">
+  <div class="transportation-card">
+    <p class="cards-kicker">First deck setup</p>
+    <h2>How do you usually get food?</h2>
+    <p>We will tune your first radius and travel labels so BiteSwipe feels campus-accurate right away.</p>
+    <div class="transportation-actions">
+      <button type="button" onclick="chooseTransportationMode('walking')">
+        <strong>Walking</strong>
+        <span>1 mile radius</span>
+      </button>
+      <button type="button" onclick="chooseTransportationMode('driving')">
+        <strong>Driving</strong>
+        <span>10 mile radius</span>
+      </button>
+      <button type="button" onclick="chooseTransportationMode('both')">
+        <strong>Both</strong>
+        <span>Walk nearby, drive farther</span>
+      </button>
+    </div>
+  </div>
+</aside>
 
 <section class="cards-page-shell" aria-label="BiteSwipe restaurant card deck">
   <div class="cards-hero">

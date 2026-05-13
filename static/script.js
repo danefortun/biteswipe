@@ -4,6 +4,8 @@ let pointerStartX = 0;
 let pointerCurrentX = 0;
 let pointerStartY = 0;
 let isDraggingCard = false;
+let touchStartX = 0;
+let touchStartY = 0;
 
 function swipeLeft() {
   const currentRestaurant = getCurrentRestaurant();
@@ -278,6 +280,79 @@ function handleCardPointerEnd(event) {
     return;
   }
 
+  window.lastCardSwipeAt = Date.now();
+  window.cardDragLock = true;
+  window.setTimeout(() => {
+    window.cardDragLock = false;
+  }, 0);
+
+  if (deltaX > 0) {
+    swipeRight();
+  } else {
+    swipeLeft();
+  }
+}
+
+function handleCardTouchStart(event) {
+  if (!cards || event.target.closest("a, button, input, label, textarea, select")) {
+    return;
+  }
+
+  const touch = event.changedTouches[0];
+  if (!touch || !getCurrentRestaurant()) {
+    return;
+  }
+
+  touchStartX = touch.clientX;
+  touchStartY = touch.clientY;
+}
+
+function handleCardTouchMove(event) {
+  if (!cards || !touchStartX) {
+    return;
+  }
+
+  const touch = event.changedTouches[0];
+  if (!touch) {
+    return;
+  }
+
+  const deltaX = touch.clientX - touchStartX;
+  const deltaY = touch.clientY - touchStartY;
+
+  if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 12) {
+    event.preventDefault();
+    cards.classList.add("is-dragging");
+    cards.style.setProperty("--drag-x", `${deltaX}px`);
+    cards.style.setProperty("--drag-rotate", `${Math.max(Math.min(deltaX / 18, 10), -10)}deg`);
+  }
+}
+
+function handleCardTouchEnd(event) {
+  if (!cards || !touchStartX) {
+    return;
+  }
+
+  const touch = event.changedTouches[0];
+  const deltaX = touch ? touch.clientX - touchStartX : 0;
+  const deltaY = touch ? touch.clientY - touchStartY : 0;
+  const wasSwipe = Math.abs(deltaX) > 70 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25;
+
+  touchStartX = 0;
+  touchStartY = 0;
+  cards.classList.remove("is-dragging");
+  cards.style.removeProperty("--drag-x");
+  cards.style.removeProperty("--drag-rotate");
+
+  if (!wasSwipe) {
+    return;
+  }
+
+  if (Date.now() - Number(window.lastCardSwipeAt || 0) < 500) {
+    return;
+  }
+
+  window.lastCardSwipeAt = Date.now();
   window.cardDragLock = true;
   window.setTimeout(() => {
     window.cardDragLock = false;
@@ -319,6 +394,9 @@ if (cards) {
   cards.addEventListener("pointermove", handleCardPointerMove);
   cards.addEventListener("pointerup", handleCardPointerEnd);
   cards.addEventListener("pointercancel", handleCardPointerEnd);
+  cards.addEventListener("touchstart", handleCardTouchStart, { passive: true });
+  cards.addEventListener("touchmove", handleCardTouchMove, { passive: false });
+  cards.addEventListener("touchend", handleCardTouchEnd, { passive: true });
 }
 
 document.addEventListener("keydown", handleDeckKeyboard);

@@ -121,6 +121,7 @@
       <a href="{{ url_for('credits') }}">Review saved picks</a>
       <button type="button" onclick="toggleFooterPanel('filters', event)">Edit filters</button>
       <button type="button" onclick="toggleFooterPanel('interests', event)">Edit interests</button>
+      <button type="button" onclick="copyPublicProfileLink()" data-public-profile-url="{{ url_for('public_user_profile', user_id=u.id, _external=True) }}">Copy public profile</button>
       <form method="POST" class="campus-mode-form">
         <input type="hidden" name="action" value="update_campus_theme">
         <label for="campus-theme-domain">
@@ -453,6 +454,23 @@ function settleProfileCompletionCard() {
     if (profileSteps >= 5) {
       hideCompletedSetup();
     }
+  }
+}
+
+async function copyPublicProfileLink() {
+  const button = document.querySelector("[data-public-profile-url]");
+  const url = button?.dataset.publicProfileUrl || `${window.location.origin}/user/{{ u.id }}`;
+
+  try {
+    await navigator.clipboard.writeText(url);
+    if (button) {
+      button.textContent = "Profile link copied";
+      window.setTimeout(() => {
+        button.textContent = "Copy public profile";
+      }, 1800);
+    }
+  } catch {
+    window.prompt("Copy your public BiteSwipe profile link:", url);
   }
 }
 

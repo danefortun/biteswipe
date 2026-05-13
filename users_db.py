@@ -26,6 +26,7 @@ class Users(db.Model):
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
     campus_theme_domain = db.Column(db.String(255))
+    transportation_mode = db.Column(db.String(16))
     allergen_interests_json = db.Column(db.Text, default="[]")
     food_preferences_json = db.Column(db.Text, default="[]")
     hobby_interests_json = db.Column(db.Text, default="[]")
@@ -172,6 +173,31 @@ class SavedRestaurant(db.Model):
         self.review_count = review_count
         self.website = website
         self.created_at = datetime.now(timezone.utc).isoformat()
+
+
+class UserRestaurantRating(db.Model):
+    __tablename__ = "user_restaurant_ratings"
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "place_id", name="uq_user_restaurant_rating_place"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    place_id = db.Column(db.String(255), nullable=False, index=True)
+    rating = db.Column(db.Integer, nullable=False)
+    updated_at = db.Column(db.String(40), nullable=False, index=True)
+
+    user = db.relationship("Users", backref=db.backref("restaurant_ratings", lazy=True, cascade="all, delete-orphan"))
+
+    def __init__(self, user_id: int, place_id: str, rating: int) -> None:
+        self.user_id = user_id
+        self.place_id = place_id[:255]
+        self.rating = min(max(int(rating), 1), 5)
+        self.updated_at = datetime.now(timezone.utc).isoformat()
+
+    def update_rating(self, rating: int) -> None:
+        self.rating = min(max(int(rating), 1), 5)
+        self.updated_at = datetime.now(timezone.utc).isoformat()
 
 
 class GroupSwipeSession(db.Model):

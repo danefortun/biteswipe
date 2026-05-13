@@ -20,7 +20,7 @@ from main import (
     normalize_google_price_level,
     normalize_price_level,
 )
-from users_db import SavedRestaurant, UserInterest, Users
+from users_db import SavedRestaurant, UserInterest, UserRestaurantRating, Users
 
 
 class LifeSwipeAppTestCase(unittest.TestCase):
@@ -214,6 +214,42 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertIn(b"Celiac safe", response.data)
         self.assertIn(b"Italian", response.data)
         self.assertIn(b"Gaming", response.data)
+
+    def test_default_distance_filter_is_campus_sized(self) -> None:
+        self.login()
+
+        response = self.client.get("/get_filters")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["distance"], 2)
+
+    def test_transportation_mode_sets_radius(self) -> None:
+        self.login()
+
+        response = self.client.post("/save_transportation", json={"mode": "walking"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["filters"]["distance"], 1)
+
+        response = self.client.post("/save_transportation", json={"mode": "driving"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["filters"]["distance"], 10)
+
+        with self.app.app_context():
+            user = Users.query.filter_by(email="person@example.com").first()
+            self.assertEqual(user.transportation_mode, "driving")
+
+    def test_user_rating_persists_server_side(self) -> None:
+        self.login()
+
+        response = self.client.post("/user_rating", json={"place": "osm:node:1", "rating": 4})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["rating"], 4)
+
+        response = self.client.get("/user_ratings")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["ratings"]["osm:node:1"], 4)
+
+        with self.app.app_context():
+            self.assertEqual(UserRestaurantRating.query.count(), 1)
 
     def test_profile_quick_add_hobby_interest_updates_filters(self) -> None:
         self.login()
