@@ -173,7 +173,7 @@
       <p>Head back to Cards and press Save on a restaurant. Your picks will show up here for sorting, notes, and group decisions.</p>
       <div class="empty-actions">
         <a href="{{ url_for('home') }}">Browse cards</a>
-        <button type="button" onclick="toggleFooterPanel('filters')">Set filters first</button>
+        <button type="button" onclick="toggleFooterPanel('filters', event)">Set filters first</button>
       </div>
     </div>
   {% endif %}

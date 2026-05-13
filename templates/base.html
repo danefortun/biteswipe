@@ -59,8 +59,8 @@
           </div>
           <a role="menuitem" href="{{ url_for('profile') }}">Profile</a>
           <a role="menuitem" href="{{ url_for('credits') }}">Saved picks</a>
-          <button type="button" role="menuitem" onclick="toggleFooterPanel('filters')">Filters</button>
-          <button type="button" role="menuitem" onclick="toggleFooterPanel('interests')">Interests</button>
+          <button type="button" role="menuitem" onclick="toggleFooterPanel('filters', event)">Filters</button>
+          <button type="button" role="menuitem" onclick="toggleFooterPanel('interests', event)">Interests</button>
           <a role="menuitem" class="header-settings-logout" href="{{ url_for('logout') }}">Log out</a>
         </div>
       </details>
@@ -101,7 +101,7 @@
           class="nav-link filter-trigger"
           aria-controls="myDropup"
           aria-expanded="false"
-          onclick="myFunction()">
+          onclick="myFunction(event)">
           <span class="nav-icon" aria-hidden="true">⚙️</span>
           <span>Filters</span>
           <span class="nav-chip-count" id="filterCount" aria-label="0 active deck filters">0</span>
@@ -133,8 +133,14 @@
             </div>
           </section>
 
-          <section class="filter-section" aria-labelledby="allergen-filter-title">
-            <h2 id="allergen-filter-title">Allergens</h2>
+          <details class="filter-section filter-disclosure" id="allergenFilterGroup">
+            <summary class="filter-disclosure-summary">
+              <span>
+                <span class="filter-disclosure-title" id="allergen-filter-title">Allergens</span>
+                <span class="filter-disclosure-help">Open when allergy signals need to shape the deck.</span>
+              </span>
+              <span class="filter-disclosure-icon" aria-hidden="true"></span>
+            </summary>
             <div class="filter-options">
               <label class="filter-option" for="celiac"><input type="checkbox" id="celiac"> Celiac</label>
               <label class="filter-option" for="peanuts"><input type="checkbox" id="peanuts"> Peanuts</label>
@@ -145,7 +151,7 @@
               <label class="filter-option" for="treenuts"><input type="checkbox" id="treenuts"> Tree nuts</label>
               <label class="filter-option" for="eggs"><input type="checkbox" id="eggs"> Eggs</label>
             </div>
-          </section>
+          </details>
 
           <section class="filter-section" aria-labelledby="price-filter-title">
             <h2 id="price-filter-title">Price</h2>
@@ -163,8 +169,14 @@
             </div>
           </section>
 
-          <section class="filter-section" aria-labelledby="food-filter-title">
-            <h2 id="food-filter-title">Cravings</h2>
+          <details class="filter-section filter-disclosure" id="cravingFilterGroup">
+            <summary class="filter-disclosure-summary">
+              <span>
+                <span class="filter-disclosure-title" id="food-filter-title">Cravings</span>
+                <span class="filter-disclosure-help">Pick cuisines only when the deck needs a stronger direction.</span>
+              </span>
+              <span class="filter-disclosure-icon" aria-hidden="true"></span>
+            </summary>
             <div class="filter-options">
               {% for preference in ["American", "Italian", "Seafood", "Mexican", "Chinese", "Japanese", "Indian", "Mediterranean", "Pizza", "Vegan", "Coffee", "Dessert", "Breakfast", "Healthy", "Halal", "Korean", "Thai"] %}
                 <label class="filter-option" for="foodPreference{{ loop.index }}">
@@ -177,7 +189,7 @@
                 </label>
               {% endfor %}
             </div>
-          </section>
+          </details>
 
           <div class="filter-panel-actions">
             <button type="button" class="filter-action-primary" data-apply-filters>Apply to deck</button>
@@ -192,7 +204,7 @@
           class="nav-link interests-trigger"
           aria-controls="myInterestsDropup"
           aria-expanded="false"
-          onclick="toggleFooterPanel('interests')">
+          onclick="toggleFooterPanel('interests', event)">
           <span class="nav-icon" aria-hidden="true">✨</span>
           <span>Interests</span>
           <span class="nav-chip-count" id="interestCount" aria-label="0 profile interests">0</span>

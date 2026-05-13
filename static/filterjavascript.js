@@ -13,11 +13,27 @@ const checkboxFilterIds = [
   "openNow",
 ];
 
-function myFunction() {
-  toggleFooterPanel("filters");
+function myFunction(event) {
+  toggleFooterPanel("filters", event);
 }
 
-function toggleFooterPanel(panelName) {
+function closeFooterPanels() {
+  document.querySelectorAll(".dropup.is-open").forEach((dropup) => {
+    dropup.classList.remove("is-open");
+  });
+
+  document.querySelectorAll(".filter-trigger, .interests-trigger").forEach((trigger) => {
+    trigger.setAttribute("aria-expanded", "false");
+  });
+
+  document.body.classList.remove("footer-panel-open");
+}
+
+function toggleFooterPanel(panelName, event) {
+  if (event && typeof event.stopPropagation === "function") {
+    event.stopPropagation();
+  }
+
   const target = panelName === "interests" ? "myInterestsDropup" : "myDropup";
   const triggerSelector = panelName === "interests" ? ".interests-trigger" : ".filter-trigger";
   const menu = document.getElementById(target);
@@ -45,6 +61,8 @@ function toggleFooterPanel(panelName) {
   if (trigger) {
     trigger.setAttribute("aria-expanded", String(isOpen));
   }
+
+  document.body.classList.toggle("footer-panel-open", isOpen);
 }
 
 function getFilters() {
@@ -108,9 +126,17 @@ function restoreCheckedValues(name, values) {
 
 document.addEventListener("DOMContentLoaded", function () {
   const inputs = document.querySelectorAll(".dropup-content input");
+  const closeButtons = document.querySelectorAll("[data-close-footer-panel]");
 
   inputs.forEach((input) => {
     input.addEventListener("change", updateFilters);
+  });
+
+  closeButtons.forEach((button) => {
+    button.addEventListener("click", function (event) {
+      event.preventDefault();
+      closeFooterPanels();
+    });
   });
 
   const slider = document.getElementById("myRange");
@@ -156,10 +182,12 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    openDropup.classList.remove("is-open");
+    closeFooterPanels();
+  });
 
-    document.querySelectorAll(".filter-trigger, .interests-trigger").forEach((trigger) => {
-      trigger.setAttribute("aria-expanded", "false");
-    });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      closeFooterPanels();
+    }
   });
 });

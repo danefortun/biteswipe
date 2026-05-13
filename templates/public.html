@@ -119,8 +119,8 @@
     <div class="profile-action-strip" aria-label="Profile quick actions">
       <a href="{{ url_for('home') }}">Open card deck</a>
       <a href="{{ url_for('credits') }}">Review saved picks</a>
-      <button type="button" onclick="toggleFooterPanel('filters')">Edit filters</button>
-      <button type="button" onclick="toggleFooterPanel('interests')">Edit interests</button>
+      <button type="button" onclick="toggleFooterPanel('filters', event)">Edit filters</button>
+      <button type="button" onclick="toggleFooterPanel('interests', event)">Edit interests</button>
       <form method="POST" class="campus-mode-form">
         <input type="hidden" name="action" value="update_campus_theme">
         <label for="campus-theme-domain">
