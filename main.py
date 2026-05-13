@@ -555,21 +555,16 @@ def register_routes(app: Flask) -> None:
 
         user = Users.query.filter_by(email=email).first()
 
-        if user is not None:
-            if not verify_password(user.password, password):
-                flash("Invalid email or password.")
-                return render_template("login.html"), 401
+        if user is None:
+            flash("No BiteSwipe account exists for that email yet. Create one first.")
+            return render_template("login.html"), 404
 
-            if not is_password_hash(user.password):
-                user.password = generate_password_hash(password)
-                db.session.commit()
-        else:
-            user = Users(
-                name=default_name_from_email(email),
-                email=email,
-                password=generate_password_hash(password),
-            )
-            db.session.add(user)
+        if not verify_password(user.password, password):
+            flash("Invalid email or password.")
+            return render_template("login.html"), 401
+
+        if not is_password_hash(user.password):
+            user.password = generate_password_hash(password)
             db.session.commit()
 
         session.clear()
@@ -579,6 +574,58 @@ def register_routes(app: Flask) -> None:
 
         flash("Login successful.")
         return redirect(url_for("home"))
+
+    @app.route("/signup", methods=["POST", "GET"])
+    def signup() -> Any:
+        if request.method == "GET":
+            if "email" in session:
+                return redirect(url_for("home"))
+            return render_template("signup.html")
+
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("pass", "")
+        confirm_password = request.form.get("confirm_pass", "")
+
+        if not email or not password or not confirm_password:
+            flash("Email, password, and password confirmation are required.")
+            return render_template("signup.html"), 400
+
+        if password != confirm_password:
+            flash("Passwords do not match.")
+            return render_template("signup.html"), 400
+
+        if Users.query.filter_by(email=email).first() is not None:
+            flash("An account already exists for that email. Log in instead.")
+            return render_template("signup.html"), 409
+
+        user = Users(
+            name=default_name_from_email(email),
+            email=email,
+            password=generate_password_hash(password),
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        session.clear()
+        session.permanent = False
+        session["email"] = user.email
+        session["id"] = user.id
+
+        flash("Account created. Welcome to BiteSwipe.")
+        return redirect(url_for("home"))
+
+    @app.route("/forgot-password", methods=["POST", "GET"])
+    def forgot_password() -> Any:
+        if request.method == "POST":
+            email = request.form.get("email", "").strip().lower()
+            if not email:
+                flash("Enter your email to start password recovery.")
+                return render_template("forgot_password.html"), 400
+
+            flash("Password reset email delivery is not enabled yet. Ask the BiteSwipe team to reset this account.")
+            return render_template("forgot_password.html")
+
+        return render_template("forgot_password.html")
 
     @app.route("/chat", methods=["POST", "GET"])
     @login_required

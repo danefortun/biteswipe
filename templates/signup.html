@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html data-theme="dark" lang="en">
 <head>
-  <title>BiteSwipe Login</title>
+  <title>Create BiteSwipe Account</title>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#178f79">
@@ -19,25 +19,12 @@
         <img src="{{ url_for('static', filename='drexelxfizz.png') }}" alt="Drexel Fizz logo">
       </div>
       <p class="auth-kicker">BiteSwipe</p>
-      <h1>Find the next bite before the group chat melts down.</h1>
+      <h1>Build a restaurant deck that remembers you.</h1>
       <p class="auth-rotating-line" data-biteswipe-headline>Swipe once. Eat better.</p>
-      <p>
-        Swipe through nearby restaurants, save the strongest options, tune for allergies and cravings, then bring your shortlist to My Stuff.
-      </p>
-      <div class="auth-feature-grid" aria-label="BiteSwipe features">
-        <span>Allergy-aware filters</span>
-        <span>Nearby deck</span>
-        <span>Saved shortlists</span>
-        <span>Campus chat</span>
-      </div>
-      <div class="auth-flow-preview" aria-label="BiteSwipe flow">
-        <div><strong>1</strong><span>Set filters</span></div>
-        <div><strong>2</strong><span>Swipe cards</span></div>
-        <div><strong>3</strong><span>Plan food</span></div>
-      </div>
+      <p>Create your profile, save picks, and tune the deck around cravings, campus, and allergy signals.</p>
     </section>
 
-    <section class="auth-card" aria-labelledby="login-title">
+    <section class="auth-card" aria-labelledby="signup-title">
       {% with messages = get_flashed_messages() %}
         {% if messages %}
           <div class="flash-messages auth-flashes" role="status" aria-live="polite">
@@ -49,12 +36,12 @@
       {% endwith %}
 
       <div class="auth-card-heading">
-        <p class="auth-kicker">Welcome back</p>
-        <h2 id="login-title">Log in to your account</h2>
-        <p>New here? Create an account first so a typo never turns into a ghost profile.</p>
+        <p class="auth-kicker">New account</p>
+        <h2 id="signup-title">Create your BiteSwipe account</h2>
+        <p>Use an email you can recognize later. Student emails help BiteSwipe pick your campus theme.</p>
       </div>
 
-      <form class="auth-form" method="POST" action="{{ url_for('login') }}">
+      <form class="auth-form" method="POST" action="{{ url_for('signup') }}">
         <label for="email">Email</label>
         <input
           id="email"
@@ -69,21 +56,24 @@
           id="pass"
           type="password"
           name="pass"
-          placeholder="Your password"
-          autocomplete="current-password"
+          placeholder="Create a password"
+          autocomplete="new-password"
           required>
 
-        <button type="submit">Enter BiteSwipe</button>
+        <label for="confirm_pass">Confirm password</label>
+        <input
+          id="confirm_pass"
+          type="password"
+          name="confirm_pass"
+          placeholder="Type it again"
+          autocomplete="new-password"
+          required>
+
+        <button type="submit">Create account</button>
       </form>
 
       <div class="auth-secondary-links">
-        <a href="{{ url_for('signup') }}">Create account</a>
-        <a href="{{ url_for('forgot_password') }}">Forgot password?</a>
-      </div>
-
-      <div class="auth-safety-note">
-        <strong>Safe-bite note</strong>
-        <p>BiteSwipe can help narrow restaurant options, but always verify ingredients and cross-contact directly with the restaurant.</p>
+        <a href="{{ url_for('login') }}">Already have an account?</a>
       </div>
     </section>
   </main>

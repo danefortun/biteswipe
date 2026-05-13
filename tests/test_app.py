@@ -55,6 +55,11 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         shutil.rmtree(self.temp_path, ignore_errors=True)
 
     def login(self, email: str = "person@example.com", password: str = "password123") -> None:
+        self.client.post(
+            "/signup",
+            data={"email": email, "pass": password, "confirm_pass": password},
+            follow_redirects=False,
+        )
         response = self.client.post(
             "/login",
             data={"email": email, "pass": password},
@@ -72,7 +77,7 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login", response.headers["Location"])
 
-    def test_login_creates_hashed_user_and_rejects_wrong_password(self) -> None:
+    def test_signup_creates_hashed_user_and_login_rejects_wrong_password(self) -> None:
         self.login()
 
         with self.app.app_context():
@@ -86,6 +91,28 @@ class LifeSwipeAppTestCase(unittest.TestCase):
             data={"email": "person@example.com", "pass": "wrong"},
         )
         self.assertEqual(response.status_code, 401)
+
+    def test_login_unknown_email_does_not_create_account(self) -> None:
+        response = self.client.post(
+            "/login",
+            data={"email": "typo@example.com", "pass": "password123"},
+        )
+        self.assertEqual(response.status_code, 404)
+
+        with self.app.app_context():
+            self.assertIsNone(Users.query.filter_by(email="typo@example.com").first())
+
+    def test_signup_requires_matching_password_confirmation(self) -> None:
+        response = self.client.post(
+            "/signup",
+            data={"email": "new@example.com", "pass": "password123", "confirm_pass": "different"},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_forgot_password_route_exists(self) -> None:
+        response = self.client.get("/forgot-password")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Forgot your password", response.data)
 
     def test_school_theme_matches_edu_email_domains(self) -> None:
         self.assertGreaterEqual(len(SCHOOL_THEMES), 100)

@@ -1588,11 +1588,15 @@ span.restaurant-website-link {
 }
 
 .arrow.left {
-  background-color: #FF3131;
+  border-color: color-mix(in srgb, #ef4444 52%, transparent);
+  background: color-mix(in srgb, #ef4444 16%, var(--surface-color));
+  color: #991b1b;
 }
 
 .arrow.right {
-  background-color: #39FF14;
+  border-color: color-mix(in srgb, #10b981 54%, transparent);
+  background: color-mix(in srgb, #10b981 18%, var(--surface-color));
+  color: #047857;
 }
 
 /* ============ FOOTER ============ */
@@ -3387,6 +3391,20 @@ body {
   box-shadow: 0 16px 34px rgba(18, 111, 96, 0.25);
 }
 
+.auth-secondary-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.auth-secondary-links a {
+  color: var(--accent-color);
+  font-weight: 900;
+  text-decoration: none;
+}
+
 .auth-safety-note,
 .chat-guidelines,
 .deck-coach-panel,
@@ -3644,6 +3662,17 @@ body.deck-focus-mode .card-stage {
 .chat-refresh-note {
   color: var(--surface-muted-color);
   font-weight: 900;
+}
+
+.chat-scope-note {
+  margin: 8px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, #ef4444 22%, var(--border-color));
+  border-radius: 12px;
+  background: color-mix(in srgb, #ef4444 9%, var(--surface-color));
+  color: var(--surface-muted-color);
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .chat-guidelines {
