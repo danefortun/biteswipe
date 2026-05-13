@@ -260,6 +260,7 @@ function handleCardPointerMove(event) {
     event.preventDefault();
     cards.style.setProperty("--drag-x", `${deltaX}px`);
     cards.style.setProperty("--drag-rotate", `${Math.max(Math.min(deltaX / 18, 10), -10)}deg`);
+    updateSwipeFeedback(deltaX);
   }
 }
 
@@ -274,6 +275,7 @@ function handleCardPointerEnd(event) {
   cards.classList.remove("is-dragging");
   cards.style.removeProperty("--drag-x");
   cards.style.removeProperty("--drag-rotate");
+  clearSwipeFeedback();
   cards.releasePointerCapture?.(event.pointerId);
 
   if (!wasSwipe) {
@@ -325,6 +327,7 @@ function handleCardTouchMove(event) {
     cards.classList.add("is-dragging");
     cards.style.setProperty("--drag-x", `${deltaX}px`);
     cards.style.setProperty("--drag-rotate", `${Math.max(Math.min(deltaX / 18, 10), -10)}deg`);
+    updateSwipeFeedback(deltaX);
   }
 }
 
@@ -343,6 +346,7 @@ function handleCardTouchEnd(event) {
   cards.classList.remove("is-dragging");
   cards.style.removeProperty("--drag-x");
   cards.style.removeProperty("--drag-rotate");
+  clearSwipeFeedback();
 
   if (!wasSwipe) {
     return;
@@ -363,6 +367,22 @@ function handleCardTouchEnd(event) {
   } else {
     swipeLeft();
   }
+}
+
+function updateSwipeFeedback(deltaX) {
+  const card = document.querySelector(".card.is-active");
+  if (!card) return;
+
+  const strength = Math.min(Math.abs(deltaX) / 130, 1).toFixed(2);
+  card.style.setProperty("--swipe-feedback-opacity", strength);
+  card.dataset.swipeIntent = deltaX > 0 ? "save" : "pass";
+}
+
+function clearSwipeFeedback() {
+  document.querySelectorAll(".card[data-swipe-intent]").forEach((card) => {
+    card.style.removeProperty("--swipe-feedback-opacity");
+    delete card.dataset.swipeIntent;
+  });
 }
 
 function handleDeckKeyboard(event) {

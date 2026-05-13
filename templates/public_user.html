@@ -27,6 +27,23 @@
             <h1 id="public-profile-title">{{ u.name or 'BiteSwipe user' }}</h1>
           </div>
           <p class="profile-email">User ID {{ u.id }}</p>
+          <div class="profile-badge-row">
+            {% if u.pronouns %}<span>{{ u.pronouns }}</span>{% endif %}
+            {% if favorite_cuisine %}<span>Favorite: {{ favorite_cuisine }}</span>{% endif %}
+            {% if u.last_active_at %}<span>Last active {{ u.last_active_at[:10] }}</span>{% endif %}
+            {% for badge in profile_badges %}
+              <span>{{ badge }}</span>
+            {% endfor %}
+          </div>
+          {% if follow_status == 'none' %}
+            <form method="POST" action="{{ url_for('follow_user', user_id=u.id) }}" class="public-follow-form">
+              <button type="submit">Follow</button>
+            </form>
+          {% elif follow_status == 'pending' %}
+            <p class="interest-empty">Follow request pending.</p>
+          {% elif follow_status == 'approved' %}
+            <p class="interest-empty">Following this foodie.</p>
+          {% endif %}
 
           <div class="profile-stats" aria-label="Profile stats">
             <div>
@@ -74,6 +91,20 @@
           </div>
         {% endif %}
       </div>
+    </section>
+
+    <section class="profile-panel profile-social-panel" aria-labelledby="public-activity-title">
+      <p class="profile-section-kicker">Activity</p>
+      <h2 id="public-activity-title">Recent BiteSwipe moves</h2>
+      {% if profile_activity %}
+        <ul class="profile-activity-list">
+          {% for item in profile_activity %}
+            <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="interest-empty">No public activity yet.</p>
+      {% endif %}
     </section>
   </div>
 

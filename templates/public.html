@@ -64,6 +64,13 @@
           </form>
 
           <p class="profile-email">{{ u.email }}</p>
+          <div class="profile-badge-row">
+            {% if u.pronouns %}<span>{{ u.pronouns }}</span>{% endif %}
+            {% if favorite_cuisine %}<span>Favorite: {{ favorite_cuisine }}</span>{% endif %}
+            {% for badge in profile_badges %}
+              <span>{{ badge }}</span>
+            {% endfor %}
+          </div>
 
           <div class="profile-stats" aria-label="Profile stats">
             <div>
@@ -110,6 +117,12 @@
         </div>
         <div class="profile-completion-bar" aria-hidden="true">
           <span style="width: {{ (profile_steps / 5 * 100)|round|int }}%"></span>
+        </div>
+        <div class="profile-completion-links">
+          <a href="#about-title" class="{% if u.bio and u.bio != 'this is a placeholder!' %}is-complete{% endif %}">Bio</a>
+          <button type="button" onclick="toggleFooterPanel('filters', event)" class="{% if allergen_interests %}is-complete{% endif %}">Allergies</button>
+          <a href="#interests-title" class="{% if food_preferences %}is-complete{% endif %}">Cravings</a>
+          <a href="{{ url_for('home') }}" class="{% if saved_restaurant_count %}is-complete{% endif %}">First save</a>
         </div>
       </div>
     </div>
@@ -186,6 +199,49 @@
           <button type="button" id="cancel-bio-btn">Cancel</button>
         </div>
       </form>
+
+      <form method="POST" class="profile-inline-form profile-pronouns-form">
+        <input type="hidden" name="action" value="update_pronouns">
+        <input type="text" name="pronouns" value="{{ u.pronouns or '' }}" maxlength="64" placeholder="Pronouns" aria-label="Profile pronouns">
+        <button type="submit">Save pronouns</button>
+      </form>
+    </section>
+
+    <section class="profile-panel profile-social-panel" aria-labelledby="social-title">
+      <p class="profile-section-kicker">Social</p>
+      <h2 id="social-title">Foodies you might know</h2>
+      {% if foodies_you_might_know %}
+        <div class="foodie-list">
+          {% for foodie in foodies_you_might_know %}
+            <a href="{{ url_for('public_user_profile', user_id=foodie.id) }}">
+              <img src="{{ uploaded_file_url(foodie.pfp_file_path, 'transparentnewdefaultpicture.png') }}" alt="">
+              <span>{{ foodie.name }}</span>
+            </a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="interest-empty">More people from your school will appear here as they join BiteSwipe.</p>
+      {% endif %}
+
+      {% if profile_activity %}
+        <h3>Recent activity</h3>
+        <ul class="profile-activity-list">
+          {% for item in profile_activity %}
+            <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      {% if pending_follow_requests %}
+        <h3>Follow requests</h3>
+        <div class="foodie-list">
+          {% for request_row in pending_follow_requests %}
+            <form method="POST" action="{{ url_for('approve_follow_user', user_id=request_row.follower_id) }}" class="public-follow-form">
+              <button type="submit">Approve {{ request_row.follower.name }}</button>
+            </form>
+          {% endfor %}
+        </div>
+      {% endif %}
     </section>
 
     <section

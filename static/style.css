@@ -2049,6 +2049,11 @@ span.restaurant-website-link {
   transform: translateX(var(--drag-x, 0)) rotate(var(--drag-rotate, 0));
 }
 
+.card-stage.is-dealing .card {
+  animation: dealCard 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(min(var(--card-index, 0), 4) * 70ms);
+}
+
 .card {
   height: 465px;
   border-radius: 30px;
@@ -2065,7 +2070,69 @@ span.restaurant-website-link {
 }
 
 .card.is-next {
-  transform: translateY(8px) scale(0.985);
+  opacity: 0.72;
+  transform: translateX(10px) translateY(12px) scale(0.965) rotate(2deg);
+}
+
+.card.is-next + .card {
+  opacity: 0.36;
+  transform: translateX(18px) translateY(24px) scale(0.93) rotate(-2deg);
+}
+
+.swipe-feedback {
+  position: absolute;
+  inset: 18px;
+  z-index: 6;
+  pointer-events: none;
+  opacity: var(--swipe-feedback-opacity, 0);
+  transition: opacity 0.12s ease;
+}
+
+.swipe-feedback span {
+  position: absolute;
+  top: 18px;
+  padding: 8px 14px;
+  border: 3px solid currentColor;
+  border-radius: 10px;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--surface-color) 62%, transparent);
+}
+
+.swipe-feedback-pass {
+  left: 12px;
+  color: #ef4444;
+  transform: rotate(-14deg);
+  display: none;
+}
+
+.swipe-feedback-save {
+  right: 12px;
+  color: #10b981;
+  transform: rotate(14deg);
+  display: none;
+}
+
+.card[data-swipe-intent="pass"] .swipe-feedback-pass,
+.card[data-swipe-intent="save"] .swipe-feedback-save {
+  display: block;
+}
+
+@keyframes dealCard {
+  0% {
+    opacity: 0;
+    transform: translateY(-28px) rotate(-7deg) scale(0.94);
+  }
+  58% {
+    opacity: 1;
+    transform: translateY(4px) rotate(3deg) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotate(0) scale(1);
+  }
 }
 
 .card-face {
@@ -2311,6 +2378,87 @@ span.restaurant-website-link {
 .transportation-actions span {
   margin-top: 6px;
   font-size: 13px;
+}
+
+.profile-badge-row,
+.profile-completion-links,
+.foodie-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-badge-row {
+  margin: 8px 0 12px;
+}
+
+.profile-badge-row span,
+.profile-completion-links a,
+.profile-completion-links button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 34%, var(--border-color));
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  background: color-mix(in srgb, var(--surface-color) 80%, var(--accent-soft-color));
+  color: var(--surface-text-color);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.profile-completion-links {
+  margin-top: 10px;
+}
+
+.profile-completion-links .is-complete {
+  color: var(--accent-color);
+}
+
+.profile-pronouns-form {
+  margin-top: 14px;
+}
+
+.foodie-list a {
+  min-height: 46px;
+  padding: 6px 10px 6px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--surface-text-color);
+  text-decoration: none;
+}
+
+.foodie-list img {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.profile-activity-list {
+  margin: 12px 0 0;
+  padding-left: 20px;
+  color: var(--surface-text-color);
+}
+
+.public-follow-form {
+  margin: 10px 0 0;
+}
+
+.public-follow-form button {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--accent-color);
+  border-radius: 999px;
+  background: var(--accent-soft-color);
+  color: var(--accent-color);
+  font: inherit;
+  font-weight: 900;
 }
 
 .arrow {
@@ -4890,6 +5038,52 @@ body[data-route="home"][data-school-theme] .cards-page-shell .card-stage > * {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-top: 10px;
+}
+
+.group-member-list,
+.group-reaction-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.group-member-list span {
+  min-height: 30px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.group-member-list img {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.group-reaction-row button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--surface-color);
+  color: var(--surface-text-color);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.group-message-list {
+  margin: 8px 0;
+  padding-left: 18px;
+  color: var(--surface-muted-color);
+  font-size: 12px;
 }
 
 .group-mode-results > div {

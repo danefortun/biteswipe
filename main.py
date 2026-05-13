@@ -7,6 +7,7 @@ import re
 import secrets
 import string
 from functools import wraps
+from datetime import datetime, timedelta, timezone
 from math import atan2, cos, radians, sin, sqrt
 from pathlib import Path
 from typing import Any
@@ -35,9 +36,12 @@ from config import Config
 from db import db, migrate
 from users_db import (
     GroupSwipeMember,
+    GroupSwipeMessage,
     GroupSwipeSession,
     GroupSwipeVote,
     SavedRestaurant,
+    UserActivity,
+    UserFollow,
     UserInterest,
     UserRestaurantRating,
     Users,
@@ -322,8 +326,13 @@ DEFAULT_FILTERS: dict[str, Any] = {
     "mediumPrice": False,
     "expensivePrice": False,
     "distance": 2,
+    "minRating": 0,
     "openNow": False,
+    "outdoorSeating": False,
+    "takeoutOnly": False,
+    "dineIn": False,
     "foodPreferences": [],
+    "cuisineExclusions": [],
     "hobbyInterests": [],
 }
 
@@ -373,6 +382,8 @@ def ensure_user_interest_columns() -> None:
         "profile_showcase_file_path": "VARCHAR(255)",
         "campus_theme_domain": "VARCHAR(255)",
         "transportation_mode": "VARCHAR(16)",
+        "pronouns": "VARCHAR(64)",
+        "last_active_at": "VARCHAR(40)",
         "allergen_interests_json": "TEXT DEFAULT '[]'",
         "food_preferences_json": "TEXT DEFAULT '[]'",
         "hobby_interests_json": "TEXT DEFAULT '[]'",
@@ -381,6 +392,10 @@ def ensure_user_interest_columns() -> None:
     for column_name, column_type in required_columns.items():
         if column_name not in column_names:
             db.session.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_type}"))
+
+    group_columns = get_table_column_names("group_swipe_sessions") if inspect(db.engine).has_table("group_swipe_sessions") else set()
+    if group_columns and "expires_at" not in group_columns:
+        db.session.execute(text("ALTER TABLE group_swipe_sessions ADD COLUMN expires_at VARCHAR(40)"))
 
     db.session.commit()
 
@@ -461,6 +476,8 @@ def register_routes(app: Flask) -> None:
     @app.context_processor
     def inject_template_user() -> dict[str, Any]:
         user = current_user()
+        if user is not None:
+            touch_user_activity(user)
         return {
             "template_user": user,
             "school_theme": build_school_theme_payload(user),
@@ -511,6 +528,8 @@ def register_routes(app: Flask) -> None:
                 update_user_bio(user)
             elif action == "update_name":
                 update_user_name(user)
+            elif action == "update_pronouns":
+                update_user_pronouns(user)
             elif action == "add_food_preference":
                 add_user_food_preference(user)
             elif action == "add_hobby_interest":
@@ -849,6 +868,21 @@ def register_routes(app: Flask) -> None:
         db.session.commit()
         return jsonify({"ok": True, "group": serialize_group_session(group_session, user)})
 
+    @app.post("/group_session/message")
+    @login_required
+    def group_session_message() -> Any:
+        user = current_user()
+        group_session = get_current_group_session()
+        if user is None or group_session is None:
+            return jsonify({"ok": False, "message": "Join or create a group first."}), 400
+        payload = request.get_json(silent=True) or {}
+        message = normalize_optional_string(payload.get("message"), 160)
+        if not message:
+            return jsonify({"ok": False, "message": "Choose a quick reaction first."}), 400
+        db.session.add(GroupSwipeMessage(session_id=group_session.id, user_id=user.id, message=message))
+        db.session.commit()
+        return jsonify({"ok": True, "group": serialize_group_session(group_session, user)})
+
     @app.post("/remove_restaurant/<int:restaurant_id>")
     @login_required
     def remove_restaurant(restaurant_id: int) -> Any:
@@ -913,6 +947,41 @@ def register_routes(app: Flask) -> None:
         db.session.commit()
 
         return jsonify({"ok": True, "mode": mode, "filters": filters})
+
+    @app.post("/follow/<int:user_id>")
+    @login_required
+    def follow_user(user_id: int) -> Any:
+        viewer = current_user()
+        target = Users.query.get_or_404(user_id)
+        if viewer is None or viewer.id == target.id:
+            return redirect(url_for("public_user_profile", user_id=user_id))
+
+        follow = UserFollow.query.filter_by(follower_id=viewer.id, following_id=target.id).first()
+        if follow is None:
+            reciprocal = UserFollow.query.filter_by(follower_id=target.id, following_id=viewer.id).first()
+            status = "approved" if reciprocal and reciprocal.status == "approved" else "pending"
+            follow = UserFollow(follower_id=viewer.id, following_id=target.id, status=status)
+            db.session.add(follow)
+            flash("Follow request sent." if status == "pending" else "You are now following each other.")
+        db.session.commit()
+        return redirect(url_for("public_user_profile", user_id=user_id))
+
+    @app.post("/follow/<int:user_id>/approve")
+    @login_required
+    def approve_follow_user(user_id: int) -> Any:
+        viewer = current_user()
+        if viewer is None:
+            abort(401)
+        follow = UserFollow.query.filter_by(follower_id=user_id, following_id=viewer.id).first_or_404()
+        follow.status = "approved"
+        reciprocal = UserFollow.query.filter_by(follower_id=viewer.id, following_id=user_id).first()
+        if reciprocal is None:
+            db.session.add(UserFollow(follower_id=viewer.id, following_id=user_id, status="approved"))
+        else:
+            reciprocal.status = "approved"
+        db.session.commit()
+        flash("Friend approved.")
+        return redirect(url_for("profile"))
 
     @app.post("/save_filters")
     def save_filters() -> Any:
@@ -1127,7 +1196,79 @@ def build_profile_template_context(user: Users, is_public_profile: bool = False)
         "current_school_theme_domain": get_user_school_theme_domain(user),
         "selected_campus_theme_domain": str(user.campus_theme_domain or ""),
         "detected_school_theme": get_school_theme_for_email(user.email),
+        "favorite_cuisine": favorite_cuisine_for_user(user),
+        "profile_badges": build_user_badges(user),
+        "foodies_you_might_know": suggest_school_users(user) if not is_public_profile else [],
+        "profile_activity": build_profile_activity(user),
+        "follow_status": follow_status_for_viewer(user) if is_public_profile else None,
+        "pending_follow_requests": pending_follow_requests(user) if not is_public_profile else [],
     }
+
+
+def touch_user_activity(user: Users) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    if user.last_active_at and user.last_active_at[:13] == now[:13]:
+        return
+    user.last_active_at = now
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+
+
+def favorite_cuisine_for_user(user: Users) -> str | None:
+    preferences = user.get_interest_list("food_preferences_json")
+    return preferences[0] if preferences else None
+
+
+def build_user_badges(user: Users) -> list[str]:
+    badges = []
+    saved_count = len(user.saved_restaurants)
+    if saved_count >= 1:
+        badges.append("First save")
+    if saved_count >= 10:
+        badges.append("10 saves")
+    if favorite_cuisine_for_user(user):
+        badges.append("Taste setter")
+    if user.hosted_group_sessions:
+        badges.append("Group host")
+    return badges
+
+
+def build_profile_activity(user: Users) -> list[str]:
+    activity = [row.summary for row in sorted(user.activity_rows, key=lambda row: row.created_at, reverse=True)[:6]]
+    if activity:
+        return activity
+    return [f"Saved {row.name}" for row in sorted(user.saved_restaurants, key=lambda row: row.created_at, reverse=True)[:4]]
+
+
+def suggest_school_users(user: Users) -> list[Users]:
+    domain = user.email.split("@", 1)[1].lower() if "@" in user.email else ""
+    if not domain:
+        return []
+    return (
+        Users.query.filter(Users.email.ilike(f"%@{domain}"), Users.id != user.id)
+        .order_by(Users.id.desc())
+        .limit(6)
+        .all()
+    )
+
+
+def follow_status_for_viewer(profile_user: Users) -> str | None:
+    viewer = current_user()
+    if viewer is None or viewer.id == profile_user.id:
+        return None
+    follow = UserFollow.query.filter_by(follower_id=viewer.id, following_id=profile_user.id).first()
+    return follow.status if follow else "none"
+
+
+def pending_follow_requests(user: Users) -> list[UserFollow]:
+    return (
+        UserFollow.query.filter_by(following_id=user.id, status="pending")
+        .order_by(UserFollow.created_at.desc())
+        .limit(8)
+        .all()
+    )
 
 
 def handle_profile_picture_upload(user: Users) -> None:
@@ -1228,6 +1369,13 @@ def update_user_name(user: Users) -> None:
     flash("Name updated.")
 
 
+def update_user_pronouns(user: Users) -> None:
+    pronouns = normalize_optional_string(request.form.get("pronouns"), 64)
+    user.pronouns = pronouns
+    db.session.commit()
+    flash("Pronouns updated.")
+
+
 def add_user_food_preference(user: Users) -> None:
     preference = normalize_interest_label(request.form.get("food_preference", ""))
     if not preference:
@@ -1305,6 +1453,11 @@ def sanitize_filters(payload: dict[str, Any]) -> dict[str, Any]:
         elif key == "distance":
             try:
                 filters[key] = min(max(int(payload[key]), 1), 100)
+            except (TypeError, ValueError):
+                filters[key] = default
+        elif key == "minRating":
+            try:
+                filters[key] = min(max(float(payload[key]), 0), 5)
             except (TypeError, ValueError):
                 filters[key] = default
         elif isinstance(default, list):
@@ -1409,6 +1562,8 @@ def save_selected_restaurant(user: Users, payload: dict[str, Any]) -> tuple[bool
             website=website,
         )
         db.session.add(saved)
+        db.session.flush()
+        db.session.add(UserActivity(user_id=user.id, action="save", summary=f"Saved {name}"))
     else:
         saved.name = name[:255]
         saved.source = source
@@ -1457,7 +1612,23 @@ def get_current_group_session() -> GroupSwipeSession | None:
     if not code:
         return None
 
-    return GroupSwipeSession.query.filter_by(code=code, is_active=True).first()
+    group_session = GroupSwipeSession.query.filter_by(code=code, is_active=True).first()
+    if group_session is not None and group_session_is_expired(group_session):
+        group_session.is_active = False
+        db.session.commit()
+        session.pop("group_swipe_code", None)
+        return None
+    return group_session
+
+
+def group_session_is_expired(group_session: GroupSwipeSession) -> bool:
+    if not group_session.expires_at:
+        return False
+    try:
+        expires_at = datetime.fromisoformat(group_session.expires_at)
+    except ValueError:
+        return False
+    return datetime.now(timezone.utc) >= expires_at.replace(tzinfo=timezone.utc)
 
 
 def join_group_from_invite(user: Users) -> None:
@@ -1501,6 +1672,7 @@ def serialize_group_session(group_session: GroupSwipeSession, user: Users | None
     member_count = max(len(member_ids), 1)
     votes = list(group_session.votes)
     saved_votes = [vote for vote in votes if vote.action == "save"]
+    vetoed_places = {vote.place_id for vote in votes if vote.action == "veto"}
     saved_by_place: dict[str, list[GroupSwipeVote]] = {}
 
     for vote in saved_votes:
@@ -1519,9 +1691,12 @@ def serialize_group_session(group_session: GroupSwipeSession, user: Users | None
             "source": payload.get("source"),
             "saved_count": len(voter_ids),
             "needed_count": member_count,
+            "is_vetoed": place_id in vetoed_places,
         }
 
-        if member_ids and voter_ids >= member_ids:
+        if place_id in vetoed_places:
+            maybe.append(entry)
+        elif member_ids and voter_ids >= member_ids:
             consensus.append(entry)
         else:
             maybe.append(entry)
@@ -1532,18 +1707,28 @@ def serialize_group_session(group_session: GroupSwipeSession, user: Users | None
     return {
         "code": group_session.code,
         "invite_path": url_for("home", group=group_session.code),
+        "expires_at": group_session.expires_at,
+        "expires_in_seconds": max(0, int((datetime.fromisoformat(group_session.expires_at).replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)).total_seconds())) if group_session.expires_at else None,
         "is_host": bool(user and user.id == group_session.host_user_id),
         "member_count": member_count,
         "members": [
             {
                 "id": member.user_id,
                 "name": member.user.name if member.user else "BiteSwipe user",
+                "avatar": uploaded_file_url(member.user.pfp_file_path if member.user else None, "transparentnewdefaultpicture.png"),
             }
             for member in members
         ],
         "vote_count": len(votes),
         "consensus": consensus[:12],
         "almost": maybe[:12],
+        "messages": [
+            {
+                "name": message.user.name if message.user else "BiteSwipe user",
+                "message": message.message,
+            }
+            for message in sorted(group_session.messages, key=lambda item: item.created_at, reverse=True)[:8]
+        ],
     }
 
 
@@ -1649,6 +1834,16 @@ def restaurant_matches_filters(place: dict[str, Any], filters: dict[str, Any]) -
     if selected_price_levels(filters) and price_level is not None and price_level not in selected_price_levels(filters):
         return False
 
+    rating = normalize_optional_float(place.get("rating"))
+    if filters.get("minRating") and (rating is None or rating < float(filters["minRating"])):
+        return False
+
+    if not restaurant_matches_seating_filters(place, filters):
+        return False
+
+    if not restaurant_matches_cuisine_exclusions(place, sanitize_interest_values(filters.get("cuisineExclusions", []))):
+        return False
+
     if not restaurant_matches_food_preferences(place, sanitize_interest_values(filters.get("foodPreferences", []))):
         return False
 
@@ -1693,6 +1888,33 @@ def restaurant_matches_food_preferences(place: dict[str, Any], food_preferences:
             return True
 
     return False
+
+
+def restaurant_matches_cuisine_exclusions(place: dict[str, Any], exclusions: list[str]) -> bool:
+    if not exclusions:
+        return True
+
+    searchable = " ".join(
+        str(place.get(key) or "")
+        for key in ("name", "address", "cuisine", "photo_category")
+    ).lower()
+
+    return not any(exclusion.lower() in searchable for exclusion in exclusions)
+
+
+def restaurant_matches_seating_filters(place: dict[str, Any], filters: dict[str, Any]) -> bool:
+    seating = place.get("seating_tags") or {}
+
+    if filters.get("outdoorSeating") and seating.get("outdoor") is False:
+        return False
+
+    if filters.get("takeoutOnly") and seating.get("takeout") is False:
+        return False
+
+    if filters.get("dineIn") and seating.get("dine_in") is False:
+        return False
+
+    return True
 
 
 def restaurant_matches_allergens(place: dict[str, Any], filters: dict[str, Any]) -> bool:
@@ -1824,6 +2046,26 @@ def extract_dietary_tags(tags: dict[str, Any]) -> dict[str, str]:
         for key, value in tags.items()
         if key.startswith("diet:")
     }
+
+
+def extract_seating_tags(tags: dict[str, Any]) -> dict[str, bool | None]:
+    return {
+        "outdoor": normalize_osm_yes_no(tags.get("outdoor_seating")),
+        "takeout": normalize_osm_yes_no(tags.get("takeaway") or tags.get("takeout")),
+        "dine_in": normalize_osm_yes_no(tags.get("indoor_seating") or tags.get("dine_in")),
+    }
+
+
+def normalize_osm_yes_no(value: Any) -> bool | None:
+    if value is None:
+        return None
+
+    text_value = str(value).strip().lower()
+    if text_value in {"yes", "true", "1", "only"}:
+        return True
+    if text_value in {"no", "false", "0"}:
+        return False
+    return None
 
 
 def normalize_price_level(value: Any) -> int | None:
@@ -2192,6 +2434,7 @@ def format_osm_place(
         "price_level": normalize_price_level(tags.get("price") or tags.get("price:range")),
         "price_text": format_price_text(normalize_price_level(tags.get("price") or tags.get("price:range"))),
         "dietary_tags": extract_dietary_tags(tags),
+        "seating_tags": extract_seating_tags(tags),
         "rating": None,
         "review_count": None,
         "website": normalize_website_url(tags.get("website") or tags.get("contact:website")),
@@ -2282,6 +2525,7 @@ def format_google_place(place: dict[str, Any], api_key: str) -> dict[str, Any]:
         "price_level": normalize_google_price_level(place.get("priceLevel")),
         "price_text": format_price_text(normalize_google_price_level(place.get("priceLevel"))),
         "dietary_tags": {},
+        "seating_tags": {},
         "rating": normalize_optional_float(place.get("rating")),
         "review_count": place.get("userRatingCount"),
         "website": place.get("websiteUri") or place.get("googleMapsUri"),

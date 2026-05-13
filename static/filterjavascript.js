@@ -11,6 +11,9 @@ const checkboxFilterIds = [
   "mediumPrice",
   "expensivePrice",
   "openNow",
+  "outdoorSeating",
+  "takeoutOnly",
+  "dineIn",
 ];
 
 function myFunction(event) {
@@ -74,9 +77,12 @@ function getFilters() {
   });
 
   const distance = document.getElementById("myRange");
+  const minRating = document.getElementById("minRatingRange");
 
   filters.distance = distance ? Number(distance.value) : 2;
+  filters.minRating = minRating ? Number(minRating.value) : 0;
   filters.foodPreferences = getCheckedValues("foodPreferences");
+  filters.cuisineExclusions = getCheckedValues("cuisineExclusions");
   filters.hobbyInterests = getCheckedValues("hobbyInterests");
 
   return filters;
@@ -141,12 +147,23 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const slider = document.getElementById("myRange");
   const distanceValue = document.getElementById("distanceValue");
+  const minRating = document.getElementById("minRatingRange");
+  const minRatingValue = document.getElementById("minRatingValue");
 
   if (slider && distanceValue) {
     distanceValue.textContent = slider.value;
 
     slider.addEventListener("input", function () {
       distanceValue.textContent = this.value;
+      updateFilters();
+    });
+  }
+
+  if (minRating && minRatingValue) {
+    minRatingValue.textContent = Number(minRating.value).toFixed(1);
+
+    minRating.addEventListener("input", function () {
+      minRatingValue.textContent = Number(this.value).toFixed(1);
       updateFilters();
     });
   }
@@ -166,11 +183,17 @@ document.addEventListener("DOMContentLoaded", function () {
       });
 
       restoreCheckedValues("foodPreferences", saved.foodPreferences);
+      restoreCheckedValues("cuisineExclusions", saved.cuisineExclusions);
       restoreCheckedValues("hobbyInterests", saved.hobbyInterests);
 
       if (slider && distanceValue && saved.distance) {
         slider.value = saved.distance;
         distanceValue.textContent = saved.distance;
+      }
+
+      if (minRating && minRatingValue && saved.minRating !== undefined) {
+        minRating.value = saved.minRating;
+        minRatingValue.textContent = Number(saved.minRating).toFixed(1);
       }
     })
     .catch((err) => console.error("Error:", err));

@@ -166,6 +166,21 @@
             <h2 id="availability-filter-title">Availability</h2>
             <div class="filter-options filter-options-compact">
               <label class="filter-option" for="openNow"><input type="checkbox" id="openNow"> Open now</label>
+              <label class="filter-option" for="outdoorSeating"><input type="checkbox" id="outdoorSeating"> Outdoor seating</label>
+              <label class="filter-option" for="takeoutOnly"><input type="checkbox" id="takeoutOnly"> Takeout</label>
+              <label class="filter-option" for="dineIn"><input type="checkbox" id="dineIn"> Dine-in</label>
+            </div>
+          </section>
+
+          <section class="filter-section" aria-labelledby="rating-filter-title">
+            <h2 id="rating-filter-title">Minimum rating</h2>
+            <label class="filter-distance-label" for="minRatingRange">
+              <span id="minRatingValue">0.0</span>+ stars
+            </label>
+            <div class="slidecontainer">
+              <span>Any</span>
+              <input type="range" min="0" max="5" step="0.5" value="0" class="slider" id="minRatingRange">
+              <span>5</span>
             </div>
           </section>
 
@@ -186,6 +201,28 @@
                     name="foodPreferences"
                     value="{{ preference }}">
                   {{ preference }}
+                </label>
+              {% endfor %}
+            </div>
+          </details>
+
+          <details class="filter-section filter-disclosure" id="exclusionFilterGroup">
+            <summary class="filter-disclosure-summary">
+              <span>
+                <span class="filter-disclosure-title">Cuisine exclusions</span>
+                <span class="filter-disclosure-help">Block foods you never want in the deck.</span>
+              </span>
+              <span class="filter-disclosure-icon" aria-hidden="true"></span>
+            </summary>
+            <div class="filter-options">
+              {% for exclusion in ["Sushi", "Seafood", "Pizza", "Coffee", "Vegan", "Fast food", "Thai", "Indian"] %}
+                <label class="filter-option" for="cuisineExclusion{{ loop.index }}">
+                  <input
+                    type="checkbox"
+                    id="cuisineExclusion{{ loop.index }}"
+                    name="cuisineExclusions"
+                    value="{{ exclusion }}">
+                  Never {{ exclusion }}
                 </label>
               {% endfor %}
             </div>

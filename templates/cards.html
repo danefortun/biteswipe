@@ -356,6 +356,18 @@ async function setQuickCraving(preference) {
 
 async function applyDeckMode(mode) {
     const modes = {
+        breakfast: {
+            label: "Breakfast",
+            distance: 2,
+            prices: ["cheapPrice", "mediumPrice"],
+            cravings: ["Breakfast", "Coffee"],
+        },
+        late: {
+            label: "Late night",
+            distance: 5,
+            prices: ["cheapPrice", "mediumPrice"],
+            cravings: ["Pizza", "Mexican", "American"],
+        },
         cheap: {
             label: "Cheap eats",
             distance: 3,
@@ -419,6 +431,29 @@ async function applyDeckMode(mode) {
 
     showBiteToast(`${config.label} mode applied`, "success");
     await refreshRestaurantCards();
+}
+
+function getTimeOfDayPreset() {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+        return { mode: "breakfast", label: "Breakfast nearby" };
+    }
+    if (hour >= 22 || hour < 3) {
+        return { mode: "late", label: "Late night" };
+    }
+    return null;
+}
+
+function setupTimeOfDayPreset() {
+    const button = document.getElementById("timePresetButton");
+    const preset = getTimeOfDayPreset();
+    if (!button || !preset) {
+        return;
+    }
+
+    button.hidden = false;
+    button.textContent = preset.label;
+    button.addEventListener("click", () => applyDeckMode(preset.mode));
 }
 
 function shuffleRemainingDeck() {
@@ -975,12 +1010,43 @@ async function recordGroupSwipe(action, restaurant) {
     }
 }
 
+async function sendGroupReaction(message) {
+    if (!window.activeGroupSession) {
+        setRestaurantStatus("Start or join a group first.");
+        return;
+    }
+
+    const response = await fetch("/group_session/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+    });
+    const data = await response.json();
+    if (response.ok && data.group) {
+        window.activeGroupSession = data.group;
+        updateGroupPanel(data.group);
+    }
+}
+
+async function vetoCurrentGroupRestaurant() {
+    const restaurant = getCurrentRestaurant?.();
+    if (!restaurant) {
+        setRestaurantStatus("Load a card before vetoing.");
+        return;
+    }
+    await recordGroupSwipe("veto", restaurant);
+    showBiteToast("Veto recorded for the group", "success");
+}
+
 function updateGroupPanel(group) {
     const panel = document.getElementById("groupModePanel");
     const inactive = document.getElementById("groupModeInactive");
     const active = document.getElementById("groupModeActive");
     const code = document.getElementById("groupCodeLabel");
     const memberCount = document.getElementById("groupMemberCount");
+    const memberList = document.getElementById("groupMemberList");
+    const expiry = document.getElementById("groupExpiryLabel");
+    const messages = document.getElementById("groupMessageList");
     const consensusList = document.getElementById("groupConsensusList");
     const almostList = document.getElementById("groupAlmostList");
 
@@ -998,9 +1064,46 @@ function updateGroupPanel(group) {
 
     if (code) code.textContent = group.code;
     if (memberCount) memberCount.textContent = `${group.member_count} member${group.member_count === 1 ? "" : "s"}`;
+    if (expiry) expiry.textContent = formatGroupExpiry(group.expires_in_seconds);
+    renderGroupMembers(memberList, group.members || []);
+    renderGroupMessages(messages, group.messages || []);
 
     renderGroupRestaurantList(consensusList, group.consensus, "No unanimous saves yet.");
     renderGroupRestaurantList(almostList, group.almost, "Near matches will show here.");
+}
+
+function formatGroupExpiry(seconds) {
+    const value = Number(seconds);
+    if (!Number.isFinite(value)) return "Invite expires soon";
+    const minutes = Math.max(0, Math.ceil(value / 60));
+    if (minutes >= 60) {
+        return `${Math.floor(minutes / 60)}h ${minutes % 60}m left`;
+    }
+    return `${minutes}m left`;
+}
+
+function renderGroupMembers(container, members) {
+    if (!container) return;
+    container.innerHTML = "";
+    members.slice(0, 8).forEach((member) => {
+        const item = document.createElement("span");
+        const img = document.createElement("img");
+        img.src = member.avatar;
+        img.alt = "";
+        item.appendChild(img);
+        item.append(member.name || "BiteSwipe user");
+        container.appendChild(item);
+    });
+}
+
+function renderGroupMessages(container, messages) {
+    if (!container) return;
+    container.innerHTML = "";
+    messages.slice(0, 5).forEach((message) => {
+        const item = document.createElement("li");
+        item.textContent = `${message.name}: ${message.message}`;
+        container.appendChild(item);
+    });
 }
 
 function getBoundedGroupPanelPosition(left, top, panel) {
@@ -1284,8 +1387,13 @@ async function clearRestaurantFilters() {
         mediumPrice: false,
         expensivePrice: false,
         openNow: false,
+        outdoorSeating: false,
+        takeoutOnly: false,
+        dineIn: false,
         distance: 2,
+        minRating: 0,
         foodPreferences: [],
+        cuisineExclusions: [],
         hobbyInterests: typeof getCheckedValues === "function" ? getCheckedValues("hobbyInterests") : [],
     };
 
@@ -1307,6 +1415,13 @@ async function clearRestaurantFilters() {
         if (slider && distanceValue) {
             slider.value = 2;
             distanceValue.textContent = "2";
+        }
+
+        const minRating = document.getElementById("minRatingRange");
+        const minRatingValue = document.getElementById("minRatingValue");
+        if (minRating && minRatingValue) {
+            minRating.value = 0;
+            minRatingValue.textContent = "0.0";
         }
 
         if (typeof updateFooterFilterCounts === "function") {
@@ -1456,6 +1571,7 @@ function renderRestaurantCards(places, options = {}) {
         const card = document.createElement("div");
         card.classList.add("card");
         card.dataset.cardIndex = String(index);
+        card.style.setProperty("--card-index", String(index));
         card.tabIndex = 0;
         card.setAttribute("role", "button");
         card.setAttribute("aria-label", `${result.name || "Restaurant"} details`);
@@ -1469,6 +1585,11 @@ function renderRestaurantCards(places, options = {}) {
 
         const inner = document.createElement("div");
         inner.classList.add("card-inner");
+
+        const feedback = document.createElement("div");
+        feedback.classList.add("swipe-feedback");
+        feedback.innerHTML = '<span class="swipe-feedback-pass">Pass</span><span class="swipe-feedback-save">Save</span>';
+        card.appendChild(feedback);
 
         const front = document.createElement("div");
         front.classList.add("card-face", "card-front");
@@ -1536,6 +1657,11 @@ function renderRestaurantCards(places, options = {}) {
 
     if (options.persist !== false) {
         persistRestaurantCardStack();
+    }
+
+    if (cards.length > 0) {
+        stage.classList.add("is-dealing");
+        window.setTimeout(() => stage.classList.remove("is-dealing"), 760);
     }
 
     updateDailyBite(cards);
@@ -2159,6 +2285,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setupDraggableGroupPanel();
     await loadUserRatings();
     restoreRestaurantCardStack();
+    setupTimeOfDayPreset();
     updateSessionStats();
     updateActiveFilterSummary();
     updateDeckHistoryPanel();
@@ -2267,6 +2394,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         <button type="button" onclick="applyDeckMode('study')">Study break</button>
         <button type="button" onclick="applyDeckMode('group')">Group friendly</button>
         <button type="button" onclick="applyDeckMode('clean')">Fresh and light</button>
+        <button type="button" id="timePresetButton" hidden>Time smart</button>
       </div>
     </div>
 
@@ -2296,10 +2424,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         <div>
           <strong>Group <span id="groupCodeLabel"></span></strong>
           <span id="groupMemberCount">1 member</span>
+          <span id="groupExpiryLabel">2h left</span>
         </div>
         <button type="button" onclick="copyGroupInviteLink()">Invite</button>
         <button type="button" onclick="leaveGroupSession()">Leave</button>
       </div>
+      <div class="group-member-list" id="groupMemberList"></div>
+      <div class="group-reaction-row">
+        <button type="button" onclick="sendGroupReaction('omg yes')">omg yes</button>
+        <button type="button" onclick="sendGroupReaction('I hate this place')">I hate this</button>
+        <button type="button" onclick="sendGroupReaction('maybe')">maybe</button>
+        <button type="button" onclick="vetoCurrentGroupRestaurant()">Veto card</button>
+      </div>
+      <ul class="group-message-list" id="groupMessageList"></ul>
       <div class="group-mode-results">
         <div>
           <span>Everyone saved</span>

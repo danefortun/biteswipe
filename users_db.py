@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 from typing import Any
 
@@ -27,6 +27,8 @@ class Users(db.Model):
     longitude = db.Column(db.Float)
     campus_theme_domain = db.Column(db.String(255))
     transportation_mode = db.Column(db.String(16))
+    pronouns = db.Column(db.String(64))
+    last_active_at = db.Column(db.String(40))
     allergen_interests_json = db.Column(db.Text, default="[]")
     food_preferences_json = db.Column(db.Text, default="[]")
     hobby_interests_json = db.Column(db.Text, default="[]")
@@ -200,6 +202,46 @@ class UserRestaurantRating(db.Model):
         self.updated_at = datetime.now(timezone.utc).isoformat()
 
 
+class UserFollow(db.Model):
+    __tablename__ = "user_follows"
+    __table_args__ = (
+        db.UniqueConstraint("follower_id", "following_id", name="uq_user_follow_pair"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    follower_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    following_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    status = db.Column(db.String(16), default="pending", nullable=False, index=True)
+    created_at = db.Column(db.String(40), nullable=False, index=True)
+
+    follower = db.relationship("Users", foreign_keys=[follower_id], backref=db.backref("following_rows", lazy=True))
+    following = db.relationship("Users", foreign_keys=[following_id], backref=db.backref("follower_rows", lazy=True))
+
+    def __init__(self, follower_id: int, following_id: int, status: str = "pending") -> None:
+        self.follower_id = follower_id
+        self.following_id = following_id
+        self.status = status
+        self.created_at = datetime.now(timezone.utc).isoformat()
+
+
+class UserActivity(db.Model):
+    __tablename__ = "user_activity"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    action = db.Column(db.String(32), nullable=False, index=True)
+    summary = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.String(40), nullable=False, index=True)
+
+    user = db.relationship("Users", backref=db.backref("activity_rows", lazy=True, cascade="all, delete-orphan"))
+
+    def __init__(self, user_id: int, action: str, summary: str) -> None:
+        self.user_id = user_id
+        self.action = action[:32]
+        self.summary = summary[:255]
+        self.created_at = datetime.now(timezone.utc).isoformat()
+
+
 class GroupSwipeSession(db.Model):
     __tablename__ = "group_swipe_sessions"
 
@@ -207,6 +249,7 @@ class GroupSwipeSession(db.Model):
     code = db.Column(db.String(12), nullable=False, unique=True, index=True)
     host_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     created_at = db.Column(db.String(40), nullable=False, index=True)
+    expires_at = db.Column(db.String(40), index=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
     host = db.relationship("Users", backref=db.backref("hosted_group_sessions", lazy=True))
@@ -215,6 +258,7 @@ class GroupSwipeSession(db.Model):
         self.code = code
         self.host_user_id = host_user_id
         self.created_at = datetime.now(timezone.utc).isoformat()
+        self.expires_at = (datetime.now(timezone.utc).replace(microsecond=0) + timedelta(hours=2)).isoformat()
         self.is_active = True
 
 
@@ -282,3 +326,22 @@ class GroupSwipeVote(db.Model):
             return {}
 
         return payload if isinstance(payload, dict) else {}
+
+
+class GroupSwipeMessage(db.Model):
+    __tablename__ = "group_swipe_messages"
+
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey("group_swipe_sessions.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    message = db.Column(db.String(160), nullable=False)
+    created_at = db.Column(db.String(40), nullable=False, index=True)
+
+    session = db.relationship("GroupSwipeSession", backref=db.backref("messages", lazy=True, cascade="all, delete-orphan"))
+    user = db.relationship("Users", backref=db.backref("group_swipe_messages", lazy=True))
+
+    def __init__(self, session_id: int, user_id: int, message: str) -> None:
+        self.session_id = session_id
+        self.user_id = user_id
+        self.message = message[:160]
+        self.created_at = datetime.now(timezone.utc).isoformat()
