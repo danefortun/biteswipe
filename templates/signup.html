@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html data-theme="dark" lang="en">
+<head>
+  <title>Create BiteSwipe Account</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#178f79">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Satoshi:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+  <script src="{{ url_for('static', filename='app-ui.js') }}" defer></script>
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-brand-panel" aria-label="BiteSwipe intro">
+      <div class="auth-logo-card">
+        <img src="{{ url_for('static', filename='drexelxfizz.png') }}" alt="Drexel Fizz logo">
+      </div>
+      <p class="auth-kicker">BiteSwipe</p>
+      <h1>Build a restaurant deck that remembers you.</h1>
+      <p class="auth-rotating-line" data-biteswipe-headline>Swipe once. Eat better.</p>
+      <p>Create your profile, save picks, and tune the deck around cravings, campus, and allergy signals.</p>
+    </section>
+
+    <section class="auth-card" aria-labelledby="signup-title">
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          <div class="flash-messages auth-flashes" role="status" aria-live="polite">
+            {% for msg in messages %}
+              <div class="flash-message">{{ msg }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <div class="auth-card-heading">
+        <p class="auth-kicker">New account</p>
+        <h2 id="signup-title">Create your BiteSwipe account</h2>
+        <p>Use an email you can recognize later. Student emails help BiteSwipe pick your campus theme.</p>
+      </div>
+
+      <form class="auth-form" method="POST" action="{{ url_for('signup') }}">
+        <label for="email">Email</label>
+        <input
+          id="email"
+          type="email"
+          name="email"
+          placeholder="you@drexel.edu"
+          autocomplete="email"
+          required>
+
+        <label for="pass">Password</label>
+        <input
+          id="pass"
+          type="password"
+          name="pass"
+          placeholder="Create a password"
+          autocomplete="new-password"
+          required>
+
+        <label for="confirm_pass">Confirm password</label>
+        <input
+          id="confirm_pass"
+          type="password"
+          name="confirm_pass"
+          placeholder="Type it again"
+          autocomplete="new-password"
+          required>
+
+        <button type="submit">Create account</button>
+      </form>
+
+      <div class="auth-secondary-links">
+        <a href="{{ url_for('login') }}">Already have an account?</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

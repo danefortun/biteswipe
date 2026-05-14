@@ -50,8 +50,8 @@
 
       <div class="auth-card-heading">
         <p class="auth-kicker">Welcome back</p>
-        <h2 id="login-title">Log in or create your account</h2>
-        <p>New here? Enter an email and password and BiteSwipe will create your account automatically.</p>
+        <h2 id="login-title">Log in to your account</h2>
+        <p>New here? Create an account first so a typo never turns into a ghost profile.</p>
       </div>
 
       <form class="auth-form" method="POST" action="{{ url_for('login') }}">
@@ -75,6 +75,11 @@
 
         <button type="submit">Enter BiteSwipe</button>
       </form>
+
+      <div class="auth-secondary-links">
+        <a href="{{ url_for('signup') }}">Create account</a>
+        <a href="{{ url_for('forgot_password') }}">Forgot password?</a>
+      </div>
 
       <div class="auth-safety-note">
         <strong>Safe-bite note</strong>

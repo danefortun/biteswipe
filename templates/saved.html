@@ -67,8 +67,18 @@
           <option value="distance">Nearest first</option>
           <option value="rating">Top rated</option>
         </select>
+        <button type="button" class="saved-decide-button" onclick="decideForMeSavedRestaurant()">Decide for me</button>
         <button type="button" onclick="pickRandomSavedRestaurant()" hidden data-feature-parked="random-saved-picker">Pick for me</button>
         <button type="button" onclick="copySavedShortlist()" hidden data-feature-parked="copy-visible-saved">Copy visible</button>
+      </div>
+    </div>
+
+    <div class="saved-decider" id="savedDecider" hidden role="status" aria-live="polite">
+      <div class="saved-decider-card">
+        <span>Decision time</span>
+        <strong id="savedDeciderName">Choosing...</strong>
+        <p id="savedDeciderMeta">BiteSwipe is shuffling your saved picks.</p>
+        <button type="button" onclick="closeSavedDecider()">Close</button>
       </div>
     </div>
 
@@ -112,7 +122,7 @@
               {% else %}
                 <span>Distance pending</span>
               {% endif %}
-              {% if restaurant.price_text %}
+              {% if restaurant.price_text and restaurant.price_text|lower != 'free' %}
                 <span>{{ restaurant.price_text }}</span>
               {% endif %}
               {% if restaurant.cuisine %}
@@ -142,7 +152,7 @@
                 Directions
               </a>
               <button type="button" onclick="copySingleSavedRestaurant(this)">Copy</button>
-              <form method="POST" action="{{ url_for('remove_restaurant', restaurant_id=restaurant.id) }}" onsubmit="return confirm('Remove {{ restaurant.name }} from Saved picks?')">
+              <form method="POST" action="{{ url_for('remove_restaurant', restaurant_id=restaurant.id) }}" onsubmit="return confirmRemoveSavedRestaurant(this)" data-restaurant-name="{{ restaurant.name }}">
                 <button type="submit" class="saved-remove">Remove</button>
               </form>
             </div>
@@ -159,11 +169,11 @@
     <div class="empty-stuff empty-stuff-upgraded">
       <img src="{{ url_for('static', filename='biteswipe.png') }}" alt="BiteSwipe">
       <p class="my-stuff-kicker">Start your board</p>
-      <h2>No saved bites yet</h2>
-      <p>Head back to Cards and press Save on a restaurant. Your picks will show up here for sorting, notes, and group decisions.</p>
+      <h2>You haven't saved anything yet</h2>
+      <p>Nothing is broken. Head back to the deck, swipe through nearby options, and press Save on anything you would actually eat.</p>
       <div class="empty-actions">
-        <a href="{{ url_for('home') }}">Browse cards</a>
-        <button type="button" onclick="toggleFooterPanel('filters')">Set filters first</button>
+        <a href="{{ url_for('home') }}">Go swipe</a>
+        <button type="button" onclick="toggleFooterPanel('filters', event)">Set filters first</button>
       </div>
     </div>
   {% endif %}
@@ -178,6 +188,11 @@ function getSavedNoteStorageKey(card) {
   return `biteswipe.savedNote.${card.dataset.placeId || card.dataset.name || "unknown"}`;
 }
 
+function confirmRemoveSavedRestaurant(form) {
+  const name = form?.dataset.restaurantName || "this saved pick";
+  return window.confirm(`Remove ${name} from Saved picks?`);
+}
+
 function updateSavedResultCount() {
   const count = getVisibleSavedCards().length;
   const selected = document.querySelectorAll(".saved-card:not([hidden]) .saved-select:checked").length;
@@ -185,7 +200,7 @@ function updateSavedResultCount() {
   const noResults = document.getElementById("savedNoResults");
 
   if (label) {
-    label.textContent = `Showing ${count} saved pick${count === 1 ? "" : "s"}${selected ? ` · ${selected} shortlisted` : ""}`;
+    label.textContent = `Showing ${count} saved pick${count === 1 ? "" : "s"}${selected ? ` - ${selected} shortlisted` : ""}`;
   }
 
   if (noResults) {
@@ -235,8 +250,8 @@ function getRestaurantLine(card, index) {
   const name = card.querySelector("h2")?.textContent.trim();
   const address = card.querySelector(".saved-address")?.textContent.trim();
   const note = card.querySelector(".saved-note")?.value.trim();
-  const meta = Array.from(card.querySelectorAll(".saved-meta span")).map((span) => span.textContent.trim()).filter(Boolean).slice(0, 3).join(" · ");
-  return `${index + 1}. ${[name, address, meta, note ? `Note: ${note}` : ""].filter(Boolean).join(" — ")}`;
+  const meta = Array.from(card.querySelectorAll(".saved-meta span")).map((span) => span.textContent.trim()).filter(Boolean).slice(0, 3).join(" - ");
+  return `${index + 1}. ${[name, address, meta, note ? `Note: ${note}` : ""].filter(Boolean).join(" - ")}`;
 }
 
 async function copyTextToClipboard(text, successMessage = "Copied") {
@@ -262,6 +277,55 @@ function pickRandomSavedRestaurant() {
   const picked = cards[Math.floor(Math.random() * cards.length)];
   picked.classList.add("is-picked");
   picked.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function closeSavedDecider() {
+  const decider = document.getElementById("savedDecider");
+  if (decider) decider.hidden = true;
+}
+
+function decideForMeSavedRestaurant() {
+  const cards = getVisibleSavedCards();
+  const decider = document.getElementById("savedDecider");
+  const name = document.getElementById("savedDeciderName");
+  const meta = document.getElementById("savedDeciderMeta");
+
+  if (!cards.length || !decider || !name || !meta) return;
+
+  if (cards.length < 2) {
+    name.textContent = cards[0].querySelector("h2")?.textContent.trim() || "Your saved pick";
+    meta.textContent = "Only one saved pick is visible, so that is the move.";
+    decider.hidden = false;
+    cards[0].classList.add("is-picked");
+    return;
+  }
+
+  document.querySelectorAll(".saved-card").forEach((card) => card.classList.remove("is-picked"));
+  decider.hidden = false;
+  decider.classList.add("is-choosing");
+  meta.textContent = cards.length <= 5
+    ? "Perfect shortlist size. Choosing one now."
+    : "More than five picks are visible, so BiteSwipe is choosing from everything shown.";
+
+  let tick = 0;
+  const maxTicks = 18;
+  const interval = window.setInterval(() => {
+    const preview = cards[Math.floor(Math.random() * cards.length)];
+    name.textContent = preview.querySelector("h2")?.textContent.trim() || "Choosing...";
+    tick += 1;
+
+    if (tick >= maxTicks) {
+      window.clearInterval(interval);
+      const picked = cards[Math.floor(Math.random() * cards.length)];
+      const pickedName = picked.querySelector("h2")?.textContent.trim() || "This one";
+      const pickedAddress = picked.querySelector(".saved-address")?.textContent.trim() || "Open the card for details.";
+      name.textContent = pickedName;
+      meta.textContent = pickedAddress;
+      decider.classList.remove("is-choosing");
+      picked.classList.add("is-picked");
+      picked.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, 90);
 }
 
 function copySavedShortlist() {

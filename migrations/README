@@ -1,0 +1,6 @@
+Generic single-database configuration for Flask-Migrate.
+
+Use this for production schema changes instead of editing live databases by hand:
+
+  flask --app main db upgrade
+

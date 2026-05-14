@@ -14,7 +14,13 @@
   <script src="{{ url_for('static', filename='themetoggle.js') }}" defer></script>
   <script src="{{ url_for('static', filename='app-ui.js') }}" defer></script>
 </head>
-<body data-route="{{ request.endpoint or '' }}">
+{% set active_school_theme = school_theme if request.endpoint == 'home' else none %}
+<body
+  data-route="{{ request.endpoint or '' }}"
+  {% if active_school_theme %}
+    data-school-theme="{{ active_school_theme.slug }}"
+    style="--school-primary: {{ active_school_theme.primary }}; --school-secondary: {{ active_school_theme.secondary }}; --school-accent: {{ active_school_theme.accent }}; --school-bg-image: {% if active_school_theme.backdrop_url %}url('{{ active_school_theme.backdrop_url }}'){% else %}none{% endif %}; --school-card-image: {% if active_school_theme.card_image_url %}url('{{ active_school_theme.card_image_url }}'){% else %}var(--school-bg-image){% endif %};"
+  {% endif %}>
   <a class="skip-link" href="#mainContent">Skip to content</a>
 
   <header class="app-header" aria-label="BiteSwipe header">
@@ -41,7 +47,7 @@
           <span class="header-settings-avatar-wrap">
             <img
               class="header-settings-avatar"
-              src="{{ url_for('static', filename='uploads/' + ((template_user.pfp_file_path if template_user else '') or 'transparentnewdefaultpicture.png')) }}"
+              src="{{ uploaded_file_url(template_user.pfp_file_path if template_user else None, 'transparentnewdefaultpicture.png') }}"
               alt="">
           </span>
           <span class="header-settings-label">Settings</span>
@@ -53,8 +59,8 @@
           </div>
           <a role="menuitem" href="{{ url_for('profile') }}">Profile</a>
           <a role="menuitem" href="{{ url_for('credits') }}">Saved picks</a>
-          <button type="button" role="menuitem" onclick="toggleFooterPanel('filters')">Filters</button>
-          <button type="button" role="menuitem" onclick="toggleFooterPanel('interests')">Interests</button>
+          <button type="button" role="menuitem" onclick="toggleFooterPanel('filters', event)">Filters</button>
+          <button type="button" role="menuitem" onclick="toggleFooterPanel('interests', event)">Interests</button>
           <a role="menuitem" class="header-settings-logout" href="{{ url_for('logout') }}">Log out</a>
         </div>
       </details>
@@ -95,7 +101,7 @@
           class="nav-link filter-trigger"
           aria-controls="myDropup"
           aria-expanded="false"
-          onclick="myFunction()">
+          onclick="myFunction(event)">
           <span class="nav-icon" aria-hidden="true">⚙️</span>
           <span>Filters</span>
           <span class="nav-chip-count" id="filterCount" aria-label="0 active deck filters">0</span>
@@ -118,17 +124,23 @@
           <section class="filter-section" aria-labelledby="distance-filter-title">
             <h2 id="distance-filter-title">Distance</h2>
             <label class="filter-distance-label" for="myRange">
-              <span id="distanceValue">50</span> miles
+              <span id="distanceValue">2</span> miles
             </label>
             <div class="slidecontainer">
               <span>1</span>
-              <input type="range" min="1" max="100" value="50" class="slider" id="myRange">
+              <input type="range" min="1" max="100" value="2" class="slider" id="myRange">
               <span>100</span>
             </div>
           </section>
 
-          <section class="filter-section" aria-labelledby="allergen-filter-title">
-            <h2 id="allergen-filter-title">Allergens</h2>
+          <details class="filter-section filter-disclosure" id="allergenFilterGroup">
+            <summary class="filter-disclosure-summary">
+              <span>
+                <span class="filter-disclosure-title" id="allergen-filter-title">Allergens</span>
+                <span class="filter-disclosure-help">Open when allergy signals need to shape the deck.</span>
+              </span>
+              <span class="filter-disclosure-icon" aria-hidden="true"></span>
+            </summary>
             <div class="filter-options">
               <label class="filter-option" for="celiac"><input type="checkbox" id="celiac"> Celiac</label>
               <label class="filter-option" for="peanuts"><input type="checkbox" id="peanuts"> Peanuts</label>
@@ -139,7 +151,7 @@
               <label class="filter-option" for="treenuts"><input type="checkbox" id="treenuts"> Tree nuts</label>
               <label class="filter-option" for="eggs"><input type="checkbox" id="eggs"> Eggs</label>
             </div>
-          </section>
+          </details>
 
           <section class="filter-section" aria-labelledby="price-filter-title">
             <h2 id="price-filter-title">Price</h2>
@@ -150,8 +162,36 @@
             </div>
           </section>
 
-          <section class="filter-section" aria-labelledby="food-filter-title">
-            <h2 id="food-filter-title">Cravings</h2>
+          <section class="filter-section" aria-labelledby="availability-filter-title">
+            <h2 id="availability-filter-title">Availability</h2>
+            <div class="filter-options filter-options-compact">
+              <label class="filter-option" for="openNow"><input type="checkbox" id="openNow"> Open now</label>
+              <label class="filter-option" for="outdoorSeating"><input type="checkbox" id="outdoorSeating"> Outdoor seating</label>
+              <label class="filter-option" for="takeoutOnly"><input type="checkbox" id="takeoutOnly"> Takeout</label>
+              <label class="filter-option" for="dineIn"><input type="checkbox" id="dineIn"> Dine-in</label>
+            </div>
+          </section>
+
+          <section class="filter-section" aria-labelledby="rating-filter-title">
+            <h2 id="rating-filter-title">Minimum rating</h2>
+            <label class="filter-distance-label" for="minRatingRange">
+              <span id="minRatingValue">0.0</span>+ stars
+            </label>
+            <div class="slidecontainer">
+              <span>Any</span>
+              <input type="range" min="0" max="5" step="0.5" value="0" class="slider" id="minRatingRange">
+              <span>5</span>
+            </div>
+          </section>
+
+          <details class="filter-section filter-disclosure" id="cravingFilterGroup">
+            <summary class="filter-disclosure-summary">
+              <span>
+                <span class="filter-disclosure-title" id="food-filter-title">Cravings</span>
+                <span class="filter-disclosure-help">Pick cuisines only when the deck needs a stronger direction.</span>
+              </span>
+              <span class="filter-disclosure-icon" aria-hidden="true"></span>
+            </summary>
             <div class="filter-options">
               {% for preference in ["American", "Italian", "Seafood", "Mexican", "Chinese", "Japanese", "Indian", "Mediterranean", "Pizza", "Vegan", "Coffee", "Dessert", "Breakfast", "Healthy", "Halal", "Korean", "Thai"] %}
                 <label class="filter-option" for="foodPreference{{ loop.index }}">
@@ -164,7 +204,29 @@
                 </label>
               {% endfor %}
             </div>
-          </section>
+          </details>
+
+          <details class="filter-section filter-disclosure" id="exclusionFilterGroup">
+            <summary class="filter-disclosure-summary">
+              <span>
+                <span class="filter-disclosure-title">Cuisine exclusions</span>
+                <span class="filter-disclosure-help">Block foods you never want in the deck.</span>
+              </span>
+              <span class="filter-disclosure-icon" aria-hidden="true"></span>
+            </summary>
+            <div class="filter-options">
+              {% for exclusion in ["Sushi", "Seafood", "Pizza", "Coffee", "Vegan", "Fast food", "Thai", "Indian"] %}
+                <label class="filter-option" for="cuisineExclusion{{ loop.index }}">
+                  <input
+                    type="checkbox"
+                    id="cuisineExclusion{{ loop.index }}"
+                    name="cuisineExclusions"
+                    value="{{ exclusion }}">
+                  Never {{ exclusion }}
+                </label>
+              {% endfor %}
+            </div>
+          </details>
 
           <div class="filter-panel-actions">
             <button type="button" class="filter-action-primary" data-apply-filters>Apply to deck</button>
@@ -179,7 +241,7 @@
           class="nav-link interests-trigger"
           aria-controls="myInterestsDropup"
           aria-expanded="false"
-          onclick="toggleFooterPanel('interests')">
+          onclick="toggleFooterPanel('interests', event)">
           <span class="nav-icon" aria-hidden="true">✨</span>
           <span>Interests</span>
           <span class="nav-chip-count" id="interestCount" aria-label="0 profile interests">0</span>

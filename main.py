@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
+import re
+import secrets
+import string
 from functools import wraps
+from datetime import datetime, timedelta, timezone
 from math import atan2, cos, radians, sin, sqrt
 from pathlib import Path
 from typing import Any
@@ -21,15 +26,26 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 from blog_db import BlogPosts
 from config import Config
-from db import db
-from users_db import SavedRestaurant, Users
+from db import db, migrate
+from users_db import (
+    GroupSwipeMember,
+    GroupSwipeMessage,
+    GroupSwipeSession,
+    GroupSwipeVote,
+    SavedRestaurant,
+    UserActivity,
+    UserFollow,
+    UserInterest,
+    UserRestaurantRating,
+    Users,
+)
 
 
 ALLOWED_UPLOAD_EXTENSIONS = {"gif", "jpeg", "jpg", "png", "webp"}
@@ -38,6 +54,7 @@ MAX_NAME_LENGTH = 32
 MAX_BIO_LENGTH = 256
 OSM_AMENITIES = ("restaurant", "fast_food", "cafe", "food_court")
 METERS_PER_MILE = 1609.344
+WALKING_SPEED_METERS_PER_MINUTE = 83
 
 ALLERGEN_FILTERS: dict[str, dict[str, str | tuple[str, ...]]] = {
     "celiac": {
@@ -83,7 +100,7 @@ ALLERGEN_FILTERS: dict[str, dict[str, str | tuple[str, ...]]] = {
 }
 
 PRICE_FILTERS: dict[str, dict[str, Any]] = {
-    "cheapPrice": {"label": "$5 - $20", "levels": {0, 1}},
+    "cheapPrice": {"label": "$5 - $20", "levels": {1}},
     "mediumPrice": {"label": "$25 - $40", "levels": {2}},
     "expensivePrice": {"label": "$40+", "levels": {3, 4}},
 }
@@ -143,6 +160,159 @@ FOOD_KEYWORDS: dict[str, tuple[str, ...]] = {
     "thai": ("thai", "pad thai", "curry"),
 }
 
+RESTAURANT_FALLBACK_IMAGE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("coffee", ("coffee", "cafe", "espresso", "tea", "bakery")),
+    ("pizza", ("pizza", "pizzeria")),
+    ("mexican", ("mexican", "taco", "burrito", "tex-mex")),
+    ("asian", ("chinese", "japanese", "korean", "thai", "vietnamese", "sushi", "ramen", "asian")),
+    ("indian", ("indian", "curry", "tandoori")),
+    ("mediterranean", ("mediterranean", "greek", "middle eastern", "falafel", "halal", "kebab")),
+    ("vegan", ("vegan", "vegetarian", "salad", "healthy")),
+    ("dessert", ("dessert", "ice cream", "donut", "pastry", "sweet")),
+    ("breakfast", ("breakfast", "brunch", "diner", "bagel")),
+    ("american", ("american", "burger", "bbq", "barbecue", "sandwich", "fast food", "chicken")),
+)
+DEFAULT_RESTAURANT_FALLBACK_IMAGE = "general"
+
+SCHOOL_THEME_ROWS: tuple[tuple[str, str, str, str, str, str, str], ...] = (
+    ("princeton.edu", "princeton", "Princeton University", "Princeton", "#E77500", "#000000", "#FFB347"),
+    ("mit.edu", "mit", "Massachusetts Institute of Technology", "MIT", "#A31F34", "#8A8B8C", "#A31F34"),
+    ("harvard.edu", "harvard", "Harvard University", "Harvard", "#A51C30", "#FFFFFF", "#A51C30"),
+    ("stanford.edu", "stanford", "Stanford University", "Stanford", "#8C1515", "#B83A4B", "#8C1515"),
+    ("yale.edu", "yale", "Yale University", "Yale", "#00356B", "#63A8E1", "#286DC0"),
+    ("uchicago.edu", "uchicago", "University of Chicago", "UChicago", "#800000", "#767676", "#800000"),
+    ("duke.edu", "duke", "Duke University", "Duke", "#012169", "#00539B", "#00539B"),
+    ("jhu.edu", "johns-hopkins", "Johns Hopkins University", "Johns Hopkins", "#002D72", "#68ACE5", "#0072CE"),
+    ("northwestern.edu", "northwestern", "Northwestern University", "Northwestern", "#4E2A84", "#836EAA", "#4E2A84"),
+    ("upenn.edu", "penn", "University of Pennsylvania", "Penn", "#011F5B", "#990000", "#2F6DB3"),
+    ("caltech.edu", "caltech", "California Institute of Technology", "Caltech", "#FF6C0C", "#76777B", "#FF6C0C"),
+    ("cornell.edu", "cornell", "Cornell University", "Cornell", "#B31B1B", "#222222", "#B31B1B"),
+    ("brown.edu", "brown", "Brown University", "Brown", "#4E3629", "#ED1C24", "#ED1C24"),
+    ("dartmouth.edu", "dartmouth", "Dartmouth College", "Dartmouth", "#00693E", "#12312B", "#00693E"),
+    ("columbia.edu", "columbia", "Columbia University", "Columbia", "#B9D9EB", "#003865", "#003865"),
+    ("berkeley.edu", "uc-berkeley", "University of California, Berkeley", "UC Berkeley", "#003262", "#FDB515", "#3B7EA1"),
+    ("rice.edu", "rice", "Rice University", "Rice", "#00205B", "#C1C6C8", "#00205B"),
+    ("ucla.edu", "ucla", "University of California, Los Angeles", "UCLA", "#2774AE", "#FFD100", "#2774AE"),
+    ("vanderbilt.edu", "vanderbilt", "Vanderbilt University", "Vanderbilt", "#866D4B", "#000000", "#866D4B"),
+    ("cmu.edu", "carnegie-mellon", "Carnegie Mellon University", "Carnegie Mellon", "#C41230", "#1D1D1D", "#C41230"),
+    ("umich.edu", "michigan", "University of Michigan-Ann Arbor", "Michigan", "#00274C", "#FFCB05", "#00274C"),
+    ("nd.edu", "notre-dame", "University of Notre Dame", "Notre Dame", "#0C2340", "#C99700", "#0C2340"),
+    ("wustl.edu", "washu", "Washington University in St. Louis", "WashU", "#A51417", "#007360", "#A51417"),
+    ("emory.edu", "emory", "Emory University", "Emory", "#012169", "#C5A057", "#012169"),
+    ("georgetown.edu", "georgetown", "Georgetown University", "Georgetown", "#041E42", "#8D817B", "#041E42"),
+    ("unc.edu", "unc", "University of North Carolina-Chapel Hill", "UNC", "#4B9CD3", "#13294B", "#4B9CD3"),
+    ("virginia.edu", "virginia", "University of Virginia", "UVA", "#232D4B", "#E57200", "#E57200"),
+    ("usc.edu", "usc", "University of Southern California", "USC", "#990000", "#FFCC00", "#990000"),
+    ("ucsd.edu", "uc-san-diego", "University of California, San Diego", "UC San Diego", "#00629B", "#FFCD00", "#00629B"),
+    ("ufl.edu", "florida", "University of Florida", "Florida", "#0021A5", "#FA4616", "#FA4616"),
+    ("utexas.edu", "texas", "The University of Texas-Austin", "UT Austin", "#BF5700", "#333F48", "#BF5700"),
+    ("gatech.edu", "georgia-tech", "Georgia Institute of Technology", "Georgia Tech", "#B3A369", "#003057", "#B3A369"),
+    ("nyu.edu", "nyu", "New York University", "NYU", "#57068C", "#FFFFFF", "#57068C"),
+    ("ucdavis.edu", "uc-davis", "University of California, Davis", "UC Davis", "#022851", "#FFBF00", "#022851"),
+    ("uci.edu", "uc-irvine", "University of California, Irvine", "UC Irvine", "#0064A4", "#FFD200", "#0064A4"),
+    ("bc.edu", "boston-college", "Boston College", "Boston College", "#8A100B", "#B29D6C", "#8A100B"),
+    ("tufts.edu", "tufts", "Tufts University", "Tufts", "#3E8EDE", "#0E1E2F", "#3E8EDE"),
+    ("illinois.edu", "illinois", "University of Illinois Urbana-Champaign", "Illinois", "#13294B", "#FF5F05", "#FF5F05"),
+    ("wisc.edu", "wisconsin", "University of Wisconsin-Madison", "Wisconsin", "#C5050C", "#646569", "#C5050C"),
+    ("ucsb.edu", "uc-santa-barbara", "University of California, Santa Barbara", "UC Santa Barbara", "#003660", "#FEBC11", "#003660"),
+    ("osu.edu", "ohio-state", "The Ohio State University", "Ohio State", "#BB0000", "#666666", "#BB0000"),
+    ("bu.edu", "boston-university", "Boston University", "Boston University", "#CC0000", "#2D2926", "#CC0000"),
+    ("rutgers.edu", "rutgers-new-brunswick", "Rutgers University-New Brunswick", "Rutgers", "#CC0033", "#5F6A72", "#CC0033"),
+    ("umd.edu", "maryland", "University of Maryland, College Park", "Maryland", "#E21833", "#FFD200", "#E21833"),
+    ("washington.edu", "washington", "University of Washington", "Washington", "#4B2E83", "#B7A57A", "#4B2E83"),
+    ("lehigh.edu", "lehigh", "Lehigh University", "Lehigh", "#653819", "#A28E6A", "#653819"),
+    ("northeastern.edu", "northeastern", "Northeastern University", "Northeastern", "#C8102E", "#000000", "#C8102E"),
+    ("purdue.edu", "purdue", "Purdue University", "Purdue", "#CEB888", "#000000", "#CEB888"),
+    ("uga.edu", "georgia", "University of Georgia", "Georgia", "#BA0C2F", "#000000", "#BA0C2F"),
+    ("rochester.edu", "rochester", "University of Rochester", "Rochester", "#003B71", "#FFD100", "#003B71"),
+    ("case.edu", "case-western", "Case Western Reserve University", "Case Western", "#0A304E", "#C8D2D9", "#0A304E"),
+    ("fsu.edu", "florida-state", "Florida State University", "Florida State", "#782F40", "#CEB888", "#782F40"),
+    ("tamu.edu", "texas-am", "Texas A&M University", "Texas A&M", "#500000", "#D6D3C4", "#500000"),
+    ("vt.edu", "virginia-tech", "Virginia Tech", "Virginia Tech", "#861F41", "#E5751F", "#E5751F"),
+    ("wfu.edu", "wake-forest", "Wake Forest University", "Wake Forest", "#9E7E38", "#000000", "#9E7E38"),
+    ("wm.edu", "william-and-mary", "William & Mary", "William & Mary", "#115740", "#B9975B", "#115740"),
+    ("ucmerced.edu", "uc-merced", "University of California, Merced", "UC Merced", "#002856", "#DAA900", "#002856"),
+    ("villanova.edu", "villanova", "Villanova University", "Villanova", "#00205B", "#13B5EA", "#0072CE"),
+    ("gwu.edu", "george-washington", "George Washington University", "GW", "#033C5A", "#AA9868", "#033C5A"),
+    ("psu.edu", "penn-state", "The Pennsylvania State University-University Park", "Penn State", "#1E407C", "#96BEE6", "#009CDE"),
+    ("scu.edu", "santa-clara", "Santa Clara University", "Santa Clara", "#862633", "#FFFFFF", "#862633"),
+    ("stonybrook.edu", "stony-brook", "Stony Brook University-SUNY", "Stony Brook", "#990000", "#5B6770", "#990000"),
+    ("umn.edu", "minnesota", "University of Minnesota-Twin Cities", "Minnesota", "#7A0019", "#FFCC33", "#7A0019"),
+    ("msu.edu", "michigan-state", "Michigan State University", "Michigan State", "#18453B", "#FFFFFF", "#18453B"),
+    ("ncsu.edu", "nc-state", "North Carolina State University", "NC State", "#CC0000", "#000000", "#CC0000"),
+    ("rpi.edu", "rpi", "Rensselaer Polytechnic Institute", "RPI", "#D6001C", "#54585A", "#D6001C"),
+    ("umass.edu", "umass-amherst", "University of Massachusetts-Amherst", "UMass Amherst", "#881C1C", "#212721", "#881C1C"),
+    ("miami.edu", "miami", "University of Miami", "Miami", "#F47321", "#005030", "#F47321"),
+    ("brandeis.edu", "brandeis", "Brandeis University", "Brandeis", "#003478", "#FFFFFF", "#003478"),
+    ("tulane.edu", "tulane", "Tulane University of Louisiana", "Tulane", "#006747", "#418FDE", "#006747"),
+    ("uconn.edu", "uconn", "University of Connecticut", "UConn", "#000E2F", "#7C878E", "#000E2F"),
+    ("pitt.edu", "pittsburgh", "University of Pittsburgh", "Pitt", "#003594", "#FFB81C", "#003594"),
+    ("binghamton.edu", "binghamton", "Binghamton University-SUNY", "Binghamton", "#005A43", "#B2B4B2", "#005A43"),
+    ("indiana.edu", "indiana", "Indiana University-Bloomington", "Indiana", "#990000", "#EEEDEB", "#990000"),
+    ("clemson.edu", "clemson", "Clemson University", "Clemson", "#F56600", "#522D80", "#F56600"),
+    ("newark.rutgers.edu", "rutgers-newark", "Rutgers University-Newark", "Rutgers Newark", "#CC0033", "#5F6A72", "#CC0033"),
+    ("syracuse.edu", "syracuse", "Syracuse University", "Syracuse", "#D44500", "#000E54", "#D44500"),
+    ("buffalo.edu", "buffalo", "University at Buffalo-SUNY", "Buffalo", "#005BBB", "#E56A54", "#005BBB"),
+    ("ucr.edu", "uc-riverside", "University of California, Riverside", "UC Riverside", "#003DA5", "#FFB81C", "#003DA5"),
+    ("mines.edu", "colorado-mines", "Colorado School of Mines", "Colorado Mines", "#21314D", "#B3A369", "#21314D"),
+    ("drexel.edu", "drexel", "Drexel University", "Drexel", "#07294D", "#FFC600", "#007A78"),
+    ("njit.edu", "njit", "New Jersey Institute of Technology", "NJIT", "#CC0000", "#58595B", "#CC0000"),
+    ("stevens.edu", "stevens", "Stevens Institute of Technology", "Stevens", "#A32638", "#9EA2A2", "#A32638"),
+    ("pepperdine.edu", "pepperdine", "Pepperdine University", "Pepperdine", "#00205C", "#F4C300", "#00205C"),
+    ("uic.edu", "uic", "University of Illinois Chicago", "UIC", "#001E62", "#D50032", "#D50032"),
+    ("wpi.edu", "wpi", "Worcester Polytechnic Institute", "WPI", "#AC2B37", "#5B6770", "#AC2B37"),
+    ("yu.edu", "yeshiva", "Yeshiva University", "Yeshiva", "#0033A0", "#FFFFFF", "#0033A0"),
+    ("american.edu", "american", "American University", "American", "#004FA3", "#D11242", "#D11242"),
+    ("baylor.edu", "baylor", "Baylor University", "Baylor", "#154734", "#FFB81C", "#154734"),
+    ("howard.edu", "howard", "Howard University", "Howard", "#003A70", "#E51937", "#003A70"),
+    ("marquette.edu", "marquette", "Marquette University", "Marquette", "#003366", "#FDB933", "#003366"),
+    ("rit.edu", "rit", "Rochester Institute of Technology", "RIT", "#F76902", "#000000", "#F76902"),
+    ("smu.edu", "smu", "Southern Methodist University", "SMU", "#0033A0", "#CC0035", "#CC0035"),
+    ("ucsc.edu", "uc-santa-cruz", "University of California, Santa Cruz", "UC Santa Cruz", "#003C6C", "#F2A900", "#003C6C"),
+    ("udel.edu", "delaware", "University of Delaware", "Delaware", "#00539F", "#FFD200", "#00539F"),
+    ("usf.edu", "south-florida", "University of South Florida", "USF", "#006747", "#CFC493", "#006747"),
+    ("fiu.edu", "fiu", "Florida International University", "FIU", "#081E3F", "#B6862C", "#081E3F"),
+    ("fordham.edu", "fordham", "Fordham University", "Fordham", "#900028", "#B9975B", "#900028"),
+    ("camden.rutgers.edu", "rutgers-camden", "Rutgers University-Camden", "Rutgers Camden", "#CC0033", "#5F6A72", "#CC0033"),
+    ("tcu.edu", "tcu", "Texas Christian University", "TCU", "#4D1979", "#A3A9AC", "#4D1979"),
+    ("colorado.edu", "colorado-boulder", "University of Colorado Boulder", "Colorado Boulder", "#CFB87C", "#000000", "#CFB87C"),
+)
+
+SCHOOL_THEME_EXTRAS: tuple[tuple[str, str, str, str, str, str, str], ...] = (
+    ("temple.edu", "temple", "Temple University", "Temple", "#9D2235", "#FFFFFF", "#222222"),
+    ("wcupa.edu", "west-chester", "West Chester University", "West Chester", "#4B116F", "#F2C75C", "#6F2DA8"),
+)
+
+SCHOOL_THEME_ASSET_OVERRIDES: dict[str, dict[str, str | None]] = {
+    "drexel.edu": {"image_file": "schools/backdrops/drexel.webp"},
+    "temple.edu": {"image_file": "schools/backdrops/temple.webp"},
+    "upenn.edu": {"image_file": "schools/backdrops/penn.webp", "card_image_file": "schools/upenn logo.webp"},
+    "wcupa.edu": {"image_file": "schools/backdrops/west-chester.webp"},
+}
+
+
+def build_school_theme_map() -> dict[str, dict[str, str | None]]:
+    themes: dict[str, dict[str, str | None]] = {}
+
+    for domain, slug, name, short_name, primary, secondary, accent in SCHOOL_THEME_ROWS + SCHOOL_THEME_EXTRAS:
+        theme = {
+            "slug": slug,
+            "name": name,
+            "short_name": short_name,
+            "primary": primary,
+            "secondary": secondary,
+            "accent": accent,
+            "image_file": f"schools/backdrops/{slug}.webp",
+            "card_image_file": f"schools/badges/{slug}.webp",
+        }
+        theme.update(SCHOOL_THEME_ASSET_OVERRIDES.get(domain, {}))
+        themes[domain] = theme
+
+    return themes
+
+
+SCHOOL_THEMES = build_school_theme_map()
+
 DEFAULT_FILTERS: dict[str, Any] = {
     "celiac": False,
     "peanuts": False,
@@ -155,8 +325,14 @@ DEFAULT_FILTERS: dict[str, Any] = {
     "cheapPrice": False,
     "mediumPrice": False,
     "expensivePrice": False,
-    "distance": 50,
+    "distance": 2,
+    "minRating": 0,
+    "openNow": False,
+    "outdoorSeating": False,
+    "takeoutOnly": False,
+    "dineIn": False,
     "foodPreferences": [],
+    "cuisineExclusions": [],
     "hobbyInterests": [],
 }
 
@@ -172,6 +348,9 @@ def create_app(config_object: type[Config] = Config, config_overrides: dict[str,
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
 
     db.init_app(app)
+    if migrate is not None:
+        migrate.init_app(app, db)
+    app.jinja_env.globals["uploaded_file_url"] = uploaded_file_url
     register_routes(app)
     register_cli(app)
 
@@ -180,6 +359,7 @@ def create_app(config_object: type[Config] = Config, config_overrides: dict[str,
             db.create_all()
             ensure_user_interest_columns()
             ensure_saved_restaurant_detail_columns()
+            ensure_user_interest_rows()
 
     return app
 
@@ -191,12 +371,19 @@ def register_cli(app: Flask) -> None:
         db.create_all()
         ensure_user_interest_columns()
         ensure_saved_restaurant_detail_columns()
+        ensure_user_interest_rows()
         print("Initialized the database.")
 
 
 def ensure_user_interest_columns() -> None:
     column_names = get_table_column_names("users")
     required_columns = {
+        "profile_banner_file_path": "VARCHAR(255)",
+        "profile_showcase_file_path": "VARCHAR(255)",
+        "campus_theme_domain": "VARCHAR(255)",
+        "transportation_mode": "VARCHAR(16)",
+        "pronouns": "VARCHAR(64)",
+        "last_active_at": "VARCHAR(40)",
         "allergen_interests_json": "TEXT DEFAULT '[]'",
         "food_preferences_json": "TEXT DEFAULT '[]'",
         "hobby_interests_json": "TEXT DEFAULT '[]'",
@@ -205,6 +392,10 @@ def ensure_user_interest_columns() -> None:
     for column_name, column_type in required_columns.items():
         if column_name not in column_names:
             db.session.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_type}"))
+
+    group_columns = get_table_column_names("group_swipe_sessions") if inspect(db.engine).has_table("group_swipe_sessions") else set()
+    if group_columns and "expires_at" not in group_columns:
+        db.session.execute(text("ALTER TABLE group_swipe_sessions ADD COLUMN expires_at VARCHAR(40)"))
 
     db.session.commit()
 
@@ -224,6 +415,39 @@ def ensure_saved_restaurant_detail_columns() -> None:
             db.session.execute(text(f"ALTER TABLE saved_restaurants ADD COLUMN {column_name} {column_type}"))
 
     db.session.commit()
+
+
+def ensure_user_interest_rows() -> None:
+    if not inspect(db.engine).has_table("user_interests"):
+        return
+
+    for user in Users.query.all():
+        for field_name, category in {
+            "allergen_interests_json": "allergen",
+            "food_preferences_json": "food",
+            "hobby_interests_json": "hobby",
+        }.items():
+            existing = UserInterest.query.filter_by(user_id=user.id, category=category).first()
+            if existing is not None:
+                continue
+
+            values = parse_legacy_interest_json(getattr(user, field_name, "[]"))
+            if values:
+                user.set_interest_list(field_name, values)
+
+    db.session.commit()
+
+
+def parse_legacy_interest_json(value: Any) -> list[str]:
+    try:
+        parsed = json.loads(value or "[]")
+    except (TypeError, json.JSONDecodeError):
+        return []
+
+    if not isinstance(parsed, list):
+        return []
+
+    return [normalize_interest_label(item) for item in parsed if normalize_interest_label(item)]
 
 
 def get_table_column_names(table_name: str) -> set[str]:
@@ -251,7 +475,13 @@ def get_table_column_names(table_name: str) -> set[str]:
 def register_routes(app: Flask) -> None:
     @app.context_processor
     def inject_template_user() -> dict[str, Any]:
-        return {"template_user": current_user()}
+        user = current_user()
+        if user is not None:
+            touch_user_activity(user)
+        return {
+            "template_user": user,
+            "school_theme": build_school_theme_payload(user),
+        }
 
     @app.get("/health")
     def health() -> Any:
@@ -275,6 +505,7 @@ def register_routes(app: Flask) -> None:
 
             return redirect(url_for("home"))
 
+        join_group_from_invite(user)
         return render_template("cards.html")
 
     @app.route("/profile", methods=["GET", "POST"])
@@ -289,30 +520,38 @@ def register_routes(app: Flask) -> None:
 
             if action == "upload_pic":
                 handle_profile_picture_upload(user)
+            elif action == "upload_banner":
+                handle_profile_banner_upload(user)
+            elif action == "upload_showcase":
+                handle_profile_showcase_upload(user)
             elif action == "update_bio":
                 update_user_bio(user)
             elif action == "update_name":
                 update_user_name(user)
+            elif action == "update_pronouns":
+                update_user_pronouns(user)
             elif action == "add_food_preference":
                 add_user_food_preference(user)
             elif action == "add_hobby_interest":
                 add_user_hobby_interest(user)
             elif action == "remove_interest":
                 remove_user_interest(user)
+            elif action == "update_campus_theme":
+                update_user_campus_theme(user)
             else:
                 flash("Unknown profile action.")
 
             return redirect(url_for("profile"))
 
+        return render_template("public.html", **build_profile_template_context(user))
+
+    @app.get("/userID=<int:user_id>")
+    @app.get("/user/<int:user_id>")
+    def public_user_profile(user_id: int) -> Any:
+        user = Users.query.get_or_404(user_id)
         return render_template(
-            "public.html",
-            u=user,
-            saved_restaurant_count=len(user.saved_restaurants),
-            allergen_interests=user.get_interest_list("allergen_interests_json"),
-            food_preferences=user.get_interest_list("food_preferences_json"),
-            hobby_interests=user.get_interest_list("hobby_interests_json"),
-            food_preference_presets=FOOD_PREFERENCE_PRESETS,
-            hobby_interest_presets=HOBBY_INTEREST_PRESETS,
+            "public_user.html",
+            **build_profile_template_context(user, is_public_profile=True),
         )
 
     @app.get("/credits")
@@ -326,7 +565,7 @@ def register_routes(app: Flask) -> None:
             if user_id
             else []
         )
-        return render_template("about_us.html", saved_restaurants=saved_restaurants)
+        return render_template("saved.html", saved_restaurants=saved_restaurants)
 
     @app.route("/login", methods=["POST", "GET"])
     def login() -> Any:
@@ -344,21 +583,16 @@ def register_routes(app: Flask) -> None:
 
         user = Users.query.filter_by(email=email).first()
 
-        if user is not None:
-            if not verify_password(user.password, password):
-                flash("Invalid email or password.")
-                return render_template("login.html"), 401
+        if user is None:
+            flash("No BiteSwipe account exists for that email yet. Create one first.")
+            return render_template("login.html"), 404
 
-            if not is_password_hash(user.password):
-                user.password = generate_password_hash(password)
-                db.session.commit()
-        else:
-            user = Users(
-                name=default_name_from_email(email),
-                email=email,
-                password=generate_password_hash(password),
-            )
-            db.session.add(user)
+        if not verify_password(user.password, password):
+            flash("Invalid email or password.")
+            return render_template("login.html"), 401
+
+        if not is_password_hash(user.password):
+            user.password = generate_password_hash(password)
             db.session.commit()
 
         session.clear()
@@ -368,6 +602,58 @@ def register_routes(app: Flask) -> None:
 
         flash("Login successful.")
         return redirect(url_for("home"))
+
+    @app.route("/signup", methods=["POST", "GET"])
+    def signup() -> Any:
+        if request.method == "GET":
+            if "email" in session:
+                return redirect(url_for("home"))
+            return render_template("signup.html")
+
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("pass", "")
+        confirm_password = request.form.get("confirm_pass", "")
+
+        if not email or not password or not confirm_password:
+            flash("Email, password, and password confirmation are required.")
+            return render_template("signup.html"), 400
+
+        if password != confirm_password:
+            flash("Passwords do not match.")
+            return render_template("signup.html"), 400
+
+        if Users.query.filter_by(email=email).first() is not None:
+            flash("An account already exists for that email. Log in instead.")
+            return render_template("signup.html"), 409
+
+        user = Users(
+            name=default_name_from_email(email),
+            email=email,
+            password=generate_password_hash(password),
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        session.clear()
+        session.permanent = False
+        session["email"] = user.email
+        session["id"] = user.id
+
+        flash("Account created. Welcome to BiteSwipe.")
+        return redirect(url_for("home"))
+
+    @app.route("/forgot-password", methods=["POST", "GET"])
+    def forgot_password() -> Any:
+        if request.method == "POST":
+            email = request.form.get("email", "").strip().lower()
+            if not email:
+                flash("Enter your email to start password recovery.")
+                return render_template("forgot_password.html"), 400
+
+            flash("Password reset email delivery is not enabled yet. Ask the BiteSwipe team to reset this account.")
+            return render_template("forgot_password.html")
+
+        return render_template("forgot_password.html")
 
     @app.route("/chat", methods=["POST", "GET"])
     @login_required
@@ -453,14 +739,16 @@ def register_routes(app: Flask) -> None:
         api_key = current_app.config.get("GOOGLE_PLACES_API_KEY")
 
         try:
-            if provider == "google" or (provider == "auto" and api_key):
+            if provider == "google":
                 if not api_key:
                     return jsonify({"places": [], "error": "Google Places API key is not configured."}), 503
                 places = search_restaurants_with_google(user, api_key, filters, radius_meters)
                 source = "google"
-            else:
+            elif provider == "openstreetmap":
                 places = search_restaurants_with_openstreetmap(user.latitude, user.longitude, radius_meters)
                 source = "openstreetmap"
+            else:
+                places, source = search_restaurants_hybrid(user, api_key, filters, radius_meters)
         except Exception:
             current_app.logger.exception("Restaurant search failed.")
             return jsonify({"places": [], "error": "Restaurant search failed. Please try again."}), 502
@@ -472,6 +760,8 @@ def register_routes(app: Flask) -> None:
             filtered_places = apply_distance_filter(places, filters)
             message = "No exact filter matches found, so showing nearby restaurants instead."
 
+        annotate_travel_times(filtered_places, user.transportation_mode)
+        annotate_restaurant_confidence(filtered_places, filters)
         return jsonify({"places": filtered_places, "source": source, "message": message})
 
     @app.post("/save_restaurant")
@@ -485,6 +775,114 @@ def register_routes(app: Flask) -> None:
         ok, message, saved = save_selected_restaurant(user, payload)
         return jsonify({"ok": ok, "message": message, "saved": saved}), 200 if ok else 400
 
+    @app.post("/group_session/create")
+    @login_required
+    def create_group_session() -> Any:
+        user = current_user()
+        if user is None:
+            abort(404)
+
+        group_session = GroupSwipeSession(code=generate_group_code(), host_user_id=user.id)
+        db.session.add(group_session)
+        db.session.flush()
+        add_group_member(group_session, user)
+        db.session.commit()
+        session["group_swipe_code"] = group_session.code
+        return jsonify({"ok": True, "group": serialize_group_session(group_session, user)})
+
+    @app.post("/group_session/join")
+    @login_required
+    def join_group_session() -> Any:
+        user = current_user()
+        if user is None:
+            abort(404)
+
+        payload = request.get_json(silent=True) or request.form
+        code = normalize_group_code(payload.get("code", ""))
+        group_session = GroupSwipeSession.query.filter_by(code=code, is_active=True).first()
+
+        if group_session is None:
+            return jsonify({"ok": False, "message": "No active group session found for that code."}), 404
+
+        add_group_member(group_session, user)
+        db.session.commit()
+        session["group_swipe_code"] = group_session.code
+        return jsonify({"ok": True, "group": serialize_group_session(group_session, user)})
+
+    @app.post("/group_session/leave")
+    @login_required
+    def leave_group_session() -> Any:
+        session.pop("group_swipe_code", None)
+        return jsonify({"ok": True, "message": "Left group mode."})
+
+    @app.get("/group_session/current")
+    @login_required
+    def current_group_session() -> Any:
+        user = current_user()
+        if user is None:
+            abort(404)
+
+        group_session = get_current_group_session()
+        if group_session is None:
+            return jsonify({"ok": True, "group": None})
+
+        return jsonify({"ok": True, "group": serialize_group_session(group_session, user)})
+
+    @app.post("/group_session/swipe")
+    @login_required
+    def group_session_swipe() -> Any:
+        user = current_user()
+        if user is None:
+            abort(404)
+
+        group_session = get_current_group_session()
+        if group_session is None:
+            return jsonify({"ok": False, "message": "Join or create a group session first."}), 400
+
+        payload = request.get_json(silent=True) or {}
+        restaurant = payload.get("restaurant") if isinstance(payload.get("restaurant"), dict) else {}
+        place_id = str(payload.get("place") or restaurant.get("place") or "").strip()
+        action = str(payload.get("action") or "").strip().lower()
+
+        if not place_id or action not in {"save", "pass"}:
+            return jsonify({"ok": False, "message": "Unable to record that group swipe."}), 400
+
+        vote = GroupSwipeVote.query.filter_by(
+            session_id=group_session.id,
+            user_id=user.id,
+            place_id=place_id,
+        ).first()
+
+        if vote is None:
+            vote = GroupSwipeVote(
+                session_id=group_session.id,
+                user_id=user.id,
+                place_id=place_id,
+                action=action,
+                restaurant=sanitize_group_restaurant_payload(restaurant),
+            )
+            db.session.add(vote)
+        else:
+            vote.set_vote(action, sanitize_group_restaurant_payload(restaurant))
+
+        db.session.commit()
+        return jsonify({"ok": True, "group": serialize_group_session(group_session, user)})
+
+    @app.post("/group_session/message")
+    @login_required
+    def group_session_message() -> Any:
+        user = current_user()
+        group_session = get_current_group_session()
+        if user is None or group_session is None:
+            return jsonify({"ok": False, "message": "Join or create a group first."}), 400
+        payload = request.get_json(silent=True) or {}
+        message = normalize_optional_string(payload.get("message"), 160)
+        if not message:
+            return jsonify({"ok": False, "message": "Choose a quick reaction first."}), 400
+        db.session.add(GroupSwipeMessage(session_id=group_session.id, user_id=user.id, message=message))
+        db.session.commit()
+        return jsonify({"ok": True, "group": serialize_group_session(group_session, user)})
+
     @app.post("/remove_restaurant/<int:restaurant_id>")
     @login_required
     def remove_restaurant(restaurant_id: int) -> Any:
@@ -494,6 +892,96 @@ def register_routes(app: Flask) -> None:
         db.session.commit()
         flash(f"Removed {saved.name} from My Stuff.")
         return redirect(url_for("credits"))
+
+    @app.get("/user_ratings")
+    @login_required
+    def user_ratings() -> Any:
+        user_id = session.get("id")
+        ratings = (
+            UserRestaurantRating.query.filter_by(user_id=user_id).all()
+            if user_id
+            else []
+        )
+        return jsonify({"ratings": {row.place_id: row.rating for row in ratings}})
+
+    @app.post("/user_rating")
+    @login_required
+    def user_rating() -> Any:
+        user = current_user()
+        if user is None:
+            abort(401)
+
+        payload = request.get_json(silent=True) or {}
+        place_id = normalize_optional_string(payload.get("place") or payload.get("place_id") or payload.get("name"), 255)
+        rating = normalize_optional_int(payload.get("rating"))
+
+        if not place_id or rating is None or rating < 1 or rating > 5:
+            return jsonify({"ok": False, "message": "Choose a 1-5 star rating."}), 400
+
+        saved_rating = UserRestaurantRating.query.filter_by(user_id=user.id, place_id=place_id).first()
+        if saved_rating is None:
+            saved_rating = UserRestaurantRating(user_id=user.id, place_id=place_id, rating=rating)
+            db.session.add(saved_rating)
+        else:
+            saved_rating.update_rating(rating)
+
+        db.session.commit()
+        return jsonify({"ok": True, "place": place_id, "rating": saved_rating.rating})
+
+    @app.post("/save_transportation")
+    @login_required
+    def save_transportation() -> Any:
+        user = current_user()
+        if user is None:
+            abort(401)
+
+        payload = request.get_json(silent=True) or {}
+        mode = str(payload.get("mode", "")).strip().lower()
+        if mode not in {"walking", "driving", "both"}:
+            return jsonify({"ok": False, "message": "Choose walking, driving, or both."}), 400
+
+        user.transportation_mode = mode
+        filters = sanitize_filters(session.get("filters") or filters_from_user_interests(user))
+        filters["distance"] = 1 if mode == "walking" else 10
+        session["filters"] = filters
+        db.session.commit()
+
+        return jsonify({"ok": True, "mode": mode, "filters": filters})
+
+    @app.post("/follow/<int:user_id>")
+    @login_required
+    def follow_user(user_id: int) -> Any:
+        viewer = current_user()
+        target = Users.query.get_or_404(user_id)
+        if viewer is None or viewer.id == target.id:
+            return redirect(url_for("public_user_profile", user_id=user_id))
+
+        follow = UserFollow.query.filter_by(follower_id=viewer.id, following_id=target.id).first()
+        if follow is None:
+            reciprocal = UserFollow.query.filter_by(follower_id=target.id, following_id=viewer.id).first()
+            status = "approved" if reciprocal and reciprocal.status == "approved" else "pending"
+            follow = UserFollow(follower_id=viewer.id, following_id=target.id, status=status)
+            db.session.add(follow)
+            flash("Follow request sent." if status == "pending" else "You are now following each other.")
+        db.session.commit()
+        return redirect(url_for("public_user_profile", user_id=user_id))
+
+    @app.post("/follow/<int:user_id>/approve")
+    @login_required
+    def approve_follow_user(user_id: int) -> Any:
+        viewer = current_user()
+        if viewer is None:
+            abort(401)
+        follow = UserFollow.query.filter_by(follower_id=user_id, following_id=viewer.id).first_or_404()
+        follow.status = "approved"
+        reciprocal = UserFollow.query.filter_by(follower_id=viewer.id, following_id=user_id).first()
+        if reciprocal is None:
+            db.session.add(UserFollow(follower_id=viewer.id, following_id=user_id, status="approved"))
+        else:
+            reciprocal.status = "approved"
+        db.session.commit()
+        flash("Friend approved.")
+        return redirect(url_for("profile"))
 
     @app.post("/save_filters")
     def save_filters() -> Any:
@@ -535,6 +1023,118 @@ def current_user() -> Users | None:
     if not email:
         return None
     return Users.query.filter_by(email=email).first()
+
+
+def get_email_domain(email: str | None) -> str:
+    if not email or "@" not in email:
+        return ""
+
+    return email.rsplit("@", 1)[1].strip().lower()
+
+
+def get_school_theme_for_email(email: str | None) -> dict[str, str | None] | None:
+    domain = get_email_domain(email)
+    if not domain.endswith(".edu"):
+        return None
+
+    if domain in SCHOOL_THEMES:
+        return dict(SCHOOL_THEMES[domain], domain=domain, is_generated="false")
+
+    for school_domain in sorted(SCHOOL_THEMES, key=len, reverse=True):
+        theme = SCHOOL_THEMES[school_domain]
+        if domain.endswith(f".{school_domain}"):
+            return dict(theme, domain=school_domain, is_generated="false")
+
+    return build_generated_school_theme(domain)
+
+
+def get_school_theme_for_domain(domain: str | None) -> dict[str, str | None] | None:
+    domain = str(domain or "").strip().lower()
+    if not domain:
+        return None
+
+    if domain in SCHOOL_THEMES:
+        return dict(SCHOOL_THEMES[domain], domain=domain, is_generated="false")
+
+    if domain.endswith(".edu"):
+        return build_generated_school_theme(domain)
+
+    return None
+
+
+def get_user_school_theme_domain(user: Users | None) -> str:
+    if user is None:
+        return ""
+
+    selected_domain = str(getattr(user, "campus_theme_domain", "") or "").strip().lower()
+    if selected_domain:
+        return selected_domain
+
+    detected_theme = get_school_theme_for_email(user.email)
+    return str(detected_theme.get("domain", "")) if detected_theme else ""
+
+
+def get_school_theme_options() -> list[dict[str, str | None]]:
+    return [
+        {
+            "domain": domain,
+            "name": str(theme["name"]),
+            "short_name": str(theme["short_name"]),
+        }
+        for domain, theme in sorted(SCHOOL_THEMES.items(), key=lambda item: str(item[1]["name"]))
+    ]
+
+
+def build_generated_school_theme(domain: str) -> dict[str, str | None]:
+    digest = hashlib.sha256(domain.encode("utf-8")).digest()
+    hue = int.from_bytes(digest[:2], "big") % 360
+    secondary_hue = (hue + 38) % 360
+    short_name = domain.split(".", 1)[0].replace("-", " ").title() or "Campus"
+
+    return {
+        "slug": slugify_school_theme(domain),
+        "name": f"{short_name} Campus",
+        "short_name": short_name,
+        "primary": f"hsl({hue} 62% 24%)",
+        "secondary": f"hsl({secondary_hue} 72% 52%)",
+        "accent": f"hsl({hue} 74% 42%)",
+        "image_file": None,
+        "card_image_file": None,
+        "domain": domain,
+        "is_generated": "true",
+    }
+
+
+def slugify_school_theme(value: str) -> str:
+    slug = []
+    previous_dash = False
+
+    for char in value.lower():
+        if char.isalnum():
+            slug.append(char)
+            previous_dash = False
+        elif not previous_dash:
+            slug.append("-")
+            previous_dash = True
+
+    return "".join(slug).strip("-") or "campus"
+
+
+def build_school_theme_payload(user: Users | None) -> dict[str, str | None] | None:
+    if user is None:
+        return None
+
+    selected_domain = str(getattr(user, "campus_theme_domain", "") or "").strip().lower()
+    theme = get_school_theme_for_domain(selected_domain) if selected_domain else get_school_theme_for_email(user.email)
+    if theme is None:
+        return None
+
+    backdrop_file = theme.get("backdrop_file") or theme.get("image_file")
+    card_image_file = theme.get("card_image_file") or theme.get("image_file")
+    theme["backdrop_url"] = url_for("static", filename=str(backdrop_file)) if backdrop_file else None
+    theme["card_image_url"] = url_for("static", filename=str(card_image_file)) if card_image_file else None
+    theme["image_url"] = theme["card_image_url"]
+    return theme
 
 
 def save_user_location(user: Users, raw_latitude: Any, raw_longitude: Any) -> tuple[bool, str]:
@@ -582,30 +1182,169 @@ def default_name_from_email(email: str) -> str:
     return (name.title() or "New User")[:MAX_NAME_LENGTH]
 
 
+def build_profile_template_context(user: Users, is_public_profile: bool = False) -> dict[str, Any]:
+    return {
+        "u": user,
+        "is_public_profile": is_public_profile,
+        "saved_restaurant_count": len(user.saved_restaurants),
+        "allergen_interests": user.get_interest_list("allergen_interests_json"),
+        "food_preferences": user.get_interest_list("food_preferences_json"),
+        "hobby_interests": user.get_interest_list("hobby_interests_json"),
+        "food_preference_presets": FOOD_PREFERENCE_PRESETS,
+        "hobby_interest_presets": HOBBY_INTEREST_PRESETS,
+        "school_theme_options": get_school_theme_options(),
+        "current_school_theme_domain": get_user_school_theme_domain(user),
+        "selected_campus_theme_domain": str(user.campus_theme_domain or ""),
+        "detected_school_theme": get_school_theme_for_email(user.email),
+        "favorite_cuisine": favorite_cuisine_for_user(user),
+        "profile_badges": build_user_badges(user),
+        "foodies_you_might_know": suggest_school_users(user) if not is_public_profile else [],
+        "profile_activity": build_profile_activity(user),
+        "follow_status": follow_status_for_viewer(user) if is_public_profile else None,
+        "pending_follow_requests": pending_follow_requests(user) if not is_public_profile else [],
+    }
+
+
+def touch_user_activity(user: Users) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    if user.last_active_at and user.last_active_at[:13] == now[:13]:
+        return
+    user.last_active_at = now
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+
+
+def favorite_cuisine_for_user(user: Users) -> str | None:
+    preferences = user.get_interest_list("food_preferences_json")
+    return preferences[0] if preferences else None
+
+
+def build_user_badges(user: Users) -> list[str]:
+    badges = []
+    saved_count = len(user.saved_restaurants)
+    if saved_count >= 1:
+        badges.append("First save")
+    if saved_count >= 10:
+        badges.append("10 saves")
+    if favorite_cuisine_for_user(user):
+        badges.append("Taste setter")
+    if user.hosted_group_sessions:
+        badges.append("Group host")
+    return badges
+
+
+def build_profile_activity(user: Users) -> list[str]:
+    activity = [row.summary for row in sorted(user.activity_rows, key=lambda row: row.created_at, reverse=True)[:6]]
+    if activity:
+        return activity
+    return [f"Saved {row.name}" for row in sorted(user.saved_restaurants, key=lambda row: row.created_at, reverse=True)[:4]]
+
+
+def suggest_school_users(user: Users) -> list[Users]:
+    domain = user.email.split("@", 1)[1].lower() if "@" in user.email else ""
+    if not domain:
+        return []
+    return (
+        Users.query.filter(Users.email.ilike(f"%@{domain}"), Users.id != user.id)
+        .order_by(Users.id.desc())
+        .limit(6)
+        .all()
+    )
+
+
+def follow_status_for_viewer(profile_user: Users) -> str | None:
+    viewer = current_user()
+    if viewer is None or viewer.id == profile_user.id:
+        return None
+    follow = UserFollow.query.filter_by(follower_id=viewer.id, following_id=profile_user.id).first()
+    return follow.status if follow else "none"
+
+
+def pending_follow_requests(user: Users) -> list[UserFollow]:
+    return (
+        UserFollow.query.filter_by(following_id=user.id, status="pending")
+        .order_by(UserFollow.created_at.desc())
+        .limit(8)
+        .all()
+    )
+
+
 def handle_profile_picture_upload(user: Users) -> None:
+    upload_profile_image(
+        user=user,
+        request_field="image",
+        file_prefix="user",
+        user_field="pfp_file_path",
+        missing_message="Choose an image before uploading.",
+        invalid_message="Profile pictures must be GIF, JPEG, PNG, or WebP images.",
+        success_message="Profile picture updated.",
+        error_message="Unable to save profile picture. Please try again.",
+    )
+
+
+def handle_profile_banner_upload(user: Users) -> None:
+    upload_profile_image(
+        user=user,
+        request_field="banner_image",
+        file_prefix="user-banner",
+        user_field="profile_banner_file_path",
+        missing_message="Choose a banner image before uploading.",
+        invalid_message="Profile banners must be GIF, JPEG, PNG, or WebP images.",
+        success_message="Profile banner updated.",
+        error_message="Unable to save profile banner. Please try again.",
+    )
+
+
+def handle_profile_showcase_upload(user: Users) -> None:
+    upload_profile_image(
+        user=user,
+        request_field="showcase_image",
+        file_prefix="user-showcase",
+        user_field="profile_showcase_file_path",
+        missing_message="Choose a showcase image before uploading.",
+        invalid_message="Showcase images must be GIF, JPEG, PNG, or WebP images.",
+        success_message="Profile showcase image updated.",
+        error_message="Unable to save profile showcase image. Please try again.",
+    )
+
+
+def upload_profile_image(
+    user: Users,
+    request_field: str,
+    file_prefix: str,
+    user_field: str,
+    missing_message: str,
+    invalid_message: str,
+    success_message: str,
+    error_message: str,
+) -> None:
     file = request.files.get("image")
     if file is None or not file.filename:
-        flash("Choose an image before uploading.")
+        file = request.files.get(request_field)
+
+    if file is None or not file.filename:
+        flash(missing_message)
         return
 
     original_name = secure_filename(file.filename)
     extension = Path(original_name).suffix.lower().lstrip(".")
     if extension not in ALLOWED_UPLOAD_EXTENSIONS:
-        flash("Profile pictures must be GIF, JPEG, PNG, or WebP images.")
+        flash(invalid_message)
         return
 
-    file_name = f"user-{user.id}.{extension}"
-    file_path = Path(current_app.config["UPLOAD_FOLDER"]) / file_name
+    file_name = f"{file_prefix}-{user.id}.{extension}"
 
     try:
-        file.save(file_path)
-        user.pfp_file_path = file_name
+        file_reference = save_profile_upload_file(file, file_name)
+        setattr(user, user_field, file_reference)
         db.session.commit()
-        flash("Profile picture updated.")
-    except OSError:
+        flash(success_message)
+    except (OSError, RuntimeError):
         db.session.rollback()
-        current_app.logger.exception("Unable to save uploaded profile picture.")
-        flash("Unable to save profile picture. Please try again.")
+        current_app.logger.exception(error_message)
+        flash(error_message)
 
 
 def update_user_bio(user: Users) -> None:
@@ -628,6 +1367,13 @@ def update_user_name(user: Users) -> None:
     user.name = new_name
     db.session.commit()
     flash("Name updated.")
+
+
+def update_user_pronouns(user: Users) -> None:
+    pronouns = normalize_optional_string(request.form.get("pronouns"), 64)
+    user.pronouns = pronouns
+    db.session.commit()
+    flash("Pronouns updated.")
 
 
 def add_user_food_preference(user: Users) -> None:
@@ -656,6 +1402,18 @@ def add_user_hobby_interest(user: Users) -> None:
     db.session.commit()
     sync_session_filters_from_user(user)
     flash(f"Added {interest} to your profile interests.")
+
+
+def update_user_campus_theme(user: Users) -> None:
+    domain = str(request.form.get("campus_theme_domain", "")).strip().lower()
+
+    if domain and get_school_theme_for_domain(domain) is None:
+        flash("That campus theme is not available yet.")
+        return
+
+    user.campus_theme_domain = domain or None
+    db.session.commit()
+    flash("Campus mode updated.")
 
 
 def remove_user_interest(user: Users) -> None:
@@ -695,6 +1453,11 @@ def sanitize_filters(payload: dict[str, Any]) -> dict[str, Any]:
         elif key == "distance":
             try:
                 filters[key] = min(max(int(payload[key]), 1), 100)
+            except (TypeError, ValueError):
+                filters[key] = default
+        elif key == "minRating":
+            try:
+                filters[key] = min(max(float(payload[key]), 0), 5)
             except (TypeError, ValueError):
                 filters[key] = default
         elif isinstance(default, list):
@@ -773,7 +1536,9 @@ def save_selected_restaurant(user: Users, payload: dict[str, Any]) -> tuple[bool
     photo = normalize_optional_string(payload.get("photo"), 512)
     distance_meters = normalize_optional_float(payload.get("distance_meters"))
     cuisine = normalize_optional_string(payload.get("cuisine"), 255)
-    price_text = normalize_optional_string(payload.get("price_text"), 64) or format_price_text(normalize_price_level(payload.get("price_level")))
+    price_text = normalize_price_text(payload.get("price_text")) or format_price_text(
+        normalize_price_level(payload.get("price_level"))
+    )
     rating = normalize_optional_float(payload.get("rating"))
     review_count = normalize_optional_int(payload.get("review_count"))
     website = normalize_website_url(payload.get("website"))
@@ -797,6 +1562,8 @@ def save_selected_restaurant(user: Users, payload: dict[str, Any]) -> tuple[bool
             website=website,
         )
         db.session.add(saved)
+        db.session.flush()
+        db.session.add(UserActivity(user_id=user.id, action="save", summary=f"Saved {name}"))
     else:
         saved.name = name[:255]
         saved.source = source
@@ -813,6 +1580,156 @@ def save_selected_restaurant(user: Users, payload: dict[str, Any]) -> tuple[bool
 
     message = f"Saved {saved.name} to My Stuff." if created else f"{saved.name} is already in My Stuff."
     return True, message, serialize_saved_restaurant(saved)
+
+
+def generate_group_code() -> str:
+    alphabet = string.ascii_uppercase + string.digits
+
+    for _ in range(12):
+        code = "".join(secrets.choice(alphabet) for _ in range(6))
+        if GroupSwipeSession.query.filter_by(code=code).first() is None:
+            return code
+
+    return "".join(secrets.choice(alphabet) for _ in range(8))
+
+
+def normalize_group_code(value: Any) -> str:
+    return "".join(char for char in str(value).upper() if char.isalnum())[:12]
+
+
+def add_group_member(group_session: GroupSwipeSession, user: Users) -> None:
+    existing = GroupSwipeMember.query.filter_by(
+        session_id=group_session.id,
+        user_id=user.id,
+    ).first()
+
+    if existing is None:
+        db.session.add(GroupSwipeMember(session_id=group_session.id, user_id=user.id))
+
+
+def get_current_group_session() -> GroupSwipeSession | None:
+    code = normalize_group_code(session.get("group_swipe_code", ""))
+    if not code:
+        return None
+
+    group_session = GroupSwipeSession.query.filter_by(code=code, is_active=True).first()
+    if group_session is not None and group_session_is_expired(group_session):
+        group_session.is_active = False
+        db.session.commit()
+        session.pop("group_swipe_code", None)
+        return None
+    return group_session
+
+
+def group_session_is_expired(group_session: GroupSwipeSession) -> bool:
+    if not group_session.expires_at:
+        return False
+    try:
+        expires_at = datetime.fromisoformat(group_session.expires_at)
+    except ValueError:
+        return False
+    return datetime.now(timezone.utc) >= expires_at.replace(tzinfo=timezone.utc)
+
+
+def join_group_from_invite(user: Users) -> None:
+    code = normalize_group_code(request.args.get("group", ""))
+    if not code:
+        return
+
+    group_session = GroupSwipeSession.query.filter_by(code=code, is_active=True).first()
+    if group_session is None:
+        flash("That group invite is no longer active.")
+        return
+
+    add_group_member(group_session, user)
+    db.session.commit()
+    session["group_swipe_code"] = group_session.code
+    flash(f"Joined group {group_session.code}.")
+
+
+def sanitize_group_restaurant_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    allowed_keys = {
+        "name",
+        "place",
+        "source",
+        "address",
+        "photo",
+        "distance_meters",
+        "cuisine",
+        "price_text",
+        "price_level",
+        "rating",
+        "review_count",
+        "website",
+        "is_open",
+    }
+    return {key: payload.get(key) for key in allowed_keys if key in payload}
+
+
+def serialize_group_session(group_session: GroupSwipeSession, user: Users | None = None) -> dict[str, Any]:
+    members = sorted(group_session.members, key=lambda member: member.joined_at)
+    member_ids = {member.user_id for member in members}
+    member_count = max(len(member_ids), 1)
+    votes = list(group_session.votes)
+    saved_votes = [vote for vote in votes if vote.action == "save"]
+    vetoed_places = {vote.place_id for vote in votes if vote.action == "veto"}
+    saved_by_place: dict[str, list[GroupSwipeVote]] = {}
+
+    for vote in saved_votes:
+        saved_by_place.setdefault(vote.place_id, []).append(vote)
+
+    consensus = []
+    maybe = []
+    for place_id, place_votes in saved_by_place.items():
+        voter_ids = {vote.user_id for vote in place_votes}
+        payload = place_votes[-1].restaurant_payload()
+        entry = {
+            "place": place_id,
+            "name": payload.get("name") or "Restaurant",
+            "address": payload.get("address"),
+            "photo": payload.get("photo"),
+            "source": payload.get("source"),
+            "saved_count": len(voter_ids),
+            "needed_count": member_count,
+            "is_vetoed": place_id in vetoed_places,
+        }
+
+        if place_id in vetoed_places:
+            maybe.append(entry)
+        elif member_ids and voter_ids >= member_ids:
+            consensus.append(entry)
+        else:
+            maybe.append(entry)
+
+    consensus.sort(key=lambda item: item["name"])
+    maybe.sort(key=lambda item: (-item["saved_count"], item["name"]))
+
+    return {
+        "code": group_session.code,
+        "invite_path": url_for("home", group=group_session.code),
+        "expires_at": group_session.expires_at,
+        "expires_in_seconds": max(0, int((datetime.fromisoformat(group_session.expires_at).replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)).total_seconds())) if group_session.expires_at else None,
+        "is_host": bool(user and user.id == group_session.host_user_id),
+        "member_count": member_count,
+        "members": [
+            {
+                "id": member.user_id,
+                "name": member.user.name if member.user else "BiteSwipe user",
+                "avatar": uploaded_file_url(member.user.pfp_file_path if member.user else None, "transparentnewdefaultpicture.png"),
+            }
+            for member in members
+        ],
+        "vote_count": len(votes),
+        "consensus": consensus[:12],
+        "almost": maybe[:12],
+        "messages": [
+            {
+                "name": message.user.name if message.user else "BiteSwipe user",
+                "message": message.message,
+            }
+            for message in sorted(group_session.messages, key=lambda item: item.created_at, reverse=True)[:8]
+        ],
+    }
 
 
 def normalize_optional_string(value: Any, max_length: int) -> str | None:
@@ -917,7 +1834,20 @@ def restaurant_matches_filters(place: dict[str, Any], filters: dict[str, Any]) -
     if selected_price_levels(filters) and price_level is not None and price_level not in selected_price_levels(filters):
         return False
 
+    rating = normalize_optional_float(place.get("rating"))
+    if filters.get("minRating") and (rating is None or rating < float(filters["minRating"])):
+        return False
+
+    if not restaurant_matches_seating_filters(place, filters):
+        return False
+
+    if not restaurant_matches_cuisine_exclusions(place, sanitize_interest_values(filters.get("cuisineExclusions", []))):
+        return False
+
     if not restaurant_matches_food_preferences(place, sanitize_interest_values(filters.get("foodPreferences", []))):
+        return False
+
+    if filters.get("openNow") and place.get("is_open") is False:
         return False
 
     if not restaurant_matches_allergens(place, filters):
@@ -960,6 +1890,33 @@ def restaurant_matches_food_preferences(place: dict[str, Any], food_preferences:
     return False
 
 
+def restaurant_matches_cuisine_exclusions(place: dict[str, Any], exclusions: list[str]) -> bool:
+    if not exclusions:
+        return True
+
+    searchable = " ".join(
+        str(place.get(key) or "")
+        for key in ("name", "address", "cuisine", "photo_category")
+    ).lower()
+
+    return not any(exclusion.lower() in searchable for exclusion in exclusions)
+
+
+def restaurant_matches_seating_filters(place: dict[str, Any], filters: dict[str, Any]) -> bool:
+    seating = place.get("seating_tags") or {}
+
+    if filters.get("outdoorSeating") and seating.get("outdoor") is False:
+        return False
+
+    if filters.get("takeoutOnly") and seating.get("takeout") is False:
+        return False
+
+    if filters.get("dineIn") and seating.get("dine_in") is False:
+        return False
+
+    return True
+
+
 def restaurant_matches_allergens(place: dict[str, Any], filters: dict[str, Any]) -> bool:
     dietary_tags = place.get("dietary_tags") or {}
 
@@ -980,12 +1937,135 @@ def restaurant_matches_allergens(place: dict[str, Any], filters: dict[str, Any])
     return True
 
 
+def annotate_restaurant_confidence(places: list[dict[str, Any]], filters: dict[str, Any]) -> None:
+    for place in places:
+        place["bite_confidence"] = build_bite_confidence(place, filters)
+        allergy_confidence = build_allergy_confidence(place, filters)
+        if allergy_confidence:
+            place["allergy_confidence"] = allergy_confidence
+
+
+def build_bite_confidence(place: dict[str, Any], filters: dict[str, Any]) -> dict[str, Any]:
+    score = 48
+    reasons: list[str] = []
+
+    distance = normalize_optional_float(place.get("distance_meters"))
+    if distance is not None:
+        miles = distance / METERS_PER_MILE
+        if miles <= 0.5:
+            score += 18
+            reasons.append("very close")
+        elif miles <= 1.5:
+            score += 12
+            reasons.append("nearby")
+        elif miles <= filters["distance"]:
+            score += 6
+            reasons.append("inside your distance")
+
+    rating = normalize_optional_float(place.get("rating"))
+    if rating is not None:
+        if rating >= 4.5:
+            score += 16
+            reasons.append("strong rating")
+        elif rating >= 4.0:
+            score += 10
+            reasons.append("solid rating")
+        elif rating >= 3.5:
+            score += 4
+
+    price_level = place.get("price_level")
+    if selected_price_levels(filters) and price_level in selected_price_levels(filters):
+        score += 10
+        reasons.append("price match")
+
+    food_preferences = sanitize_interest_values(filters.get("foodPreferences", []))
+    if food_preferences and restaurant_matches_food_preferences(place, food_preferences):
+        score += 12
+        reasons.append("craving match")
+
+    allergy_confidence = build_allergy_confidence(place, filters)
+    if allergy_confidence and allergy_confidence["level"] == "strong":
+        score += 8
+        reasons.append("clear allergy signal")
+
+    score = min(max(score, 0), 99)
+    label = "Great fit" if score >= 82 else "Good fit" if score >= 68 else "Possible fit"
+    return {"score": score, "label": label, "reasons": reasons[:4]}
+
+
+def build_allergy_confidence(place: dict[str, Any], filters: dict[str, Any]) -> dict[str, Any] | None:
+    active_filters = [
+        (key, config)
+        for key, config in ALLERGEN_FILTERS.items()
+        if filters.get(key)
+    ]
+    if not active_filters:
+        return None
+
+    dietary_tags = place.get("dietary_tags") or {}
+    matched_labels = []
+    unknown_labels = []
+
+    for _key, config in active_filters:
+        tag_names = config["diet_tags"]
+        known_values = [
+            dietary_tags.get(tag_name)
+            for tag_name in tag_names
+            if dietary_tags.get(tag_name) is not None
+        ]
+
+        if any(value in {"yes", "only"} for value in known_values):
+            matched_labels.append(str(config["label"]))
+        else:
+            unknown_labels.append(str(config["label"]))
+
+    if matched_labels and not unknown_labels:
+        return {
+            "level": "strong",
+            "label": "Strong allergy signal",
+            "detail": f"Tagged for {', '.join(matched_labels)}. Still confirm ingredients before ordering.",
+        }
+
+    if matched_labels:
+        return {
+            "level": "mixed",
+            "label": "Partial allergy signal",
+            "detail": f"Tagged for {', '.join(matched_labels)}, but {', '.join(unknown_labels)} still needs checking.",
+        }
+
+    return {
+        "level": "unknown",
+        "label": "Verify allergy safety",
+        "detail": "No public allergy tags were found for your selected filters. Ask the restaurant before ordering.",
+    }
+
+
 def extract_dietary_tags(tags: dict[str, Any]) -> dict[str, str]:
     return {
         key: str(value).strip().lower()
         for key, value in tags.items()
         if key.startswith("diet:")
     }
+
+
+def extract_seating_tags(tags: dict[str, Any]) -> dict[str, bool | None]:
+    return {
+        "outdoor": normalize_osm_yes_no(tags.get("outdoor_seating")),
+        "takeout": normalize_osm_yes_no(tags.get("takeaway") or tags.get("takeout")),
+        "dine_in": normalize_osm_yes_no(tags.get("indoor_seating") or tags.get("dine_in")),
+    }
+
+
+def normalize_osm_yes_no(value: Any) -> bool | None:
+    if value is None:
+        return None
+
+    text_value = str(value).strip().lower()
+    if text_value in {"yes", "true", "1", "only"}:
+        return True
+    if text_value in {"no", "false", "0"}:
+        return False
+    return None
 
 
 def normalize_price_level(value: Any) -> int | None:
@@ -997,12 +2077,17 @@ def normalize_price_level(value: Any) -> int | None:
         return None
 
     if set(text_value) <= {"$"}:
-        return min(max(len(text_value) - 1, 0), 4)
+        return min(max(len(text_value), 1), 4)
 
     try:
-        return min(max(int(text_value), 0), 4)
+        numeric_level = int(text_value)
     except ValueError:
         return None
+
+    if numeric_level <= 0:
+        return None
+
+    return min(numeric_level, 4)
 
 
 def normalize_google_price_level(value: Any) -> int | None:
@@ -1010,7 +2095,7 @@ def normalize_google_price_level(value: Any) -> int | None:
         return None
 
     price_map = {
-        "PRICE_LEVEL_FREE": 0,
+        "PRICE_LEVEL_FREE": None,
         "PRICE_LEVEL_INEXPENSIVE": 1,
         "PRICE_LEVEL_MODERATE": 2,
         "PRICE_LEVEL_EXPENSIVE": 3,
@@ -1025,9 +2110,38 @@ def format_price_text(price_level: int | None) -> str | None:
         return None
 
     if price_level <= 0:
-        return "Free"
+        return None
 
     return "$" * min(price_level, 4)
+
+
+def normalize_price_text(value: Any) -> str | None:
+    text_value = normalize_optional_string(value, 64)
+
+    if text_value is None:
+        return None
+
+    if text_value.strip().lower() in {"free", "0", "unknown", "price not listed"}:
+        return None
+
+    if set(text_value.strip()) <= {"$"}:
+        return format_price_text(normalize_price_level(text_value))
+
+    return text_value
+
+
+def restaurant_fallback_image_category(*values: Any) -> str:
+    searchable = " ".join(str(value or "") for value in values).replace("_", " ").lower()
+
+    for category, keywords in RESTAURANT_FALLBACK_IMAGE_KEYWORDS:
+        if any(keyword in searchable for keyword in keywords):
+            return category
+
+    return DEFAULT_RESTAURANT_FALLBACK_IMAGE
+
+
+def restaurant_fallback_image_url(category: str) -> str:
+    return url_for("static", filename=f"restaurant-fallbacks/{category}.webp")
 
 
 def normalize_website_url(value: Any) -> str | None:
@@ -1039,6 +2153,56 @@ def normalize_website_url(value: Any) -> str | None:
         return website
 
     return f"https://{website}"
+
+
+def is_external_upload_reference(value: Any) -> bool:
+    return str(value or "").startswith(("http://", "https://"))
+
+
+def uploaded_file_url(value: Any, fallback: str | None = None) -> str:
+    file_reference = str(value or fallback or "").strip()
+    if not file_reference:
+        file_reference = "transparentnewdefaultpicture.png"
+
+    if is_external_upload_reference(file_reference):
+        return file_reference
+
+    return url_for("static", filename=f"uploads/{file_reference}")
+
+
+def save_profile_upload_file(file: Any, file_name: str) -> str:
+    provider = str(current_app.config.get("UPLOAD_STORAGE_PROVIDER", "local")).lower()
+
+    if provider == "s3":
+        return save_profile_upload_to_s3(file, file_name)
+
+    file_path = Path(current_app.config["UPLOAD_FOLDER"]) / file_name
+    file.save(file_path)
+    return file_name
+
+
+def save_profile_upload_to_s3(file: Any, file_name: str) -> str:
+    bucket = str(current_app.config.get("UPLOADS_S3_BUCKET", "")).strip()
+    public_base_url = str(current_app.config.get("UPLOADS_PUBLIC_BASE_URL", "")).strip().rstrip("/")
+    prefix = str(current_app.config.get("UPLOADS_S3_PREFIX", "profile-uploads")).strip().strip("/")
+
+    if not bucket or not public_base_url:
+        raise RuntimeError("S3 uploads require UPLOADS_S3_BUCKET and UPLOADS_PUBLIC_BASE_URL.")
+
+    try:
+        import boto3
+    except ImportError as exc:
+        raise RuntimeError("S3 uploads require boto3. Install requirements.txt first.") from exc
+
+    key = f"{prefix}/{file_name}" if prefix else file_name
+    file.stream.seek(0)
+    boto3.client("s3").upload_fileobj(
+        file.stream,
+        bucket,
+        key,
+        ExtraArgs={"ContentType": file.mimetype or "application/octet-stream"},
+    )
+    return f"{public_base_url}/{key}"
 
 
 def search_restaurants_with_google(
@@ -1054,7 +2218,7 @@ def search_restaurants_with_google(
         "X-Goog-FieldMask": (
             "places.id,places.displayName,places.photos,places.formattedAddress,"
             "places.priceLevel,places.types,places.rating,places.userRatingCount,"
-            "places.websiteUri,places.googleMapsUri"
+            "places.websiteUri,places.googleMapsUri,places.currentOpeningHours"
         ),
     }
     filters = filters or DEFAULT_FILTERS
@@ -1073,6 +2237,125 @@ def search_restaurants_with_google(
 
     results = post_json(url, json_body=payload, headers=search_headers, timeout=10).get("places", [])
     return [format_google_place(result, api_key) for result in results]
+
+
+def search_restaurants_hybrid(
+    user: Users,
+    api_key: str | None,
+    filters: dict[str, Any] | None = None,
+    radius_meters: int | None = None,
+) -> tuple[list[dict[str, Any]], str]:
+    osm_places = search_restaurants_with_openstreetmap(user.latitude, user.longitude, radius_meters)
+
+    if not api_key or not google_places_enrichment_allowed():
+        return osm_places, "openstreetmap"
+
+    try:
+        google_places = search_restaurants_with_google(user, api_key, filters, radius_meters)
+    except Exception:
+        current_app.logger.exception("Google Places enrichment failed; using OpenStreetMap results.")
+        return osm_places, "openstreetmap"
+
+    if not google_places:
+        return osm_places, "openstreetmap"
+
+    merged_places = merge_osm_places_with_google_enrichment(osm_places, google_places)
+    source = "hybrid" if any(place.get("source") == "hybrid" for place in merged_places) else "openstreetmap"
+    return merged_places, source
+
+
+def google_places_enrichment_allowed() -> bool:
+    configured_ratio = normalize_optional_float(current_app.config.get("GOOGLE_PLACES_USAGE_RATIO"))
+    spend = normalize_optional_float(current_app.config.get("GOOGLE_PLACES_MONTHLY_SPEND_USD")) or 0.0
+    credit = normalize_optional_float(current_app.config.get("GOOGLE_PLACES_MONTHLY_CREDIT_USD")) or 200.0
+    disable_at = normalize_optional_float(current_app.config.get("GOOGLE_PLACES_DISABLE_AT_USAGE_RATIO")) or 0.6
+
+    usage_ratio = configured_ratio if configured_ratio is not None and configured_ratio >= 0 else spend / credit
+    return usage_ratio < disable_at
+
+
+def merge_osm_places_with_google_enrichment(
+    osm_places: list[dict[str, Any]],
+    google_places: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    enriched_places: list[dict[str, Any]] = []
+
+    for osm_place in osm_places:
+        google_place = best_google_enrichment_match(osm_place, google_places)
+
+        if google_place is None:
+            enriched_places.append(osm_place)
+            continue
+
+        merged_place = dict(osm_place)
+        merged_place["source"] = "hybrid"
+        merged_place["google_place_id"] = google_place.get("place")
+
+        if google_place.get("photo"):
+            merged_place["photo"] = google_place["photo"]
+            merged_place["photo_source"] = google_place.get("photo_source") or "google_places"
+            merged_place["photo_category"] = google_place.get("photo_category") or "google_places"
+
+        for key in ("price_level", "price_text", "rating", "review_count", "website", "is_open", "opening_hours_text"):
+            if google_place.get(key) is not None:
+                merged_place[key] = google_place[key]
+
+        if not merged_place.get("cuisine") and google_place.get("cuisine"):
+            merged_place["cuisine"] = google_place["cuisine"]
+
+        if not merged_place.get("address") and google_place.get("address"):
+            merged_place["address"] = google_place["address"]
+
+        enriched_places.append(merged_place)
+
+    return enriched_places
+
+
+def best_google_enrichment_match(
+    osm_place: dict[str, Any],
+    google_places: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    best_place: dict[str, Any] | None = None
+    best_score = 0
+
+    for google_place in google_places:
+        score = score_place_enrichment_match(osm_place, google_place)
+        if score > best_score:
+            best_score = score
+            best_place = google_place
+
+    return best_place if best_score >= 8 else None
+
+
+def score_place_enrichment_match(osm_place: dict[str, Any], google_place: dict[str, Any]) -> int:
+    osm_name = normalize_place_match_text(osm_place.get("name"))
+    google_name = normalize_place_match_text(google_place.get("name"))
+
+    if not osm_name or not google_name:
+        return 0
+
+    score = 0
+    if osm_name == google_name:
+        score += 10
+    elif osm_name in google_name or google_name in osm_name:
+        score += 7
+    else:
+        shared_tokens = set(osm_name.split()) & set(google_name.split())
+        score += min(len(shared_tokens), 3) * 2
+
+    score += min(address_token_overlap(osm_place.get("address"), google_place.get("address")), 4)
+    return score
+
+
+def address_token_overlap(first: Any, second: Any) -> int:
+    first_tokens = set(normalize_place_match_text(first).split())
+    second_tokens = set(normalize_place_match_text(second).split())
+    return len(first_tokens & second_tokens)
+
+
+def normalize_place_match_text(value: Any) -> str:
+    text_value = str(value or "").lower()
+    return " ".join(re.findall(r"[a-z0-9]+", text_value))
 
 
 def search_restaurants_with_openstreetmap(
@@ -1131,23 +2414,35 @@ def format_osm_place(
     longitude = element.get("lon") or (element.get("center") or {}).get("lon")
     place_type = tags.get("amenity", "restaurant").replace("_", " ")
     name = tags.get("name") or tags.get("brand") or tags.get("operator") or place_type.title()
+    cuisine = tags.get("cuisine")
+    fallback_category = restaurant_fallback_image_category(cuisine, name, place_type)
+    distance = (
+        distance_meters(origin_latitude, origin_longitude, latitude, longitude)
+        if latitude is not None and longitude is not None
+        else None
+    )
 
     return {
         "name": name,
         "place": f"osm:{element.get('type')}:{element.get('id')}",
-        "photo": url_for("static", filename="biteswipe.png"),
+        "photo": restaurant_fallback_image_url(fallback_category),
+        "photo_source": "biteswipe_fallback",
+        "photo_category": fallback_category,
         "source": "openstreetmap",
         "address": format_osm_address(tags),
-        "cuisine": tags.get("cuisine"),
+        "cuisine": cuisine,
         "price_level": normalize_price_level(tags.get("price") or tags.get("price:range")),
         "price_text": format_price_text(normalize_price_level(tags.get("price") or tags.get("price:range"))),
         "dietary_tags": extract_dietary_tags(tags),
+        "seating_tags": extract_seating_tags(tags),
         "rating": None,
         "review_count": None,
         "website": normalize_website_url(tags.get("website") or tags.get("contact:website")),
-        "distance_meters": distance_meters(origin_latitude, origin_longitude, latitude, longitude)
-        if latitude is not None and longitude is not None
-        else None,
+        "is_open": None,
+        "opening_hours_text": tags.get("opening_hours"),
+        "distance_meters": distance,
+        "walking_minutes": walking_minutes_from_meters(distance),
+        "driving_minutes": driving_minutes_from_meters(distance),
     }
 
 
@@ -1179,10 +2474,40 @@ def distance_meters(
     return round(earth_radius_meters * c, 1)
 
 
+def walking_minutes_from_meters(meters: Any) -> int | None:
+    distance = normalize_optional_float(meters)
+    if distance is None:
+        return None
+
+    return max(1, round(distance / WALKING_SPEED_METERS_PER_MINUTE))
+
+
+def driving_minutes_from_meters(meters: Any) -> int | None:
+    distance = normalize_optional_float(meters)
+    if distance is None:
+        return None
+
+    return max(2, round(distance / 800))
+
+
+def annotate_travel_times(places: list[dict[str, Any]], transportation_mode: str | None) -> None:
+    mode = transportation_mode if transportation_mode in {"walking", "driving", "both"} else "walking"
+
+    for place in places:
+        distance = place.get("distance_meters")
+        place["walking_minutes"] = walking_minutes_from_meters(distance)
+        place["driving_minutes"] = driving_minutes_from_meters(distance)
+        place["transportation_mode"] = mode
+
+
 def format_google_place(place: dict[str, Any], api_key: str) -> dict[str, Any]:
     display_name = place.get("displayName") or {}
     photos = place.get("photos") or []
     photo_name = photos[0].get("name") if photos else None
+    opening_hours = place.get("currentOpeningHours") or {}
+    weekday_descriptions = opening_hours.get("weekdayDescriptions") or []
+    cuisine = " ".join(place.get("types") or [])
+    fallback_category = restaurant_fallback_image_category(cuisine, display_name.get("text", ""))
 
     return {
         "name": display_name.get("text", "Unknown restaurant"),
@@ -1190,18 +2515,25 @@ def format_google_place(place: dict[str, Any], api_key: str) -> dict[str, Any]:
         "photo": (
             f"https://places.googleapis.com/v1/{photo_name}/media?maxHeightPx=500&key={api_key}"
             if photo_name
-            else url_for("static", filename="biteswipe.png")
+            else restaurant_fallback_image_url(fallback_category)
         ),
+        "photo_source": "google_places" if photo_name else "biteswipe_fallback",
+        "photo_category": "google_places" if photo_name else fallback_category,
         "source": "google",
         "address": place.get("formattedAddress"),
-        "cuisine": " ".join(place.get("types") or []),
+        "cuisine": cuisine,
         "price_level": normalize_google_price_level(place.get("priceLevel")),
         "price_text": format_price_text(normalize_google_price_level(place.get("priceLevel"))),
         "dietary_tags": {},
+        "seating_tags": {},
         "rating": normalize_optional_float(place.get("rating")),
         "review_count": place.get("userRatingCount"),
         "website": place.get("websiteUri") or place.get("googleMapsUri"),
+        "is_open": opening_hours.get("openNow"),
+        "opening_hours_text": "; ".join(weekday_descriptions[:2]) if weekday_descriptions else None,
         "distance_meters": None,
+        "walking_minutes": None,
+        "driving_minutes": None,
     }
 
 

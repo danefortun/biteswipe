@@ -10,13 +10,33 @@ const checkboxFilterIds = [
   "cheapPrice",
   "mediumPrice",
   "expensivePrice",
+  "openNow",
+  "outdoorSeating",
+  "takeoutOnly",
+  "dineIn",
 ];
 
-function myFunction() {
-  toggleFooterPanel("filters");
+function myFunction(event) {
+  toggleFooterPanel("filters", event);
 }
 
-function toggleFooterPanel(panelName) {
+function closeFooterPanels() {
+  document.querySelectorAll(".dropup.is-open").forEach((dropup) => {
+    dropup.classList.remove("is-open");
+  });
+
+  document.querySelectorAll(".filter-trigger, .interests-trigger").forEach((trigger) => {
+    trigger.setAttribute("aria-expanded", "false");
+  });
+
+  document.body.classList.remove("footer-panel-open");
+}
+
+function toggleFooterPanel(panelName, event) {
+  if (event && typeof event.stopPropagation === "function") {
+    event.stopPropagation();
+  }
+
   const target = panelName === "interests" ? "myInterestsDropup" : "myDropup";
   const triggerSelector = panelName === "interests" ? ".interests-trigger" : ".filter-trigger";
   const menu = document.getElementById(target);
@@ -44,6 +64,8 @@ function toggleFooterPanel(panelName) {
   if (trigger) {
     trigger.setAttribute("aria-expanded", String(isOpen));
   }
+
+  document.body.classList.toggle("footer-panel-open", isOpen);
 }
 
 function getFilters() {
@@ -55,9 +77,12 @@ function getFilters() {
   });
 
   const distance = document.getElementById("myRange");
+  const minRating = document.getElementById("minRatingRange");
 
-  filters.distance = distance ? Number(distance.value) : 50;
+  filters.distance = distance ? Number(distance.value) : 2;
+  filters.minRating = minRating ? Number(minRating.value) : 0;
   filters.foodPreferences = getCheckedValues("foodPreferences");
+  filters.cuisineExclusions = getCheckedValues("cuisineExclusions");
   filters.hobbyInterests = getCheckedValues("hobbyInterests");
 
   return filters;
@@ -107,19 +132,38 @@ function restoreCheckedValues(name, values) {
 
 document.addEventListener("DOMContentLoaded", function () {
   const inputs = document.querySelectorAll(".dropup-content input");
+  const closeButtons = document.querySelectorAll("[data-close-footer-panel]");
 
   inputs.forEach((input) => {
     input.addEventListener("change", updateFilters);
   });
 
+  closeButtons.forEach((button) => {
+    button.addEventListener("click", function (event) {
+      event.preventDefault();
+      closeFooterPanels();
+    });
+  });
+
   const slider = document.getElementById("myRange");
   const distanceValue = document.getElementById("distanceValue");
+  const minRating = document.getElementById("minRatingRange");
+  const minRatingValue = document.getElementById("minRatingValue");
 
   if (slider && distanceValue) {
     distanceValue.textContent = slider.value;
 
     slider.addEventListener("input", function () {
       distanceValue.textContent = this.value;
+      updateFilters();
+    });
+  }
+
+  if (minRating && minRatingValue) {
+    minRatingValue.textContent = Number(minRating.value).toFixed(1);
+
+    minRating.addEventListener("input", function () {
+      minRatingValue.textContent = Number(this.value).toFixed(1);
       updateFilters();
     });
   }
@@ -139,11 +183,17 @@ document.addEventListener("DOMContentLoaded", function () {
       });
 
       restoreCheckedValues("foodPreferences", saved.foodPreferences);
+      restoreCheckedValues("cuisineExclusions", saved.cuisineExclusions);
       restoreCheckedValues("hobbyInterests", saved.hobbyInterests);
 
       if (slider && distanceValue && saved.distance) {
         slider.value = saved.distance;
         distanceValue.textContent = saved.distance;
+      }
+
+      if (minRating && minRatingValue && saved.minRating !== undefined) {
+        minRating.value = saved.minRating;
+        minRatingValue.textContent = Number(saved.minRating).toFixed(1);
       }
     })
     .catch((err) => console.error("Error:", err));
@@ -155,10 +205,12 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    openDropup.classList.remove("is-open");
+    closeFooterPanels();
+  });
 
-    document.querySelectorAll(".filter-trigger, .interests-trigger").forEach((trigger) => {
-      trigger.setAttribute("aria-expanded", "false");
-    });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      closeFooterPanels();
+    }
   });
 });

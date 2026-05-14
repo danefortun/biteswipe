@@ -4,13 +4,24 @@
 <script>
 const RESTAURANT_STACK_STORAGE_VERSION = 3;
 const restaurantCardStorageUser = {{ session.get("id", "guest") | tojson }};
+window.userTransportationMode = {{ (template_user.transportation_mode if template_user else "") | tojson }};
+window.serverRestaurantRatings = {};
 window.restaurantCardStorageKey = `biteswipe.restaurantStack.${restaurantCardStorageUser}`;
 window.restaurantRatingStorageKey = `biteswipe.userRatings.${restaurantCardStorageUser}`;
 window.restaurantStatsStorageKey = `biteswipe.deckStats.${restaurantCardStorageUser}`;
+window.restaurantPassHistoryStorageKey = `biteswipe.passHistory.${restaurantCardStorageUser}`;
+window.restaurantAvoidStorageKey = `biteswipe.avoidRepeats.${restaurantCardStorageUser}`;
+window.restaurantTasteProfileStorageKey = `biteswipe.tasteProfile.${restaurantCardStorageUser}`;
+window.restaurantMemoryStorageKey = `biteswipe.restaurantMemory.${restaurantCardStorageUser}`;
+window.dailyBiteStorageKey = `biteswipe.dailyBite.${restaurantCardStorageUser}`;
 window.currentRestaurantCards = [];
 window.restaurantDecisionHistory = [];
 window.restaurantToastTimeout = null;
 window.deckCoachStorageKey = `biteswipe.deckCoachDismissed.${restaurantCardStorageUser}`;
+window.groupPanelPositionStorageKey = `biteswipe.groupPanelPosition.${restaurantCardStorageUser}`;
+window.activeGroupSession = null;
+window.groupStatusTimer = null;
+window.groupPanelDragState = null;
 
 function setRestaurantStatus(message) {
     const status = document.getElementById("restaurantStatus");
@@ -70,6 +81,143 @@ function toggleDeckFocusMode() {
     document.body.classList.toggle("deck-focus-mode");
     const isOn = document.body.classList.contains("deck-focus-mode");
     showBiteToast(isOn ? "Focus mode on" : "Focus mode off", "success");
+}
+
+function todayKey() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function readTasteProfile() {
+    try {
+        const rawProfile = localStorage.getItem(window.restaurantTasteProfileStorageKey);
+        const profile = rawProfile ? JSON.parse(rawProfile) : {};
+        return {
+            cuisines: profile.cuisines && typeof profile.cuisines === "object" ? profile.cuisines : {},
+            prices: profile.prices && typeof profile.prices === "object" ? profile.prices : {},
+            distanceComfort: Number(profile.distanceComfort) || 0,
+            savedCount: Number(profile.savedCount) || 0,
+            passedCount: Number(profile.passedCount) || 0,
+            updatedAt: profile.updatedAt || null,
+        };
+    } catch (error) {
+        return { cuisines: {}, prices: {}, distanceComfort: 0, savedCount: 0, passedCount: 0, updatedAt: null };
+    }
+}
+
+function writeTasteProfile(profile) {
+    try {
+        localStorage.setItem(window.restaurantTasteProfileStorageKey, JSON.stringify(profile));
+    } catch (error) {
+        // Taste learning is local enhancement only.
+    }
+}
+
+function getCuisineTokens(restaurant) {
+    const cuisine = formatCuisine(restaurant?.cuisine) || "";
+    return cuisine
+        .split(",")
+        .map((part) => part.trim().toLowerCase())
+        .filter(Boolean)
+        .slice(0, 4);
+}
+
+function updateTasteProfile(action, restaurant) {
+    if (!restaurant) {
+        return;
+    }
+
+    const profile = readTasteProfile();
+    const weight = action === "save" ? 3 : -1;
+    getCuisineTokens(restaurant).forEach((token) => {
+        profile.cuisines[token] = Math.max(-8, Math.min(24, (Number(profile.cuisines[token]) || 0) + weight));
+    });
+
+    const price = getRestaurantPrice(restaurant);
+    if (price && price !== "Price not listed") {
+        profile.prices[price] = Math.max(-8, Math.min(24, (Number(profile.prices[price]) || 0) + weight));
+    }
+
+    const distance = Number(restaurant.distance_meters);
+    if (Number.isFinite(distance) && action === "save") {
+        const miles = distance / 1609.344;
+        profile.distanceComfort = profile.distanceComfort
+            ? Number(((profile.distanceComfort * 0.75) + (miles * 0.25)).toFixed(2))
+            : Number(miles.toFixed(2));
+    }
+
+    if (action === "save") {
+        profile.savedCount += 1;
+    } else if (action === "pass") {
+        profile.passedCount += 1;
+    }
+
+    profile.updatedAt = new Date().toISOString();
+    writeTasteProfile(profile);
+    updateTasteProfilePanel();
+}
+
+function getTopTasteEntries(map, limit = 3) {
+    return Object.entries(map || {})
+        .filter(([, value]) => Number(value) > 0)
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .slice(0, limit)
+        .map(([key]) => key);
+}
+
+function scoreTasteAffinity(restaurant) {
+    const profile = readTasteProfile();
+    let score = 0;
+
+    getCuisineTokens(restaurant).forEach((token) => {
+        score += Number(profile.cuisines[token]) || 0;
+    });
+
+    const price = getRestaurantPrice(restaurant);
+    if (price && price !== "Price not listed") {
+        score += (Number(profile.prices[price]) || 0) * 0.8;
+    }
+
+    const distance = Number(restaurant?.distance_meters);
+    if (profile.distanceComfort && Number.isFinite(distance)) {
+        const miles = distance / 1609.344;
+        if (miles <= profile.distanceComfort + 0.35) {
+            score += 3;
+        }
+    }
+
+    return Math.round(score);
+}
+
+function updateTasteProfilePanel() {
+    const panel = document.getElementById("tasteProfilePanel");
+    const summary = document.getElementById("tasteProfileSummary");
+    const chips = document.getElementById("tasteProfileChips");
+
+    if (!panel || !summary || !chips) {
+        return;
+    }
+
+    const profile = readTasteProfile();
+    const favorites = getTopTasteEntries(profile.cuisines, 4);
+    const prices = getTopTasteEntries(profile.prices, 2);
+    const hasSignal = profile.savedCount + profile.passedCount > 0;
+
+    summary.textContent = hasSignal
+        ? `${profile.savedCount} saves and ${profile.passedCount} passes are shaping your deck.`
+        : "Save and pass cards to teach BiteSwipe what should show up first.";
+
+    chips.innerHTML = "";
+    [...favorites, ...prices].slice(0, 6).forEach((value) => {
+        const chip = document.createElement("span");
+        chip.textContent = value;
+        chips.appendChild(chip);
+    });
+
+    if (!chips.children.length) {
+        const chip = document.createElement("span");
+        chip.textContent = "Learning from your next swipes";
+        chips.appendChild(chip);
+    }
 }
 
 function readSessionStats() {
@@ -147,7 +295,7 @@ function getActiveFilterLabels() {
     });
 
     const slider = document.getElementById("myRange");
-    if (slider && Number(slider.value) !== 50) {
+    if (slider && Number(slider.value) !== 2) {
         labels.unshift(`${slider.value} mi radius`);
     }
 
@@ -166,7 +314,7 @@ function updateActiveFilterSummary() {
     if (labels.length === 0) {
         const empty = document.createElement("span");
         empty.className = "filter-summary-empty";
-        empty.textContent = "No filters yet — open Allergens to tune your deck.";
+        empty.textContent = "No filters yet - open Allergens to tune your deck.";
         summary.appendChild(empty);
         return;
     }
@@ -208,6 +356,18 @@ async function setQuickCraving(preference) {
 
 async function applyDeckMode(mode) {
     const modes = {
+        breakfast: {
+            label: "Breakfast",
+            distance: 2,
+            prices: ["cheapPrice", "mediumPrice"],
+            cravings: ["Breakfast", "Coffee"],
+        },
+        late: {
+            label: "Late night",
+            distance: 5,
+            prices: ["cheapPrice", "mediumPrice"],
+            cravings: ["Pizza", "Mexican", "American"],
+        },
         cheap: {
             label: "Cheap eats",
             distance: 3,
@@ -273,6 +433,29 @@ async function applyDeckMode(mode) {
     await refreshRestaurantCards();
 }
 
+function getTimeOfDayPreset() {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+        return { mode: "breakfast", label: "Breakfast nearby" };
+    }
+    if (hour >= 22 || hour < 3) {
+        return { mode: "late", label: "Late night" };
+    }
+    return null;
+}
+
+function setupTimeOfDayPreset() {
+    const button = document.getElementById("timePresetButton");
+    const preset = getTimeOfDayPreset();
+    if (!button || !preset) {
+        return;
+    }
+
+    button.hidden = false;
+    button.textContent = preset.label;
+    button.addEventListener("click", () => applyDeckMode(preset.mode));
+}
+
 function shuffleRemainingDeck() {
     const restaurants = window.currentRestaurantCards || [];
     if (!restaurants.length || typeof currentIndex !== "number" || currentIndex >= restaurants.length - 1) {
@@ -313,7 +496,9 @@ function sortRemainingDeck(mode = "best") {
         if (mode === "rating") {
             return getRating(b) - getRating(a);
         }
-        return (getRating(b) * 2 - getDistance(b) / 1609.344) - (getRating(a) * 2 - getDistance(a) / 1609.344);
+        const scoreA = (Number(a.bite_confidence?.score) || 50) + scoreTasteAffinity(a) + (getRating(a) * 2) - (getDistance(a) / 1609.344);
+        const scoreB = (Number(b.bite_confidence?.score) || 50) + scoreTasteAffinity(b) + (getRating(b) * 2) - (getDistance(b) / 1609.344);
+        return scoreB - scoreA;
     });
 
     renderRestaurantCards([...reviewed, ...remaining], {
@@ -351,6 +536,720 @@ async function shareRestaurant(result) {
     } catch (error) {
         setRestaurantStatus("Unable to share or copy this spot right now.");
     }
+}
+
+function scoreRestaurantForDailyBite(restaurant) {
+    const confidence = Number(restaurant?.bite_confidence?.score) || 50;
+    const rating = Number(restaurant?.rating) || 0;
+    const distance = Number(restaurant?.distance_meters);
+    const memory = getRestaurantMemory(restaurant);
+    let score = confidence + scoreTasteAffinity(restaurant);
+
+    if (rating) {
+        score += rating * 3;
+    }
+
+    if (Number.isFinite(distance)) {
+        score -= Math.min(distance / 1609.344, 8);
+    }
+
+    if (memory?.lastAction === "save") {
+        score += 8;
+    } else if (memory?.lastAction === "pass") {
+        score -= 6;
+    }
+
+    return score;
+}
+
+function chooseDailyBite(restaurants) {
+    const candidates = (Array.isArray(restaurants) ? restaurants : []).filter(Boolean);
+    if (!candidates.length) {
+        return null;
+    }
+
+    return candidates
+        .slice()
+        .sort((a, b) => scoreRestaurantForDailyBite(b) - scoreRestaurantForDailyBite(a))[0];
+}
+
+function readDailyBite() {
+    try {
+        const rawBite = localStorage.getItem(window.dailyBiteStorageKey);
+        const bite = rawBite ? JSON.parse(rawBite) : null;
+        return bite && bite.date === todayKey() ? bite.restaurant : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function writeDailyBite(restaurant) {
+    if (!restaurant) {
+        return;
+    }
+
+    try {
+        localStorage.setItem(window.dailyBiteStorageKey, JSON.stringify({
+            date: todayKey(),
+            restaurant,
+        }));
+    } catch (error) {
+        // Daily Bite can be regenerated from the deck.
+    }
+}
+
+function updateDailyBite(restaurants = window.currentRestaurantCards || []) {
+    let bite = readDailyBite();
+    const available = Array.isArray(restaurants) ? restaurants : [];
+    const availableKeys = new Set(available.map(getRestaurantIdentity));
+
+    if (!bite || (available.length && !availableKeys.has(getRestaurantIdentity(bite)))) {
+        bite = chooseDailyBite(available);
+        writeDailyBite(bite);
+    }
+
+    renderDailyBite(bite);
+}
+
+function renderDailyBite(restaurant) {
+    const panel = document.getElementById("dailyBitePanel");
+    const title = document.getElementById("dailyBiteTitle");
+    const meta = document.getElementById("dailyBiteMeta");
+    const reason = document.getElementById("dailyBiteReason");
+    const button = document.getElementById("dailyBiteButton");
+
+    if (!panel || !title || !meta || !reason || !button) {
+        return;
+    }
+
+    panel.classList.toggle("has-daily-bite", Boolean(restaurant));
+
+    if (!restaurant) {
+        title.textContent = "No Daily Bite yet";
+        meta.textContent = "Load a deck and BiteSwipe will pick one strong option for today.";
+        reason.textContent = "Uses your saves, passes, filters, distance, and ratings.";
+        button.disabled = true;
+        return;
+    }
+
+    title.textContent = restaurant.name || "Today's pick";
+    meta.textContent = [formatWalkingTime(restaurant), formatCuisine(restaurant.cuisine), getRestaurantPrice(restaurant)].filter(Boolean).join(" - ");
+    const confidence = formatBiteConfidence(restaurant);
+    const affinity = scoreTasteAffinity(restaurant);
+    reason.textContent = [confidence, affinity > 0 ? `+${affinity} from your taste profile` : "", buildRestaurantMemoryText(restaurant)].filter(Boolean).join(" - ");
+    button.disabled = false;
+}
+
+function focusDailyBite() {
+    const bite = readDailyBite();
+    const restaurants = window.currentRestaurantCards || [];
+    const biteKey = getRestaurantIdentity(bite);
+    const index = restaurants.findIndex((restaurant) => getRestaurantIdentity(restaurant) === biteKey);
+
+    if (index < 0) {
+        setRestaurantStatus("Load today's deck first, then Daily Bite can jump to its card.");
+        return;
+    }
+
+    currentIndex = index;
+    syncDeckState();
+    document.querySelector(".card-stage")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    showBiteToast("Daily Bite moved into focus", "success");
+}
+
+function readPassedRestaurantHistory() {
+    try {
+        const rawHistory = localStorage.getItem(window.restaurantPassHistoryStorageKey);
+        const history = rawHistory ? JSON.parse(rawHistory) : [];
+        return Array.isArray(history) ? history : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function writePassedRestaurantHistory(history) {
+    try {
+        localStorage.setItem(window.restaurantPassHistoryStorageKey, JSON.stringify(history.slice(0, 30)));
+    } catch (error) {
+        // Pass history is a convenience feature.
+    }
+}
+
+function addPassedRestaurantToHistory(restaurant) {
+    if (!restaurant) {
+        return;
+    }
+
+    const key = restaurant.place || restaurant.name || "";
+    const history = readPassedRestaurantHistory().filter((item) => (item.place || item.name || "") !== key);
+    history.unshift({
+        ...restaurant,
+        passedAt: new Date().toISOString(),
+    });
+    writePassedRestaurantHistory(history);
+    updateDeckHistoryPanel();
+}
+
+function updateDeckHistoryPanel() {
+    const list = document.getElementById("deckHistoryList");
+    const count = document.getElementById("deckHistoryCount");
+    const history = readPassedRestaurantHistory();
+
+    if (count) {
+        count.textContent = String(history.length);
+    }
+
+    if (!list) {
+        return;
+    }
+
+    list.innerHTML = "";
+
+    if (!history.length) {
+        const empty = document.createElement("p");
+        empty.className = "deck-history-empty";
+        empty.textContent = "Passed restaurants will show up here during this browser session.";
+        list.appendChild(empty);
+        return;
+    }
+
+    history.slice(0, 10).forEach((restaurant) => {
+        const item = document.createElement("article");
+        item.className = "deck-history-item";
+
+        const title = document.createElement("strong");
+        title.textContent = restaurant.name || "Restaurant";
+        item.appendChild(title);
+
+        const meta = document.createElement("span");
+        meta.textContent = [formatWalkingTime(restaurant), formatCuisine(restaurant.cuisine)].filter(Boolean).join(" - ") || "Passed pick";
+        item.appendChild(meta);
+
+        const actions = document.createElement("div");
+
+        const saveButton = document.createElement("button");
+        saveButton.type = "button";
+        saveButton.textContent = "Save";
+        saveButton.addEventListener("click", async () => {
+            const response = await fetch("/save_restaurant", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(restaurant),
+            });
+            const data = await response.json();
+            setRestaurantStatus(data.message || "Saved from history.");
+        });
+
+        const directions = document.createElement("a");
+        directions.href = buildMapsUrl(restaurant);
+        directions.target = "_blank";
+        directions.rel = "noopener noreferrer";
+        directions.textContent = "Directions";
+
+        actions.append(saveButton, directions);
+        item.appendChild(actions);
+        list.appendChild(item);
+    });
+}
+
+function toggleDeckHistory() {
+    const panel = document.getElementById("deckHistoryPanel");
+    if (!panel) {
+        return;
+    }
+
+    panel.hidden = !panel.hidden;
+    updateDeckHistoryPanel();
+}
+
+function clearDeckHistory() {
+    writePassedRestaurantHistory([]);
+    updateDeckHistoryPanel();
+    showBiteToast("Pass history cleared", "success");
+}
+
+function getRestaurantIdentity(restaurant) {
+    return String(restaurant?.place || restaurant?.name || "").trim().toLowerCase();
+}
+
+function readAvoidedRestaurants() {
+    try {
+        const rawAvoided = localStorage.getItem(window.restaurantAvoidStorageKey);
+        const avoided = rawAvoided ? JSON.parse(rawAvoided) : [];
+        return Array.isArray(avoided) ? avoided : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function writeAvoidedRestaurants(avoided) {
+    try {
+        localStorage.setItem(window.restaurantAvoidStorageKey, JSON.stringify(avoided.slice(0, 120)));
+    } catch (error) {
+        // Repeat avoidance should never block deck use.
+    }
+}
+
+function rememberAvoidedRestaurant(restaurant) {
+    const identity = getRestaurantIdentity(restaurant);
+    if (!identity) {
+        return;
+    }
+
+    const avoided = readAvoidedRestaurants().filter((item) => item.key !== identity);
+    avoided.unshift({
+        key: identity,
+        name: restaurant?.name || "Restaurant",
+        savedAt: new Date().toISOString(),
+    });
+    writeAvoidedRestaurants(avoided);
+}
+
+function filterAvoidedRestaurants(places) {
+    const cards = Array.isArray(places) ? places : [];
+    const avoidedKeys = new Set(readAvoidedRestaurants().map((item) => item.key));
+    const filtered = cards.filter((place) => !avoidedKeys.has(getRestaurantIdentity(place)));
+
+    return filtered.length ? filtered : cards;
+}
+
+function readRestaurantMemory() {
+    try {
+        const rawMemory = localStorage.getItem(window.restaurantMemoryStorageKey);
+        const memory = rawMemory ? JSON.parse(rawMemory) : {};
+        return memory && typeof memory === "object" ? memory : {};
+    } catch (error) {
+        return {};
+    }
+}
+
+function writeRestaurantMemory(memory) {
+    try {
+        const entries = Object.entries(memory)
+            .sort((a, b) => String(b[1]?.lastActionAt || "").localeCompare(String(a[1]?.lastActionAt || "")))
+            .slice(0, 180);
+        localStorage.setItem(window.restaurantMemoryStorageKey, JSON.stringify(Object.fromEntries(entries)));
+    } catch (error) {
+        // Memory should feel helpful, never fragile.
+    }
+}
+
+function rememberRestaurantDecision(action, restaurant) {
+    const key = getRestaurantIdentity(restaurant);
+    if (!key) {
+        return;
+    }
+
+    const memory = readRestaurantMemory();
+    const current = memory[key] || {
+        name: restaurant?.name || "Restaurant",
+        saveCount: 0,
+        passCount: 0,
+        firstSeenAt: new Date().toISOString(),
+    };
+
+    current.name = restaurant?.name || current.name;
+    current.lastAction = action;
+    current.lastActionAt = new Date().toISOString();
+    current.cuisine = formatCuisine(restaurant?.cuisine);
+    current.price = getRestaurantPrice(restaurant);
+    current.distance = formatWalkingTime(restaurant);
+
+    if (action === "save") {
+        current.saveCount = Number(current.saveCount || 0) + 1;
+    } else if (action === "pass") {
+        current.passCount = Number(current.passCount || 0) + 1;
+    }
+
+    memory[key] = current;
+    writeRestaurantMemory(memory);
+}
+
+function getRestaurantMemory(result) {
+    return readRestaurantMemory()[getRestaurantIdentity(result)] || null;
+}
+
+function buildRestaurantMemoryText(result) {
+    const memory = getRestaurantMemory(result);
+    const rating = getUserRating(result);
+
+    if (rating) {
+        return `You rated this ${rating} stars.`;
+    }
+
+    if (!memory) {
+        return "";
+    }
+
+    if (Number(memory.saveCount) > 0) {
+        return `You saved this ${memory.saveCount} time${Number(memory.saveCount) === 1 ? "" : "s"}.`;
+    }
+
+    if (Number(memory.passCount) > 0) {
+        return `You passed this before.`;
+    }
+
+    return "";
+}
+
+async function createGroupSession() {
+    try {
+        const response = await fetch("/group_session/create", { method: "POST" });
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            setRestaurantStatus(data.message || "Unable to start group mode.");
+            return;
+        }
+
+        window.activeGroupSession = data.group;
+        updateGroupPanel(data.group);
+        startGroupStatusPolling();
+        showBiteToast(`Group code ${data.group.code} created`, "success");
+    } catch (error) {
+        setRestaurantStatus("Unable to start group mode right now.");
+    }
+}
+
+async function joinGroupSession() {
+    const input = document.getElementById("groupCodeInput");
+    const code = input?.value || "";
+
+    if (!code.trim()) {
+        setRestaurantStatus("Enter a group code first.");
+        return;
+    }
+
+    try {
+        const response = await fetch("/group_session/join", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code }),
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            setRestaurantStatus(data.message || "Unable to join that group.");
+            return;
+        }
+
+        window.activeGroupSession = data.group;
+        updateGroupPanel(data.group);
+        startGroupStatusPolling();
+        showBiteToast(`Joined group ${data.group.code}`, "success");
+    } catch (error) {
+        setRestaurantStatus("Unable to join group mode right now.");
+    }
+}
+
+async function leaveGroupSession() {
+    await fetch("/group_session/leave", { method: "POST" });
+    window.activeGroupSession = null;
+    window.clearInterval(window.groupStatusTimer);
+    updateGroupPanel(null);
+    showBiteToast("Left group mode", "success");
+}
+
+async function copyGroupInviteLink() {
+    const group = window.activeGroupSession;
+    if (!group?.code) {
+        setRestaurantStatus("Start or join a group first.");
+        return;
+    }
+
+    const invitePath = group.invite_path || `/?group=${encodeURIComponent(group.code)}`;
+    const inviteUrl = new URL(invitePath, window.location.origin).href;
+
+    try {
+        await navigator.clipboard.writeText(inviteUrl);
+        showBiteToast("Group invite copied", "success");
+    } catch (error) {
+        setRestaurantStatus(inviteUrl);
+    }
+}
+
+async function refreshGroupSession() {
+    try {
+        const response = await fetch("/group_session/current");
+        const data = await response.json();
+        window.activeGroupSession = data.group || null;
+        updateGroupPanel(window.activeGroupSession);
+    } catch (error) {
+        // Polling should stay quiet if the network blips.
+    }
+}
+
+function startGroupStatusPolling() {
+    window.clearInterval(window.groupStatusTimer);
+    window.groupStatusTimer = window.setInterval(refreshGroupSession, 4500);
+}
+
+async function recordGroupSwipe(action, restaurant) {
+    if (!window.activeGroupSession || !restaurant) {
+        return;
+    }
+
+    try {
+        const response = await fetch("/group_session/swipe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                action,
+                place: restaurant.place,
+                restaurant,
+            }),
+        });
+        const data = await response.json();
+
+        if (response.ok && data.group) {
+            window.activeGroupSession = data.group;
+            updateGroupPanel(data.group);
+        }
+    } catch (error) {
+        setRestaurantStatus("Saved your swipe locally, but group mode could not update.");
+    }
+}
+
+async function sendGroupReaction(message) {
+    if (!window.activeGroupSession) {
+        setRestaurantStatus("Start or join a group first.");
+        return;
+    }
+
+    const response = await fetch("/group_session/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+    });
+    const data = await response.json();
+    if (response.ok && data.group) {
+        window.activeGroupSession = data.group;
+        updateGroupPanel(data.group);
+    }
+}
+
+async function vetoCurrentGroupRestaurant() {
+    const restaurant = getCurrentRestaurant?.();
+    if (!restaurant) {
+        setRestaurantStatus("Load a card before vetoing.");
+        return;
+    }
+    await recordGroupSwipe("veto", restaurant);
+    showBiteToast("Veto recorded for the group", "success");
+}
+
+function updateGroupPanel(group) {
+    const panel = document.getElementById("groupModePanel");
+    const inactive = document.getElementById("groupModeInactive");
+    const active = document.getElementById("groupModeActive");
+    const code = document.getElementById("groupCodeLabel");
+    const memberCount = document.getElementById("groupMemberCount");
+    const memberList = document.getElementById("groupMemberList");
+    const expiry = document.getElementById("groupExpiryLabel");
+    const messages = document.getElementById("groupMessageList");
+    const consensusList = document.getElementById("groupConsensusList");
+    const almostList = document.getElementById("groupAlmostList");
+
+    if (!panel || !inactive || !active) {
+        return;
+    }
+
+    panel.classList.toggle("is-active", Boolean(group));
+    inactive.hidden = Boolean(group);
+    active.hidden = !group;
+
+    if (!group) {
+        return;
+    }
+
+    if (code) code.textContent = group.code;
+    if (memberCount) memberCount.textContent = `${group.member_count} member${group.member_count === 1 ? "" : "s"}`;
+    if (expiry) expiry.textContent = formatGroupExpiry(group.expires_in_seconds);
+    renderGroupMembers(memberList, group.members || []);
+    renderGroupMessages(messages, group.messages || []);
+
+    renderGroupRestaurantList(consensusList, group.consensus, "No unanimous saves yet.");
+    renderGroupRestaurantList(almostList, group.almost, "Near matches will show here.");
+}
+
+function formatGroupExpiry(seconds) {
+    const value = Number(seconds);
+    if (!Number.isFinite(value)) return "Invite expires soon";
+    const minutes = Math.max(0, Math.ceil(value / 60));
+    if (minutes >= 60) {
+        return `${Math.floor(minutes / 60)}h ${minutes % 60}m left`;
+    }
+    return `${minutes}m left`;
+}
+
+function renderGroupMembers(container, members) {
+    if (!container) return;
+    container.innerHTML = "";
+    members.slice(0, 8).forEach((member) => {
+        const item = document.createElement("span");
+        const img = document.createElement("img");
+        img.src = member.avatar;
+        img.alt = "";
+        item.appendChild(img);
+        item.append(member.name || "BiteSwipe user");
+        container.appendChild(item);
+    });
+}
+
+function renderGroupMessages(container, messages) {
+    if (!container) return;
+    container.innerHTML = "";
+    messages.slice(0, 5).forEach((message) => {
+        const item = document.createElement("li");
+        item.textContent = `${message.name}: ${message.message}`;
+        container.appendChild(item);
+    });
+}
+
+function getBoundedGroupPanelPosition(left, top, panel) {
+    const margin = 12;
+    const width = panel?.offsetWidth || 300;
+    const height = panel?.offsetHeight || 160;
+    const maxLeft = Math.max(window.innerWidth - width - margin, margin);
+    const maxTop = Math.max(window.innerHeight - height - margin, margin);
+
+    return {
+        left: Math.min(Math.max(left, margin), maxLeft),
+        top: Math.min(Math.max(top, margin), maxTop),
+    };
+}
+
+function setGroupPanelPosition(left, top, options = {}) {
+    const panel = document.getElementById("groupModePanel");
+    if (!panel || window.matchMedia("(max-width: 760px)").matches) {
+        return;
+    }
+
+    const position = getBoundedGroupPanelPosition(left, top, panel);
+    panel.classList.add("is-user-positioned");
+    panel.style.left = `${position.left}px`;
+    panel.style.top = `${position.top}px`;
+
+    if (options.persist !== false) {
+        try {
+            localStorage.setItem(window.groupPanelPositionStorageKey, JSON.stringify(position));
+        } catch (error) {
+            // Drag position is just a local convenience.
+        }
+    }
+}
+
+function restoreGroupPanelPosition() {
+    const panel = document.getElementById("groupModePanel");
+    if (!panel || window.matchMedia("(max-width: 760px)").matches) {
+        return;
+    }
+
+    try {
+        const saved = JSON.parse(localStorage.getItem(window.groupPanelPositionStorageKey) || "null");
+        if (saved && Number.isFinite(Number(saved.left)) && Number.isFinite(Number(saved.top))) {
+            setGroupPanelPosition(Number(saved.left), Number(saved.top), { persist: false });
+        }
+    } catch (error) {
+        // Ignore old or malformed positions.
+    }
+}
+
+function resetGroupPanelPosition() {
+    const panel = document.getElementById("groupModePanel");
+    if (!panel) {
+        return;
+    }
+
+    panel.classList.remove("is-user-positioned", "is-dragging");
+    panel.style.left = "";
+    panel.style.top = "";
+    try {
+        localStorage.removeItem(window.groupPanelPositionStorageKey);
+    } catch (error) {
+        // Nothing else to do.
+    }
+}
+
+function handleGroupPanelPointerDown(event) {
+    const panel = document.getElementById("groupModePanel");
+    if (!panel || window.matchMedia("(max-width: 760px)").matches) {
+        return;
+    }
+
+    if (event.target.closest("button, input, a, select, textarea")) {
+        return;
+    }
+
+    const rect = panel.getBoundingClientRect();
+    window.groupPanelDragState = {
+        pointerId: event.pointerId,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top,
+    };
+    panel.classList.add("is-dragging");
+    panel.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+}
+
+function handleGroupPanelPointerMove(event) {
+    const panel = document.getElementById("groupModePanel");
+    const state = window.groupPanelDragState;
+    if (!panel || !state || state.pointerId !== event.pointerId) {
+        return;
+    }
+
+    setGroupPanelPosition(event.clientX - state.offsetX, event.clientY - state.offsetY, { persist: false });
+}
+
+function handleGroupPanelPointerEnd(event) {
+    const panel = document.getElementById("groupModePanel");
+    const state = window.groupPanelDragState;
+    if (!panel || !state || state.pointerId !== event.pointerId) {
+        return;
+    }
+
+    const rect = panel.getBoundingClientRect();
+    setGroupPanelPosition(rect.left, rect.top);
+    panel.classList.remove("is-dragging");
+    panel.releasePointerCapture?.(event.pointerId);
+    window.groupPanelDragState = null;
+}
+
+function setupDraggableGroupPanel() {
+    const panel = document.getElementById("groupModePanel");
+    if (!panel) {
+        return;
+    }
+
+    panel.addEventListener("pointerdown", handleGroupPanelPointerDown);
+    panel.addEventListener("pointermove", handleGroupPanelPointerMove);
+    panel.addEventListener("pointerup", handleGroupPanelPointerEnd);
+    panel.addEventListener("pointercancel", handleGroupPanelPointerEnd);
+    window.addEventListener("resize", restoreGroupPanelPosition);
+    restoreGroupPanelPosition();
+}
+
+function renderGroupRestaurantList(container, restaurants, emptyText) {
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = "";
+    const items = Array.isArray(restaurants) ? restaurants : [];
+
+    if (!items.length) {
+        const empty = document.createElement("li");
+        empty.textContent = emptyText;
+        container.appendChild(empty);
+        return;
+    }
+
+    items.slice(0, 5).forEach((restaurant) => {
+        const item = document.createElement("li");
+        item.textContent = `${restaurant.name} (${restaurant.saved_count}/${restaurant.needed_count})`;
+        container.appendChild(item);
+    });
 }
 
 function readRestaurantCardStack() {
@@ -487,8 +1386,14 @@ async function clearRestaurantFilters() {
         cheapPrice: false,
         mediumPrice: false,
         expensivePrice: false,
-        distance: 50,
+        openNow: false,
+        outdoorSeating: false,
+        takeoutOnly: false,
+        dineIn: false,
+        distance: 2,
+        minRating: 0,
         foodPreferences: [],
+        cuisineExclusions: [],
         hobbyInterests: typeof getCheckedValues === "function" ? getCheckedValues("hobbyInterests") : [],
     };
 
@@ -508,8 +1413,15 @@ async function clearRestaurantFilters() {
         const slider = document.getElementById("myRange");
         const distanceValue = document.getElementById("distanceValue");
         if (slider && distanceValue) {
-            slider.value = 50;
-            distanceValue.textContent = "50";
+            slider.value = 2;
+            distanceValue.textContent = "2";
+        }
+
+        const minRating = document.getElementById("minRatingRange");
+        const minRatingValue = document.getElementById("minRatingValue");
+        if (minRating && minRatingValue) {
+            minRating.value = 0;
+            minRatingValue.textContent = "0.0";
         }
 
         if (typeof updateFooterFilterCounts === "function") {
@@ -527,6 +1439,50 @@ async function clearRestaurantFilters() {
     }
 }
 
+function setDeckEmptyState(title, copy, suggestions = []) {
+    const emptyState = document.querySelector(".card-empty-state");
+    if (!emptyState) {
+        return;
+    }
+
+    const titleElement = emptyState.querySelector("strong");
+    const copyElement = emptyState.querySelector("span");
+    if (titleElement) titleElement.textContent = title;
+    if (copyElement) copyElement.textContent = copy;
+
+    emptyState.querySelector(".empty-state-suggestions")?.remove();
+    if (!suggestions.length) {
+        return;
+    }
+
+    const list = document.createElement("ul");
+    list.className = "empty-state-suggestions";
+    suggestions.slice(0, 3).forEach((suggestion) => {
+        const item = document.createElement("li");
+        item.textContent = suggestion;
+        list.appendChild(item);
+    });
+    emptyState.appendChild(list);
+}
+
+function buildNoRestaurantSuggestions() {
+    const labels = getActiveFilterLabels();
+    const suggestions = [];
+
+    if (labels.length) {
+        suggestions.push("Clear one craving or allergy filter, then refresh the deck.");
+    }
+
+    const slider = document.getElementById("myRange");
+    if (slider && Number(slider.value) < 10) {
+        suggestions.push("Widen your distance filter to include more campus-area spots.");
+    }
+
+    suggestions.push("Use my location again if you moved across campus.");
+    suggestions.push("Try Smart starts like Cheap eats or Study break.");
+    return suggestions;
+}
+
 async function get_restaurant(options = {}) {
     try {
         setRestaurantStatus("Loading nearby restaurants...");
@@ -540,18 +1496,37 @@ async function get_restaurant(options = {}) {
                 return;
             }
 
+            setDeckEmptyState(
+                "Your deck needs one more thing.",
+                data.error || "BiteSwipe could not load nearby restaurants yet.",
+                ["Use my location from the deck tools.", "Check that location access is allowed.", "Refresh the deck after location saves."]
+            );
             setRestaurantStatus(data.error || "Unable to load restaurants right now.");
             return;
         }
 
         window.restaurantDecisionHistory = [];
         resetSessionStats();
-        renderRestaurantCards(data.places || []);
+        const rawPlaces = data.places || [];
+        const displayPlaces = filterAvoidedRestaurants(rawPlaces);
+        renderRestaurantCards(displayPlaces);
+
+        const repeatMessage = rawPlaces.length > displayPlaces.length
+            ? ` Hidden ${rawPlaces.length - displayPlaces.length} place${rawPlaces.length - displayPlaces.length === 1 ? "" : "s"} you already swiped.`
+            : "";
+        if (!displayPlaces.length) {
+            setDeckEmptyState(
+                "No restaurants matched this deck.",
+                "Your current filters are probably too tight for the nearby results.",
+                buildNoRestaurantSuggestions()
+            );
+        }
+
         setRestaurantStatus(
             data.message ||
-            (data.places && data.places.length
-                ? `Loaded ${data.places.length} nearby spots. Swipe right to save, left to pass.`
-                : "No nearby restaurants found. Try widening your distance filter.")
+            (displayPlaces.length
+                ? `Loaded ${displayPlaces.length} nearby spots. Swipe right to save, left to pass.${repeatMessage}`
+                : "No nearby restaurants found. Try the suggestions in the empty deck.")
         );
     } catch (error) {
         setRestaurantStatus("Unable to load restaurants right now.");
@@ -585,10 +1560,18 @@ function renderRestaurantCards(places, options = {}) {
     stage.classList.toggle("has-cards", cards.length > 0);
     stage.classList.toggle("is-empty", cards.length === 0);
 
+    if (cards.length > 0) {
+        setDeckEmptyState(
+            "Build your BiteSwipe deck.",
+            "Use your location, set filters, then refresh cards to discover nearby places."
+        );
+    }
+
     cards.forEach((result, index) => {
         const card = document.createElement("div");
         card.classList.add("card");
         card.dataset.cardIndex = String(index);
+        card.style.setProperty("--card-index", String(index));
         card.tabIndex = 0;
         card.setAttribute("role", "button");
         card.setAttribute("aria-label", `${result.name || "Restaurant"} details`);
@@ -602,6 +1585,11 @@ function renderRestaurantCards(places, options = {}) {
 
         const inner = document.createElement("div");
         inner.classList.add("card-inner");
+
+        const feedback = document.createElement("div");
+        feedback.classList.add("swipe-feedback");
+        feedback.innerHTML = '<span class="swipe-feedback-pass">Pass</span><span class="swipe-feedback-save">Save</span>';
+        card.appendChild(feedback);
 
         const front = document.createElement("div");
         front.classList.add("card-face", "card-front");
@@ -629,6 +1617,14 @@ function renderRestaurantCards(places, options = {}) {
         const chips = buildCardChips(result);
         if (chips.children.length > 0) {
             front.appendChild(chips);
+        }
+
+        const memoryText = buildRestaurantMemoryText(result);
+        if (memoryText) {
+            const memory = document.createElement("small");
+            memory.classList.add("card-memory-note");
+            memory.textContent = memoryText;
+            front.appendChild(memory);
         }
 
         front.appendChild(buildMatchPanel(result));
@@ -662,6 +1658,14 @@ function renderRestaurantCards(places, options = {}) {
     if (options.persist !== false) {
         persistRestaurantCardStack();
     }
+
+    if (cards.length > 0) {
+        stage.classList.add("is-dealing");
+        window.setTimeout(() => stage.classList.remove("is-dealing"), 760);
+    }
+
+    updateDailyBite(cards);
+    updateTasteProfilePanel();
 }
 
 function toggleCardFlip(card) {
@@ -677,11 +1681,14 @@ function buildCardChips(result) {
     chips.classList.add("card-chip-row");
 
     [
-        formatDistance(result.distance_meters),
-        result.price_text || formatPriceLevel(result.price_level),
+        formatBiteConfidence(result),
+        formatAllergyConfidence(result),
+        formatWalkingTime(result),
+        getRestaurantPrice(result),
+        formatOpenStatus(result),
         formatCuisine(result.cuisine),
         formatShortRating(result),
-    ].filter(Boolean).slice(0, 4).forEach((value) => {
+    ].filter(Boolean).slice(0, 5).forEach((value) => {
         const chip = document.createElement("span");
         chip.textContent = value;
         chips.appendChild(chip);
@@ -703,9 +1710,13 @@ function buildCardBack(result) {
     const detailList = document.createElement("dl");
     detailList.classList.add("restaurant-details");
     addDetail(detailList, "Food", formatCuisine(result.cuisine));
-    addDetail(detailList, "Cost", result.price_text || formatPriceLevel(result.price_level));
+    addDetail(detailList, "Cost", getRestaurantPrice(result));
+    addDetail(detailList, "Hours", result.opening_hours_text || formatOpenStatus(result));
     addDetail(detailList, "Address", result.address);
-    addDetail(detailList, "Distance", formatDistance(result.distance_meters));
+    addDetail(detailList, "Travel", formatWalkingTime(result));
+    addDetail(detailList, "BiteSwipe score", formatBiteConfidence(result, true));
+    addDetail(detailList, "Your history", buildRestaurantMemoryText(result));
+    addDetail(detailList, "Allergy confidence", formatAllergyConfidence(result, true));
     addDetail(detailList, "Source", formatSource(result.source));
     back.appendChild(detailList);
 
@@ -793,10 +1804,25 @@ function buildMatchPanel(result) {
 
 function getMatchReasons(result) {
     const reasons = [];
-    const distance = formatDistance(result.distance_meters);
+    const confidence = result.bite_confidence || {};
+    if (Number.isFinite(Number(confidence.score))) {
+        reasons.push(`${Number(confidence.score)}% BiteSwipe fit`);
+    }
+
+    const affinity = scoreTasteAffinity(result);
+    if (affinity >= 6) {
+        reasons.push("matches your taste");
+    }
+
+    const memoryText = buildRestaurantMemoryText(result);
+    if (memoryText) {
+        reasons.push(memoryText.replace(".", ""));
+    }
+
+    const distance = formatWalkingTime(result);
     const cuisine = formatCuisine(result.cuisine);
     const rating = Number(result.rating);
-    const price = result.price_text || formatPriceLevel(result.price_level);
+    const price = getRestaurantPrice(result);
 
     if (distance) {
         reasons.push(distance);
@@ -814,6 +1840,31 @@ function getMatchReasons(result) {
     }
 
     return reasons.slice(0, 4).length ? reasons.slice(0, 4) : ["nearby discovery", "tap for details"];
+}
+
+function formatBiteConfidence(result, detailed = false) {
+    const confidence = result?.bite_confidence || {};
+    const score = Number(confidence.score);
+
+    if (!Number.isFinite(score)) {
+        return "";
+    }
+
+    const label = confidence.label || "BiteSwipe fit";
+    const reasons = Array.isArray(confidence.reasons) ? confidence.reasons.filter(Boolean) : [];
+    return detailed && reasons.length
+        ? `${score}/100 ${label} (${reasons.join(", ")})`
+        : `${score}% ${label}`;
+}
+
+function formatAllergyConfidence(result, detailed = false) {
+    const confidence = result?.allergy_confidence;
+
+    if (!confidence?.label) {
+        return "";
+    }
+
+    return detailed && confidence.detail ? confidence.detail : confidence.label;
 }
 
 function buildRatingPanel(result) {
@@ -861,13 +1912,54 @@ function getUserRating(result) {
     return Number(ratings[getRestaurantRatingKey(result)] || 0);
 }
 
+async function loadUserRatings() {
+    try {
+        const response = await fetch("/user_ratings");
+        const data = await response.json();
+        window.serverRestaurantRatings = data.ratings && typeof data.ratings === "object" ? data.ratings : {};
+        await migrateLocalUserRatingsToServer();
+    } catch (error) {
+        window.serverRestaurantRatings = {};
+    }
+}
+
+async function migrateLocalUserRatingsToServer() {
+    const localRatings = readLocalUserRatings();
+    const entries = Object.entries(localRatings).filter(([key]) => !window.serverRestaurantRatings[key]);
+
+    await Promise.all(entries.slice(0, 40).map(([place, rating]) => {
+        return fetch("/user_rating", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ place, rating }),
+        }).catch(() => null);
+    }));
+}
+
 function saveUserRating(result, rating) {
+    const key = getRestaurantRatingKey(result);
     const ratings = readUserRatings();
-    ratings[getRestaurantRatingKey(result)] = rating;
+    ratings[key] = rating;
+    window.serverRestaurantRatings[key] = rating;
     localStorage.setItem(window.restaurantRatingStorageKey, JSON.stringify(ratings));
+
+    fetch("/user_rating", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ place: key, name: result?.name, rating }),
+    }).catch(() => {
+        setRestaurantStatus("Rating saved on this browser. It will sync when the connection works.");
+    });
 }
 
 function readUserRatings() {
+    return {
+        ...readLocalUserRatings(),
+        ...(window.serverRestaurantRatings || {}),
+    };
+}
+
+function readLocalUserRatings() {
     try {
         return JSON.parse(localStorage.getItem(window.restaurantRatingStorageKey) || "{}");
     } catch (error) {
@@ -914,21 +2006,75 @@ function formatPriceLevel(value) {
     }
 
     if (level <= 0) {
-        return "Free";
+        return "Price not listed";
     }
 
     return "$".repeat(Math.min(level, 4));
 }
 
-function formatDistance(value) {
+function normalizeRestaurantPriceText(value) {
+    if (!value) {
+        return null;
+    }
+
+    const text = String(value).trim();
+    if (!text || ["free", "0", "unknown", "price not listed"].includes(text.toLowerCase())) {
+        return null;
+    }
+
+    return text;
+}
+
+function getRestaurantPrice(result) {
+    return normalizeRestaurantPriceText(result?.price_text) || formatPriceLevel(result?.price_level);
+}
+
+function formatWalkingTime(resultOrMeters) {
+    const explicitMinutes = Number(resultOrMeters?.walking_minutes);
+    const value = typeof resultOrMeters === "object" ? resultOrMeters?.distance_meters : resultOrMeters;
     const meters = Number(value);
+
+    if (!Number.isFinite(explicitMinutes) && !Number.isFinite(meters)) {
+        return null;
+    }
+
+    const walkMinutes = Number.isFinite(explicitMinutes) && explicitMinutes > 0
+        ? Math.max(1, Math.round(explicitMinutes))
+        : Math.max(1, Math.round(meters / 83));
+    const driveMinutes = formatDrivingMinutes(resultOrMeters, meters);
+    const miles = Number.isFinite(meters) ? meters / 1609.344 : 0;
+    const mode = resultOrMeters?.transportation_mode || window.userTransportationMode || "walking";
+
+    if (mode === "driving") {
+        return driveMinutes ? `${driveMinutes} min drive` : `${walkMinutes} min walk`;
+    }
+
+    if (mode === "both" && miles > 1.1 && driveMinutes) {
+        return `${walkMinutes} min walk / ${driveMinutes} min drive`;
+    }
+
+    return `${walkMinutes} min walk`;
+}
+
+function formatDrivingMinutes(resultOrMeters, metersFallback) {
+    const explicitMinutes = Number(resultOrMeters?.driving_minutes);
+    if (Number.isFinite(explicitMinutes) && explicitMinutes > 0) {
+        return Math.max(2, Math.round(explicitMinutes));
+    }
+
+    const meters = Number.isFinite(metersFallback)
+        ? metersFallback
+        : Number(typeof resultOrMeters === "object" ? resultOrMeters?.distance_meters : resultOrMeters);
 
     if (!Number.isFinite(meters)) {
         return null;
     }
 
-    const miles = meters / 1609.344;
-    return miles < 0.1 ? "Very close" : `${miles.toFixed(1)} mi away`;
+    return Math.max(2, Math.round(meters / 800));
+}
+
+function formatDistance(value) {
+    return formatWalkingTime(value);
 }
 
 function formatOnlineRating(result) {
@@ -951,7 +2097,23 @@ function formatShortRating(result) {
     return Number.isFinite(rating) ? `${rating.toFixed(1)} rated` : null;
 }
 
+function formatOpenStatus(result) {
+    if (result?.is_open === true) {
+        return "Open now";
+    }
+
+    if (result?.is_open === false) {
+        return "Closed now";
+    }
+
+    return null;
+}
+
 function formatSource(source) {
+    if (source === "hybrid") {
+        return "OSM + Google";
+    }
+
     if (source === "google") {
         return "Google Places";
     }
@@ -976,12 +2138,18 @@ function buildRestaurantSummary(result) {
         parts.push(`Serves ${cuisine}.`);
     }
 
-    if (result.price_text || Number.isFinite(Number(result.price_level))) {
-        parts.push(`Typical cost: ${result.price_text || formatPriceLevel(result.price_level)}.`);
+    const price = getRestaurantPrice(result);
+    if (price && price !== "Price not listed") {
+        parts.push(`Typical cost: ${price}.`);
     }
 
     if (result.rating) {
         parts.push(`Online rating: ${formatOnlineRating(result)}.`);
+    }
+
+    const openStatus = formatOpenStatus(result);
+    if (openStatus) {
+        parts.push(openStatus + ".");
     }
 
     return parts.join(" ") || "More restaurant details will appear here when the provider has them.";
@@ -1003,10 +2171,14 @@ function updateCurrentCardMeta() {
 
     const parts = [
         result.name,
-        formatDistance(result.distance_meters),
+        formatWalkingTime(result),
         formatShortRating(result),
     ].filter(Boolean);
-    label.textContent = parts.join(" · ");
+    label.textContent = parts.join(" - ");
+    const memoryText = buildRestaurantMemoryText(result);
+    if (memoryText) {
+        label.textContent += ` - ${memoryText}`;
+    }
 }
 
 function updateCardProgress() {
@@ -1022,8 +2194,8 @@ function updateCardProgress() {
 
     if (progress) {
         progress.textContent = isComplete
-            ? `Deck complete · ${total} reviewed`
-            : `${activeNumber} of ${total || "—"} spots`;
+            ? `Deck complete - ${total} reviewed`
+            : `${activeNumber} of ${total || "-"} spots`;
     }
 
     if (miniProgress) {
@@ -1041,6 +2213,8 @@ function updateCardProgress() {
 
     updateCurrentCardMeta();
     updateSessionStats();
+    updateTasteProfilePanel();
+    updateDailyBite();
     updateActiveFilterSummary();
 
     if (stage) {
@@ -1060,13 +2234,91 @@ function updateCardProgress() {
     }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function setupTransportationPrompt() {
+    const prompt = document.getElementById("transportationPrompt");
+    if (!prompt || window.userTransportationMode) {
+        return;
+    }
+
+    prompt.hidden = false;
+}
+
+async function chooseTransportationMode(mode) {
+    try {
+        const response = await fetch("/save_transportation", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode }),
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            setRestaurantStatus(data.message || "Unable to save transportation mode.");
+            return;
+        }
+
+        window.userTransportationMode = data.mode;
+        document.getElementById("transportationPrompt")?.setAttribute("hidden", "");
+
+        const slider = document.getElementById("myRange");
+        const distanceValue = document.getElementById("distanceValue");
+        if (slider && data.filters?.distance) {
+            slider.value = data.filters.distance;
+        }
+        if (distanceValue && data.filters?.distance) {
+            distanceValue.textContent = String(data.filters.distance);
+        }
+
+        if (typeof updateFooterFilterCounts === "function") {
+            updateFooterFilterCounts();
+        }
+        updateActiveFilterSummary();
+        clearCachedRestaurantStack?.();
+        showBiteToast(mode === "walking" ? "Walking mode set" : mode === "driving" ? "Driving mode set" : "Walk and drive mode set", "success");
+    } catch (error) {
+        setRestaurantStatus("Unable to save transportation mode right now.");
+    }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
     restoreDeckCoach();
+    setupDraggableGroupPanel();
+    await loadUserRatings();
     restoreRestaurantCardStack();
+    setupTimeOfDayPreset();
     updateSessionStats();
     updateActiveFilterSummary();
+    updateDeckHistoryPanel();
+    setupTransportationPrompt();
+    refreshGroupSession().then(() => {
+        if (window.activeGroupSession) {
+            startGroupStatusPolling();
+        }
+    });
 });
 </script>
+
+<aside class="transportation-prompt" id="transportationPrompt" hidden aria-label="Choose usual transportation">
+  <div class="transportation-card">
+    <p class="cards-kicker">First deck setup</p>
+    <h2>How do you usually get food?</h2>
+    <p>We will tune your first radius and travel labels so BiteSwipe feels campus-accurate right away.</p>
+    <div class="transportation-actions">
+      <button type="button" onclick="chooseTransportationMode('walking')">
+        <strong>Walking</strong>
+        <span>1 mile radius</span>
+      </button>
+      <button type="button" onclick="chooseTransportationMode('driving')">
+        <strong>Driving</strong>
+        <span>10 mile radius</span>
+      </button>
+      <button type="button" onclick="chooseTransportationMode('both')">
+        <strong>Both</strong>
+        <span>Walk nearby, drive farther</span>
+      </button>
+    </div>
+  </div>
+</aside>
 
 <section class="cards-page-shell" aria-label="BiteSwipe restaurant card deck">
   <div class="cards-hero">
@@ -1077,7 +2329,7 @@ document.addEventListener("DOMContentLoaded", () => {
     </p>
 
     <div class="cards-hero-metrics" aria-label="Deck status">
-      <span id="cardProgressText">0 of — spots</span>
+      <span id="cardProgressText">0 of - spots</span>
       <span id="currentCardMeta">Choose filters, use location, then load a deck.</span>
       <span>Tap cards for details</span>
     </div>
@@ -1091,7 +2343,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <strong>Best flow</strong>
         <p>Set allergy filters, load nearby spots, tap a card for details, save only the places you would actually eat at, then compare in Saved.</p>
       </div>
-      <button type="button" onclick="dismissDeckCoach()" aria-label="Hide BiteSwipe tips">×</button>
+      <button type="button" onclick="dismissDeckCoach()" aria-label="Hide BiteSwipe tips">x</button>
     </aside>
 
     <div class="deck-insight-grid" aria-label="Your deck activity">
@@ -1100,8 +2352,27 @@ document.addEventListener("DOMContentLoaded", () => {
       <div><strong id="passedCount">0</strong><span>passed</span></div>
     </div>
 
+    <div class="personal-deck-grid" aria-label="Personal BiteSwipe tools">
+      <section class="daily-bite-panel" id="dailyBitePanel" aria-label="Daily Bite recommendation">
+        <p>Daily Bite</p>
+        <strong id="dailyBiteTitle">No Daily Bite yet</strong>
+        <span id="dailyBiteMeta">Load a deck and BiteSwipe will pick one strong option for today.</span>
+        <small id="dailyBiteReason">Uses your saves, passes, filters, distance, and ratings.</small>
+        <button type="button" id="dailyBiteButton" onclick="focusDailyBite()" disabled>Show card</button>
+      </section>
+
+      <section class="taste-profile-panel" id="tasteProfilePanel" aria-label="Taste profile learning">
+        <p>Taste profile</p>
+        <strong>Learning from your swipes</strong>
+        <span id="tasteProfileSummary">Save and pass cards to teach BiteSwipe what should show up first.</span>
+        <div id="tasteProfileChips" class="taste-profile-chips">
+          <span>Learning from your next swipes</span>
+        </div>
+      </section>
+    </div>
+
     <div class="active-filter-summary" id="activeFilterSummary" aria-live="polite">
-      <span class="filter-summary-empty">No filters yet — open Allergens to tune your deck.</span>
+      <span class="filter-summary-empty">No filters yet - open Allergens to tune your deck.</span>
     </div>
 
     <div class="quick-cravings" aria-label="Quick food cravings">
@@ -1123,6 +2394,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <button type="button" onclick="applyDeckMode('study')">Study break</button>
         <button type="button" onclick="applyDeckMode('group')">Group friendly</button>
         <button type="button" onclick="applyDeckMode('clean')">Fresh and light</button>
+        <button type="button" id="timePresetButton" hidden>Time smart</button>
       </div>
     </div>
 
@@ -1133,12 +2405,62 @@ document.addEventListener("DOMContentLoaded", () => {
     </div>
   </div>
 
-  <div class="card-stage is-empty">
-    <div class="deck-status-row">
-      <span class="deck-status-pill" id="deckMiniProgress">No deck yet</span>
-      <span class="deck-status-pill">← Pass</span>
-      <span class="deck-status-pill deck-status-pill-save">Save →</span>
+  <section class="group-mode-panel" id="groupModePanel" aria-label="Group swipe mode">
+    <div class="group-mode-drag-handle" aria-hidden="true">
+      <span></span>
+      <span></span>
     </div>
+    <div id="groupModeInactive">
+      <strong>Group mode</strong>
+      <p>Start or join a session. Only restaurants everyone saves make the final shortlist.</p>
+      <div class="group-mode-actions">
+        <button type="button" onclick="createGroupSession()">Start group</button>
+        <input id="groupCodeInput" type="text" maxlength="12" placeholder="Code" aria-label="Group code">
+        <button type="button" onclick="joinGroupSession()">Join</button>
+      </div>
+    </div>
+    <div id="groupModeActive" hidden>
+      <div class="group-mode-active-header">
+        <div>
+          <strong>Group <span id="groupCodeLabel"></span></strong>
+          <span id="groupMemberCount">1 member</span>
+          <span id="groupExpiryLabel">2h left</span>
+        </div>
+        <button type="button" onclick="copyGroupInviteLink()">Invite</button>
+        <button type="button" onclick="leaveGroupSession()">Leave</button>
+      </div>
+      <div class="group-member-list" id="groupMemberList"></div>
+      <div class="group-reaction-row">
+        <button type="button" onclick="sendGroupReaction('omg yes')">omg yes</button>
+        <button type="button" onclick="sendGroupReaction('I hate this place')">I hate this</button>
+        <button type="button" onclick="sendGroupReaction('maybe')">maybe</button>
+        <button type="button" onclick="vetoCurrentGroupRestaurant()">Veto card</button>
+      </div>
+      <ul class="group-message-list" id="groupMessageList"></ul>
+      <div class="group-mode-results">
+        <div>
+          <span>Everyone saved</span>
+          <ul id="groupConsensusList"></ul>
+        </div>
+        <div>
+          <span>Almost there</span>
+          <ul id="groupAlmostList"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="card-stage is-empty">
+    {% if school_theme %}
+      <div class="school-theme-chip" aria-label="Active school theme">
+        {% if school_theme.card_image_url %}
+          <img src="{{ school_theme.card_image_url }}" alt="">
+        {% else %}
+          <span class="school-theme-monogram" aria-hidden="true">{{ school_theme.short_name[:1] }}</span>
+        {% endif %}
+        <span>{{ school_theme.short_name }} mode</span>
+      </div>
+    {% endif %}
 
     <div class="deck-sort-row" aria-label="Deck sorting tools">
       <button type="button" onclick="sortRemainingDeck('best')">Best match</button>
@@ -1146,12 +2468,11 @@ document.addEventListener("DOMContentLoaded", () => {
       <button type="button" onclick="sortRemainingDeck('rating')">Top rated</button>
     </div>
 
-    <div class="card-empty-state" aria-hidden="true">
-      <strong>Build your BiteSwipe deck.</strong>
-      <span>Use your location, set filters, then refresh cards to discover nearby places.</span>
-    </div>
-
     <div class="card-container" aria-live="polite">
+      <div class="card-empty-state" aria-hidden="true">
+        <strong>Build your BiteSwipe deck.</strong>
+        <span>Use your location, set filters, then refresh cards to discover nearby places.</span>
+      </div>
       <div class="cards" id="cards"></div>
     </div>
 
@@ -1214,7 +2535,24 @@ document.addEventListener("DOMContentLoaded", () => {
         onclick="clearRestaurantFilters()">
         Clear
       </button>
+      <button
+        type="button"
+        class="card-action-button card-action-history"
+        onclick="toggleDeckHistory()">
+        History <span id="deckHistoryCount">0</span>
+      </button>
     </div>
+
+    <section class="deck-history-panel" id="deckHistoryPanel" hidden aria-label="Passed restaurant history">
+      <div class="deck-history-header">
+        <div>
+          <strong>Passed restaurants</strong>
+          <span>Save one later if you change your mind.</span>
+        </div>
+        <button type="button" onclick="clearDeckHistory()">Clear history</button>
+      </div>
+      <div class="deck-history-list" id="deckHistoryList"></div>
+    </section>
 
     <p id="restaurantStatus" role="status" aria-live="polite"></p>
     <div class="deck-trust-strip" aria-label="BiteSwipe trust reminders">
@@ -1222,8 +2560,9 @@ document.addEventListener("DOMContentLoaded", () => {
       <span>Cards stay hidden until active</span>
       <span>Confirm allergies before ordering</span>
     </div>
-    <p class="deck-keyboard-hint">Keyboard: ← pass · → save · U undo · Enter/Space details. Allergy results are guidance only—confirm with the restaurant before ordering.</p>
+    <p class="deck-keyboard-hint">Keyboard: left arrow pass - right arrow save - U undo - Enter/Space details. Allergy results are guidance only; confirm with the restaurant before ordering.</p>
   </div>
 </section>
+<script src="{{ url_for('static', filename='deck-state.js') }}"></script>
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 {% endblock %}

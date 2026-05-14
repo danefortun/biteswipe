@@ -7,8 +7,10 @@ LifeSwipe is a Flask app for location-based restaurant discovery, profile pages,
 - Python 3.12
 - Flask
 - Flask-SQLAlchemy
+- Flask-Migrate / Alembic migrations
 - SQLite for local development
 - Optional PostgreSQL through `DATABASE_URL` for production scale
+- Optional S3-compatible upload storage for profile media
 - OpenStreetMap Overpass API for no-key restaurant search
 - Optional Google Places API for richer restaurant cards
 
@@ -36,6 +38,13 @@ Initialize the database manually when needed:
 flask --app main init-db
 ```
 
+For production databases, use migrations instead of `init-db`:
+
+```powershell
+$env:AUTO_CREATE_DB="false"
+flask --app main db upgrade
+```
+
 ## Tests
 
 ```powershell
@@ -61,6 +70,11 @@ Required environment variables:
 Optional environment variables:
 
 - `POSTS_DATABASE_URL`: separate database URL for chat posts
+- `DATABASE_POOL_RECYCLE_SECONDS`: database connection pool recycle window
+- `UPLOAD_STORAGE_PROVIDER`: `local` or `s3`; default is `local`
+- `UPLOADS_PUBLIC_BASE_URL`: public CDN/bucket base URL for S3 uploads
+- `UPLOADS_S3_BUCKET`: S3 bucket name when `UPLOAD_STORAGE_PROVIDER=s3`
+- `UPLOADS_S3_PREFIX`: folder/prefix for profile uploads
 - `RESTAURANT_PROVIDER`: `auto`, `osm`, or `google`; default is `auto`
 - `AUTO_CREATE_DB`: defaults to `true`; set to `false` after adding real migrations
 - `MAX_CONTENT_LENGTH`: upload size limit in bytes
@@ -72,6 +86,8 @@ Optional environment variables:
 OpenStreetMap does not require an API key, but public Overpass servers are shared infrastructure. For heavier production traffic, use your own Overpass instance, a paid hosted OSM provider, or Google Places with a private server-side key.
 
 `render.yaml` and `Procfile` are included for common Python web hosts. If your host provides PostgreSQL URLs as `postgres://...`, the app normalizes them for SQLAlchemy.
+
+Public profiles are available by user ID at `/userID=<id>` and `/user/<id>`, for example `/userID=1`.
 
 ## Repository Hygiene
 

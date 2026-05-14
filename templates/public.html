@@ -12,72 +12,105 @@
 
 <section class="profile-shell profile-shell-upgraded" aria-labelledby="profile-title">
   <header class="profile-hero">
-    <div class="profile-avatar-panel">
-      <div class="profile-avatar-frame">
-        <img
-          src="{{ url_for('static', filename='uploads/' + (u.pfp_file_path or 'transparentnewdefaultpicture.png')) }}"
-          alt="{{ u.name or 'Profile' }} picture"
-          class="profile-pic"
-          id="profilePreview">
-      </div>
-
-      <form method="POST" enctype="multipart/form-data" class="upload-form">
-        <input type="hidden" name="action" value="upload_pic">
-        <label class="file-upload-label" for="profile-image">Update photo</label>
-        <input
-          id="profile-image"
-          type="file"
-          name="image"
-          accept=".gif,.jpeg,.jpg,.png,.webp,image/*"
-          required>
-        <button type="submit">Upload</button>
-      </form>
-    </div>
-
     <div class="profile-identity">
-      <p class="profile-kicker">BiteSwipe profile</p>
+      <div
+        class="profile-identity-banner{% if u.profile_banner_file_path %} has-banner-image{% endif %}"
+        {% if u.profile_banner_file_path %}
+          style="--profile-banner-image: url('{{ uploaded_file_url(u.profile_banner_file_path) }}')"
+        {% endif %}>
+        <button type="button" id="hero-edit-btn" class="profile-small-button profile-hero-toggle" aria-expanded="false">Edit</button>
 
-      <div class="name-display">
-        <h1 id="username-display">{{ u.name or 'Your Name' }}</h1>
-        <button type="button" id="edit-name-btn" class="profile-small-button">Edit</button>
+        <div class="profile-avatar-panel">
+          <div class="profile-avatar-frame">
+            <img
+              src="{{ uploaded_file_url(u.pfp_file_path, 'transparentnewdefaultpicture.png') }}"
+              alt="{{ u.name or 'Profile' }} picture"
+              class="profile-pic"
+              id="profilePreview">
+          </div>
+
+          <form method="POST" enctype="multipart/form-data" class="upload-form hero-edit-control">
+            <input type="hidden" name="action" value="upload_pic">
+            <input
+              id="profile-image"
+              type="file"
+              name="image"
+              accept=".gif,.jpeg,.jpg,.png,.webp,image/*"
+              required>
+            <button type="submit">Upload</button>
+          </form>
+        </div>
+
+        <div class="profile-banner-content">
+          <p class="profile-kicker">BiteSwipe profile</p>
+
+          <div class="name-display">
+            <h1 id="username-display">{{ u.name or 'Your Name' }}</h1>
+            <button type="button" id="edit-name-btn" class="profile-small-button profile-name-edit-button hero-edit-control">Edit name</button>
+          </div>
+
+          <form id="username-form" method="POST" class="profile-inline-form" hidden>
+            <input type="hidden" name="action" value="update_name">
+            <input
+              type="text"
+              name="name"
+              value="{{ u.name or '' }}"
+              minlength="2"
+              maxlength="32"
+              required
+              aria-label="Profile name">
+            <button type="submit">Save</button>
+            <button type="button" id="cancel-name-btn">Cancel</button>
+          </form>
+
+          <p class="profile-email">{{ u.email }}</p>
+          <div class="profile-badge-row">
+            {% if u.pronouns %}<span>{{ u.pronouns }}</span>{% endif %}
+            {% if favorite_cuisine %}<span>Favorite: {{ favorite_cuisine }}</span>{% endif %}
+            {% for badge in profile_badges %}
+              <span>{{ badge }}</span>
+            {% endfor %}
+          </div>
+
+          <div class="profile-stats" aria-label="Profile stats">
+            <div>
+              <strong>{{ saved_restaurant_count }}</strong>
+              <span>saved pick{% if saved_restaurant_count != 1 %}s{% endif %}</span>
+            </div>
+            <div>
+              <strong>{{ food_preferences|length }}</strong>
+              <span>craving{% if food_preferences|length != 1 %}s{% endif %}</span>
+            </div>
+            <div>
+              <strong>{{ allergen_interests|length }}</strong>
+              <span>allergy signal{% if allergen_interests|length != 1 %}s{% endif %}</span>
+            </div>
+            <div>
+              <strong>{{ hobby_interests|length }}</strong>
+              <span>interest{% if hobby_interests|length != 1 %}s{% endif %}</span>
+            </div>
+          </div>
+
+          <form method="POST" enctype="multipart/form-data" class="profile-banner-upload hero-edit-control">
+            <input type="hidden" name="action" value="upload_banner">
+            <label class="file-upload-label" for="profile-banner-image">Update banner</label>
+            <input
+              id="profile-banner-image"
+              type="file"
+              name="banner_image"
+              accept=".gif,.jpeg,.jpg,.png,.webp,image/*"
+              required>
+            <button type="submit">Upload</button>
+          </form>
+        </div>
       </div>
 
-      <form id="username-form" method="POST" class="profile-inline-form" hidden>
-        <input type="hidden" name="action" value="update_name">
-        <input
-          type="text"
-          name="name"
-          value="{{ u.name or '' }}"
-          minlength="2"
-          maxlength="32"
-          required
-          aria-label="Profile name">
-        <button type="submit">Save</button>
-        <button type="button" id="cancel-name-btn">Cancel</button>
-      </form>
-
-      <p class="profile-email">{{ u.email }}</p>
-
-      <div class="profile-stats" aria-label="Profile stats">
-        <div>
-          <strong>{{ saved_restaurant_count }}</strong>
-          <span>saved pick{% if saved_restaurant_count != 1 %}s{% endif %}</span>
-        </div>
-        <div>
-          <strong>{{ food_preferences|length }}</strong>
-          <span>craving{% if food_preferences|length != 1 %}s{% endif %}</span>
-        </div>
-        <div>
-          <strong>{{ allergen_interests|length }}</strong>
-          <span>allergy signal{% if allergen_interests|length != 1 %}s{% endif %}</span>
-        </div>
-        <div>
-          <strong>{{ hobby_interests|length }}</strong>
-          <span>interest{% if hobby_interests|length != 1 %}s{% endif %}</span>
-        </div>
-      </div>
-
-      <div class="profile-completion-card" aria-label="Profile completion">
+      <div
+        class="profile-completion-card"
+        aria-label="Profile completion"
+        data-profile-completion
+        data-profile-steps="{{ profile_steps }}"
+        data-profile-user="{{ u.id }}">
         <div>
           <span>{{ profile_steps }}/5 setup steps</span>
           <strong>{% if profile_steps >= 5 %}Profile ready{% elif profile_steps >= 3 %}Almost ready{% else %}Keep building{% endif %}</strong>
@@ -85,18 +118,64 @@
         <div class="profile-completion-bar" aria-hidden="true">
           <span style="width: {{ (profile_steps / 5 * 100)|round|int }}%"></span>
         </div>
+        <div class="profile-completion-links">
+          <a href="#about-title" class="{% if u.bio and u.bio != 'this is a placeholder!' %}is-complete{% endif %}">Bio</a>
+          <button type="button" onclick="toggleFooterPanel('filters', event)" class="{% if allergen_interests %}is-complete{% endif %}">Allergies</button>
+          <a href="#interests-title" class="{% if food_preferences %}is-complete{% endif %}">Cravings</a>
+          <a href="{{ url_for('home') }}" class="{% if saved_restaurant_count %}is-complete{% endif %}">First save</a>
+        </div>
       </div>
     </div>
   </header>
 
-  <div class="profile-action-strip" aria-label="Profile quick actions">
-    <a href="{{ url_for('home') }}">Open card deck</a>
-    <a href="{{ url_for('credits') }}">Review saved picks</a>
-    <button type="button" onclick="toggleFooterPanel('filters')">Edit filters</button>
-    <button type="button" onclick="toggleFooterPanel('interests')">Edit interests</button>
-  </div>
-
   <div class="profile-layout">
+    <div class="profile-action-strip" aria-label="Profile quick actions">
+      <a href="{{ url_for('home') }}">Open card deck</a>
+      <a href="{{ url_for('credits') }}">Review saved picks</a>
+      <button type="button" onclick="toggleFooterPanel('filters', event)">Edit filters</button>
+      <button type="button" onclick="toggleFooterPanel('interests', event)">Edit interests</button>
+      <button type="button" onclick="copyPublicProfileLink()" data-public-profile-url="{{ url_for('public_user_profile', user_id=u.id, _external=True) }}">Copy public profile</button>
+      <form method="POST" class="campus-mode-form">
+        <input type="hidden" name="action" value="update_campus_theme">
+        <label for="campus-theme-domain">
+          <span>Campus mode</span>
+          <strong>{{ (school_theme.short_name if school_theme else 'BiteSwipe') }} deck theme</strong>
+        </label>
+        <div>
+          <select id="campus-theme-domain" name="campus_theme_domain">
+            <option value="">Auto from .edu{% if detected_school_theme %} ({{ detected_school_theme.short_name }}){% endif %}</option>
+            {% for option in school_theme_options %}
+              <option value="{{ option.domain }}" {% if option.domain == selected_campus_theme_domain %}selected{% endif %}>{{ option.name }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data" class="profile-showcase-card" aria-label="Profile showcase image">
+      <input type="hidden" name="action" value="upload_showcase">
+      <div class="profile-showcase-frame">
+        {% if u.profile_showcase_file_path %}
+          <img
+            src="{{ uploaded_file_url(u.profile_showcase_file_path) }}"
+            alt="{{ u.name or 'Profile' }} showcase"
+            id="profileShowcasePreview">
+        {% else %}
+          <div class="profile-showcase-placeholder" id="profileShowcasePreview" aria-hidden="true">
+            <span>BiteSwipe</span>
+          </div>
+        {% endif %}
+        <label class="profile-showcase-edit" for="profile-showcase-image" aria-label="Edit profile showcase image">✎</label>
+      </div>
+      <input
+        id="profile-showcase-image"
+        type="file"
+        name="showcase_image"
+        accept=".gif,.jpeg,.jpg,.png,.webp,image/*">
+      <button type="submit" id="profile-showcase-upload-btn" hidden>Upload</button>
+    </form>
+
     <section class="profile-panel about-panel" aria-labelledby="about-title">
       <div class="section-heading-row">
         <div>
@@ -120,9 +199,55 @@
           <button type="button" id="cancel-bio-btn">Cancel</button>
         </div>
       </form>
+
+      <form method="POST" class="profile-inline-form profile-pronouns-form">
+        <input type="hidden" name="action" value="update_pronouns">
+        <input type="text" name="pronouns" value="{{ u.pronouns or '' }}" maxlength="64" placeholder="Pronouns" aria-label="Profile pronouns">
+        <button type="submit">Save pronouns</button>
+      </form>
     </section>
 
-    <section class="profile-panel taste-primer-panel" aria-labelledby="taste-primer-title">
+    <section class="profile-panel profile-social-panel" aria-labelledby="social-title">
+      <p class="profile-section-kicker">Social</p>
+      <h2 id="social-title">Foodies you might know</h2>
+      {% if foodies_you_might_know %}
+        <div class="foodie-list">
+          {% for foodie in foodies_you_might_know %}
+            <a href="{{ url_for('public_user_profile', user_id=foodie.id) }}">
+              <img src="{{ uploaded_file_url(foodie.pfp_file_path, 'transparentnewdefaultpicture.png') }}" alt="">
+              <span>{{ foodie.name }}</span>
+            </a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="interest-empty">More people from your school will appear here as they join BiteSwipe.</p>
+      {% endif %}
+
+      {% if profile_activity %}
+        <h3>Recent activity</h3>
+        <ul class="profile-activity-list">
+          {% for item in profile_activity %}
+            <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      {% if pending_follow_requests %}
+        <h3>Follow requests</h3>
+        <div class="foodie-list">
+          {% for request_row in pending_follow_requests %}
+            <form method="POST" action="{{ url_for('approve_follow_user', user_id=request_row.follower_id) }}" class="public-follow-form">
+              <button type="submit">Approve {{ request_row.follower.name }}</button>
+            </form>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </section>
+
+    <section
+      class="profile-panel taste-primer-panel"
+      aria-labelledby="taste-primer-title"
+      data-profile-setup-panel>
       <p class="profile-section-kicker">Taste setup</p>
       <h2 id="taste-primer-title">Make the deck better</h2>
       <div class="taste-checklist">
@@ -265,8 +390,24 @@ function bindToggle(editButton, cancelButton, displayElement, formElement, focus
 
 const nameForm = document.getElementById("username-form");
 const displayName = document.getElementById("username-display");
+const profileHero = document.querySelector(".profile-hero");
+const heroEditButton = document.getElementById("hero-edit-btn");
+const nameEditButton = document.getElementById("edit-name-btn");
+
+heroEditButton?.addEventListener("click", () => {
+  const isEditing = profileHero?.classList.toggle("is-editing");
+  heroEditButton.textContent = isEditing ? "Done" : "Edit";
+  heroEditButton.setAttribute("aria-expanded", String(Boolean(isEditing)));
+
+  if (!isEditing && nameForm && displayName && nameEditButton) {
+    nameForm.hidden = true;
+    displayName.hidden = false;
+    nameEditButton.hidden = false;
+  }
+});
+
 bindToggle(
-  document.getElementById("edit-name-btn"),
+  nameEditButton,
   document.getElementById("cancel-name-btn"),
   displayName,
   nameForm,
@@ -297,5 +438,98 @@ document.getElementById("profile-image")?.addEventListener("change", (event) => 
   if (!file || !preview) return;
   preview.src = URL.createObjectURL(file);
 });
+
+document.getElementById("profile-banner-image")?.addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  const banner = document.querySelector(".profile-identity-banner");
+  if (!file || !banner) return;
+  banner.style.setProperty("--profile-banner-image", `url("${URL.createObjectURL(file)}")`);
+  banner.classList.add("has-banner-image");
+});
+
+document.getElementById("profile-showcase-image")?.addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  const uploadButton = document.getElementById("profile-showcase-upload-btn");
+  const preview = document.getElementById("profileShowcasePreview");
+
+  if (!file) {
+    if (uploadButton) uploadButton.hidden = true;
+    return;
+  }
+
+  if (uploadButton) uploadButton.hidden = false;
+
+  if (preview) {
+    const src = URL.createObjectURL(file);
+    if (preview.tagName === "IMG") {
+      preview.src = src;
+    } else {
+      const image = document.createElement("img");
+      image.id = "profileShowcasePreview";
+      image.alt = "Selected profile showcase";
+      image.src = src;
+      preview.replaceWith(image);
+    }
+  }
+});
+
+function settleProfileCompletionCard() {
+  const completionCard = document.querySelector("[data-profile-completion]");
+  const setupPanel = document.querySelector("[data-profile-setup-panel]");
+  if (!completionCard) return;
+
+  const profileSteps = Number(completionCard.dataset.profileSteps);
+  const profileUser = completionCard.dataset.profileUser || "guest";
+  const storageKey = `biteswipe.profileSetupComplete.${profileUser}`;
+  const hideCompletedSetup = () => {
+    completionCard.hidden = true;
+    if (setupPanel) setupPanel.hidden = true;
+  };
+  const animateCompletedSetup = () => {
+    window.requestAnimationFrame(() => {
+      completionCard.classList.add("is-completing");
+      setupPanel?.classList.add("is-completing");
+    });
+
+    completionCard.addEventListener("animationend", () => {
+      localStorage.setItem(storageKey, "true");
+      hideCompletedSetup();
+    }, { once: true });
+  };
+
+  try {
+    if (localStorage.getItem(storageKey) === "true") {
+      hideCompletedSetup();
+      return;
+    }
+
+    if (profileSteps >= 5) {
+      animateCompletedSetup();
+    }
+  } catch {
+    if (profileSteps >= 5) {
+      hideCompletedSetup();
+    }
+  }
+}
+
+async function copyPublicProfileLink() {
+  const button = document.querySelector("[data-public-profile-url]");
+  const url = button?.dataset.publicProfileUrl || `${window.location.origin}/user/{{ u.id }}`;
+
+  try {
+    await navigator.clipboard.writeText(url);
+    if (button) {
+      button.textContent = "Profile link copied";
+      window.setTimeout(() => {
+        button.textContent = "Copy public profile";
+      }, 1800);
+    }
+  } catch {
+    window.prompt("Copy your public BiteSwipe profile link:", url);
+  }
+}
+
+settleProfileCompletionCard();
 </script>
 {% endblock %}
