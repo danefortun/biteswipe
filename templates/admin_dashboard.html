@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}BiteSwipe Analytics{% endblock %}
+
+{% block content %}
+<section class="admin-dashboard-shell" aria-labelledby="admin-dashboard-title">
+  <p class="profile-section-kicker">Admin</p>
+  <h1 id="admin-dashboard-title">Analytics dashboard</h1>
+
+  <div class="admin-metric-grid">
+    <article>
+      <span>Daily active users</span>
+      <strong>{{ today_active_users }}</strong>
+    </article>
+    <article>
+      <span>Deck opens</span>
+      <strong>{{ deck_open_count }}</strong>
+    </article>
+    <article>
+      <span>Deck completions</span>
+      <strong>{{ deck_complete_count }}</strong>
+    </article>
+    <article>
+      <span>Completion rate</span>
+      <strong>{{ "%.1f"|format(deck_completion_rate) }}%</strong>
+    </article>
+  </div>
+
+  <div class="admin-dashboard-grid">
+    <section class="profile-panel">
+      <h2>Last 7 days</h2>
+      <ol class="admin-list">
+        {% for row in daily_active_users %}
+          <li><span>{{ row.day }}</span><strong>{{ row.count }}</strong></li>
+        {% endfor %}
+      </ol>
+    </section>
+
+    <section class="profile-panel">
+      <h2>Top saved restaurants</h2>
+      <ol class="admin-list">
+        {% for row in top_saved_restaurants %}
+          <li><span>{{ row.name }}</span><strong>{{ row.save_count }}</strong></li>
+        {% else %}
+          <li><span>No saves yet</span><strong>0</strong></li>
+        {% endfor %}
+      </ol>
+    </section>
+
+    <section class="profile-panel">
+      <h2>Most-used filters</h2>
+      <ol class="admin-list">
+        {% for label, count in most_used_filters %}
+          <li><span>{{ label }}</span><strong>{{ count }}</strong></li>
+        {% else %}
+          <li><span>No filter data yet</span><strong>0</strong></li>
+        {% endfor %}
+      </ol>
+    </section>
+  </div>
+</section>
+{% endblock %}

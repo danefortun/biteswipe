@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}BiteSwipe Leaderboard{% endblock %}
+
+{% block content %}
+<section class="leaderboard-shell" aria-labelledby="leaderboard-title">
+  <p class="profile-section-kicker">Foodie leaderboard</p>
+  <h1 id="leaderboard-title">Who is exploring the widest menu?</h1>
+  <div class="leaderboard-grid">
+    <article>
+      <h2>Campus</h2>
+      <ol>
+        {% for row in campus_rows %}
+          <li>
+            <a href="{{ url_for('public_user_handle_profile', handle=public_handle_for_user(row.user)) }}">{{ row.user.name }}</a>
+            <span>{{ row.unique_cuisines }} cuisines</span>
+            <small>{{ row.monthly_saves }} saves this month</small>
+          </li>
+        {% endfor %}
+      </ol>
+    </article>
+    <article>
+      <h2>Friends</h2>
+      <ol>
+        {% for row in friend_rows %}
+          <li>
+            <a href="{{ url_for('public_user_handle_profile', handle=public_handle_for_user(row.user)) }}">{{ row.user.name }}</a>
+            <span>{{ row.unique_cuisines }} cuisines</span>
+            <small>{{ row.monthly_saves }} saves this month</small>
+          </li>
+        {% endfor %}
+      </ol>
+    </article>
+  </div>
+</section>
+{% endblock %}

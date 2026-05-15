@@ -1,0 +1,21 @@
+{
+  "name": "BiteSwipe",
+  "short_name": "BiteSwipe",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7fbfa",
+  "theme_color": "#178f79",
+  "icons": [
+    {
+      "src": "/static/biteswipe.png",
+      "sizes": "200x200",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/logo2.png",
+      "sizes": "500x500",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

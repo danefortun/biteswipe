@@ -39,6 +39,9 @@ class Users(db.Model):
     transportation_mode = db.Column(db.String(16))
     pronouns = db.Column(db.String(64))
     last_active_at = db.Column(db.String(40))
+    deck_streak_count = db.Column(db.Integer, default=0)
+    deck_last_opened_on = db.Column(db.String(10))
+    dare_points = db.Column(db.Integer, default=0)
     allergen_interests_json = db.Column(db.Text, default="[]")
     food_preferences_json = db.Column(db.Text, default="[]")
     hobby_interests_json = db.Column(db.Text, default="[]")
@@ -156,6 +159,7 @@ class SavedRestaurant(db.Model):
     rating = db.Column(db.Float)
     review_count = db.Column(db.Integer)
     website = db.Column(db.String(512))
+    student_discount = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.String(40), nullable=False, index=True)
 
     user = db.relationship("Users", backref=db.backref("saved_restaurants", lazy=True))
@@ -174,6 +178,7 @@ class SavedRestaurant(db.Model):
         rating: float | None = None,
         review_count: int | None = None,
         website: str | None = None,
+        student_discount: bool = False,
     ) -> None:
         self.user_id = user_id
         self.place_id = place_id
@@ -187,6 +192,28 @@ class SavedRestaurant(db.Model):
         self.rating = rating
         self.review_count = review_count
         self.website = website
+        self.student_discount = bool(student_discount)
+        self.created_at = datetime.now(timezone.utc).isoformat()
+
+
+class AvoidedRestaurant(db.Model):
+    __tablename__ = "avoided_restaurants"
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "place_id", name="uq_avoided_restaurant_user_place"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    place_id = db.Column(db.String(255), nullable=False, index=True)
+    name = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.String(40), nullable=False, index=True)
+
+    user = db.relationship("Users", backref=db.backref("avoided_restaurants", lazy=True, cascade="all, delete-orphan"))
+
+    def __init__(self, user_id: int, place_id: str, name: str) -> None:
+        self.user_id = user_id
+        self.place_id = place_id[:255]
+        self.name = name[:255]
         self.created_at = datetime.now(timezone.utc).isoformat()
 
 
@@ -283,6 +310,45 @@ class UserNotification(db.Model):
         self.kind = kind[:32]
         self.message = message[:255]
         self.link_url = link_url[:255] if link_url else None
+        self.created_at = datetime.now(timezone.utc).isoformat()
+
+
+class UserFilterUsage(db.Model):
+    __tablename__ = "user_filter_usage"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    filters_json = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.String(40), nullable=False, index=True)
+
+    user = db.relationship("Users", backref=db.backref("filter_usage_rows", lazy=True, cascade="all, delete-orphan"))
+
+    def __init__(self, user_id: int, filters: dict[str, Any]) -> None:
+        self.user_id = user_id
+        self.filters_json = json.dumps(filters)
+        self.created_at = datetime.now(timezone.utc).isoformat()
+
+    def filters_payload(self) -> dict[str, Any]:
+        try:
+            parsed = json.loads(self.filters_json or "{}")
+        except (TypeError, json.JSONDecodeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+
+class UserDeckEvent(db.Model):
+    __tablename__ = "user_deck_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    event_type = db.Column(db.String(32), nullable=False, index=True)
+    created_at = db.Column(db.String(40), nullable=False, index=True)
+
+    user = db.relationship("Users", backref=db.backref("deck_event_rows", lazy=True, cascade="all, delete-orphan"))
+
+    def __init__(self, user_id: int, event_type: str) -> None:
+        self.user_id = user_id
+        self.event_type = event_type[:32]
         self.created_at = datetime.now(timezone.utc).isoformat()
 
 

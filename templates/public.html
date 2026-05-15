@@ -72,6 +72,9 @@
           <p class="profile-kicker">BiteSwipe profile</p>
 
           <p class="profile-email">{{ u.email }}</p>
+          {% if u.deck_streak_count %}
+            <p class="profile-streak-pill" aria-label="Swipe streak">&#128293; {{ u.deck_streak_count }} day streak</p>
+          {% endif %}
           <div class="profile-badge-row profile-sortable-row" data-profile-sortable="badges">
             {% for badge in profile_badges %}
               <span
@@ -312,6 +315,28 @@
       </div>
     </section>
   </div>
+
+  {% if ambassador_top_picks %}
+    <section class="profile-panel ambassador-picks-panel" aria-labelledby="ambassador-picks-title">
+      <div class="profile-interests-header">
+        <div>
+          <p class="profile-section-kicker">Ambassador</p>
+          <h2 id="ambassador-picks-title">Top picks</h2>
+        </div>
+      </div>
+      <div class="ambassador-picks-grid">
+        {% for restaurant in ambassador_top_picks %}
+          <article>
+            <img src="{{ restaurant.photo or url_for('static', filename='biteswipe.png') }}" alt="">
+            <div>
+              <h3>{{ restaurant.name }}</h3>
+              <p>{{ restaurant.cuisine or restaurant.address or 'Saved favorite' }}</p>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
 
   <section class="profile-panel profile-interests" aria-labelledby="interests-title">
     <div class="profile-interests-header">

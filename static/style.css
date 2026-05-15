@@ -869,6 +869,133 @@ span.restaurant-website-link {
   margin-top: 22px;
 }
 
+.card-menu-preview {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.card-menu-preview span {
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid rgba(23, 143, 121, 0.28);
+  border-radius: 999px;
+  background: rgba(23, 143, 121, 0.08);
+  color: #176d5d;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.admin-dashboard-shell {
+  width: min(1100px, calc(100% - 32px));
+  margin: 0 auto;
+}
+
+.admin-dashboard-shell h1 {
+  margin: 0;
+  font-size: 34px;
+}
+
+.admin-metric-grid,
+.admin-dashboard-grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.admin-metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.admin-dashboard-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.admin-metric-grid article {
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+}
+
+.admin-metric-grid span,
+.admin-metric-grid strong {
+  display: block;
+}
+
+.admin-metric-grid span {
+  color: var(--surface-muted-color);
+  font-size: 14px;
+}
+
+.admin-metric-grid strong {
+  margin-top: 8px;
+  font-size: 30px;
+}
+
+.admin-list {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ambassador-picks-panel {
+  margin-top: 18px;
+}
+
+.ambassador-picks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.ambassador-picks-grid article {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+}
+
+.ambassador-picks-grid img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.ambassador-picks-grid h3,
+.ambassador-picks-grid p {
+  margin: 0;
+}
+
+.ambassador-picks-grid h3 {
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.ambassador-picks-grid p {
+  margin-top: 4px;
+  color: var(--surface-muted-color);
+  font-size: 14px;
+}
+
 .saved-toolbar {
   display: flex;
   align-items: center;
@@ -2723,6 +2850,12 @@ span.restaurant-website-link {
   margin: 8px 0 12px;
 }
 
+.profile-streak-pill {
+  margin: 8px 0 0;
+  color: var(--accent-color);
+  font-weight: 900;
+}
+
 .profile-badge-row > .profile-badge-tip,
 .profile-completion-links a,
 .profile-completion-links button {
@@ -4458,6 +4591,71 @@ body.deck-focus-mode .card-stage {
   font: inherit;
   font-weight: 900;
   cursor: pointer;
+}
+
+.saved-calendar-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.saved-calendar-form input {
+  min-height: 34px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+  color: var(--surface-text-color);
+}
+
+.leaderboard-shell {
+  width: min(900px, 94vw);
+  margin: 24px auto 100px;
+}
+
+.leaderboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.leaderboard-grid article {
+  padding: 18px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+}
+
+.leaderboard-grid ol {
+  margin: 14px 0 0;
+  padding-left: 22px;
+}
+
+.leaderboard-grid li {
+  margin: 12px 0;
+}
+
+.leaderboard-grid a,
+.leaderboard-grid span,
+.leaderboard-grid small {
+  display: block;
+}
+
+.leaderboard-grid a {
+  color: var(--surface-text-color);
+  font-weight: 900;
+}
+
+.leaderboard-grid span {
+  color: var(--accent-color);
+}
+
+.leaderboard-grid small {
+  color: var(--surface-muted-color);
+}
+
+body.dare-mode-active .filter-trigger,
+body.dare-mode-active .interests-trigger {
+  opacity: 0.6;
 }
 
 .saved-card:has(.saved-select:checked) {

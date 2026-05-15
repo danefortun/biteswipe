@@ -23,10 +23,13 @@ from main import (
     sort_restaurants_by_availability,
 )
 from users_db import (
+    AvoidedRestaurant,
     GroupSwipeMember,
     GroupSwipeSession,
     SavedRestaurant,
     UserFollow,
+    UserFilterUsage,
+    UserDeckEvent,
     UserInterest,
     UserNotification,
     UserRestaurantRating,
@@ -273,6 +276,163 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Added Tacos to your quick interests.", response.data)
+
+    def test_deck_streak_updates_on_home_open(self) -> None:
+        self.login()
+        self.client.get("/")
+        with self.app.app_context():
+            user = Users.query.filter_by(email="person@example.com").first()
+            self.assertEqual(user.deck_streak_count, 1)
+
+    def test_avoid_restaurant_persists_server_side(self) -> None:
+        self.login()
+        response = self.client.post("/avoid_restaurant", json={"place": "place-1", "name": "Nope Cafe"})
+        self.assertEqual(response.status_code, 200)
+        with self.app.app_context():
+            self.assertIsNotNone(AvoidedRestaurant.query.filter_by(place_id="place-1").first())
+
+    def test_leaderboard_renders_unique_cuisine_counts(self) -> None:
+        self.login(email="student@drexel.edu")
+        with self.app.app_context():
+            user = Users.query.filter_by(email="student@drexel.edu").first()
+            db.session.add(SavedRestaurant(user_id=user.id, place_id="a", name="A", cuisine="Pizza"))
+            db.session.add(SavedRestaurant(user_id=user.id, place_id="b", name="B", cuisine="Thai"))
+            db.session.commit()
+        response = self.client.get("/leaderboard")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"2 cuisines", response.data)
+
+    def test_ambassador_badge_and_picks_surface_to_followers(self) -> None:
+        self.login(email="ambassador@example.com")
+        self.client.get("/logout")
+        self.login(email="viewer@example.com")
+
+        with self.app.app_context():
+            ambassador = Users.query.filter_by(email="ambassador@example.com").first()
+            viewer = Users.query.filter_by(email="viewer@example.com").first()
+            for index in range(500):
+                db.session.add(
+                    SavedRestaurant(
+                        user_id=ambassador.id,
+                        place_id=f"ambassador-{index}",
+                        name=f"Pick {index}",
+                        cuisine="Cafe",
+                        rating=5 if index == 499 else 4,
+                    )
+                )
+            viewer.latitude = 39.9566
+            viewer.longitude = -75.1899
+            db.session.add(UserFollow(follower_id=viewer.id, following_id=ambassador.id, status="approved"))
+            db.session.commit()
+
+        response = self.client.get("/@ambassador")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Verified foodie", response.data)
+        self.assertIn(b"Top picks", response.data)
+
+        with patch("main.search_restaurants_hybrid", return_value=([], "hybrid")):
+            response = self.client.get("/get_restaurant")
+        self.assertEqual(response.status_code, 200)
+        places = response.get_json()["places"]
+        self.assertTrue(places)
+        self.assertTrue(places[0]["ambassador_pick"])
+        self.assertEqual(places[0]["recommended_by_handle"], "ambassador")
+
+    def test_saved_exports_and_student_deal_filter(self) -> None:
+        self.login(email="student@drexel.edu")
+        with self.app.app_context():
+            user = Users.query.filter_by(email="student@drexel.edu").first()
+            saved = SavedRestaurant(
+                user_id=user.id,
+                place_id="deal-1",
+                name="Deal Cafe",
+                address="1 Campus Way",
+                cuisine="Cafe",
+                student_discount=True,
+            )
+            db.session.add(saved)
+            db.session.commit()
+            saved_id = saved.id
+        response = self.client.get("/saved/export.kml")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Deal Cafe", response.data)
+        response = self.client.get(f"/saved/{saved_id}/calendar.ics?date=2026-05-20&time=18:30")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"BEGIN:VCALENDAR", response.data)
+        response = self.client.post("/save_filters", json={"studentDealsOnly": True})
+        self.assertTrue(response.get_json()["filters"]["studentDealsOnly"])
+
+    def test_google_menu_preview_is_preserved_when_provider_supplies_dishes(self) -> None:
+        with self.app.test_request_context():
+            place = format_google_place(
+                {
+                    "id": "menu-place",
+                    "displayName": {"text": "Menu Cafe"},
+                    "menu": ["Tacos", "Fries", "Milkshake", "Soup", "Salad", "Pie"],
+                },
+                "test-key",
+            )
+        self.assertEqual(place["menu_preview"], ["Tacos", "Fries", "Milkshake", "Soup", "Salad"])
+
+    def test_restaurant_search_uses_cache_and_rate_limits(self) -> None:
+        self.login()
+        self.app.config.update(
+            {
+                "RESTAURANT_SEARCH_RATE_LIMIT_COUNT": 2,
+                "RESTAURANT_SEARCH_RATE_LIMIT_WINDOW_SECONDS": 60,
+            }
+        )
+        self.client.post("/save_location", json={"latitude": 39.9566, "longitude": -75.1899})
+        with patch(
+            "main.search_restaurants_with_openstreetmap",
+            return_value=[{"name": "Cache Cafe", "place": "osm:node:9", "distance_meters": 10}],
+        ) as search:
+            first = self.client.get("/get_restaurant")
+            second = self.client.get("/get_restaurant")
+            third = self.client.get("/get_restaurant")
+        self.assertEqual(first.status_code, 200)
+        self.assertFalse(first.get_json()["cache_hit"])
+        self.assertEqual(second.status_code, 200)
+        self.assertTrue(second.get_json()["cache_hit"])
+        self.assertEqual(third.status_code, 429)
+        search.assert_called_once()
+
+    def test_save_restaurant_rate_limit_blocks_bursts(self) -> None:
+        self.login()
+        self.app.config.update(
+            {
+                "RESTAURANT_SAVE_RATE_LIMIT_COUNT": 1,
+                "RESTAURANT_SAVE_RATE_LIMIT_WINDOW_SECONDS": 60,
+            }
+        )
+        payload = {"name": "Limit Cafe", "place": "osm:node:10"}
+        self.assertEqual(self.client.post("/save_restaurant", json=payload).status_code, 200)
+        self.assertEqual(self.client.post("/save_restaurant", json=payload).status_code, 429)
+
+    def test_admin_dashboard_requires_admin_and_shows_metrics(self) -> None:
+        self.login(email="admin@example.com")
+        self.app.config.update({"ADMIN_EMAILS": ["admin@example.com"]})
+        self.client.post("/save_filters", json={"openNow": True})
+        self.client.post("/deck/complete")
+        self.client.post("/save_location", json={"latitude": 39.9566, "longitude": -75.1899})
+        with patch("main.search_restaurants_with_openstreetmap", return_value=[]):
+            self.client.get("/get_restaurant")
+        response = self.client.get("/admin/analytics")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Analytics dashboard", response.data)
+        self.assertIn(b"Open now", response.data)
+        with self.app.app_context():
+            self.assertEqual(UserFilterUsage.query.count(), 1)
+            self.assertEqual(UserDeckEvent.query.count(), 2)
+
+        self.client.get("/logout")
+        self.login(email="plain@example.com")
+        self.assertEqual(self.client.get("/admin/analytics").status_code, 403)
+
+    def test_pwa_manifest_is_served(self) -> None:
+        response = self.client.get("/static/manifest.webmanifest")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'"name": "BiteSwipe"', response.data)
 
     def test_default_distance_filter_is_campus_sized(self) -> None:
         self.login()
@@ -660,7 +820,7 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertIn(b"Requests to you", response.data)
         self.assertIn(b"Requester", response.data)
 
-        response = self.client.get("/requester")
+        response = self.client.get("/@requester")
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"has sent you a request", response.data)
         self.assertIn(b"Accept", response.data)

@@ -6,6 +6,8 @@ import json
 import re
 import secrets
 import string
+import time
+from collections import Counter
 from functools import wraps
 from datetime import datetime, timedelta, timezone
 from math import atan2, cos, radians, sin, sqrt
@@ -16,6 +18,7 @@ from urllib import request as urllib_request
 
 from flask import (
     Flask,
+    Response,
     abort,
     current_app,
     flash,
@@ -26,7 +29,7 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import inspect, text
+from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
@@ -39,8 +42,11 @@ from users_db import (
     GroupSwipeMessage,
     GroupSwipeSession,
     GroupSwipeVote,
+    AvoidedRestaurant,
     SavedRestaurant,
     UserActivity,
+    UserDeckEvent,
+    UserFilterUsage,
     UserFollow,
     UserInterest,
     UserNotification,
@@ -54,6 +60,7 @@ MAX_CHAT_MESSAGE_LENGTH = 500
 CHAT_PAGE_SIZE = 20
 CHAT_RATE_LIMIT_COUNT = 5
 CHAT_RATE_LIMIT_WINDOW_SECONDS = 60
+MAX_MENU_PREVIEW_ITEMS = 5
 MAX_NAME_LENGTH = 32
 MAX_HANDLE_LENGTH = 32
 MIN_HANDLE_LENGTH = 2
@@ -93,6 +100,7 @@ DEFAULT_PROFILE_STAT_VISIBILITY = {
     "connections": False,
     "places_visited": False,
     "reviews_given": False,
+    "swipe_streak": False,
 }
 DEFAULT_PROFILE_STAT_ENABLED = {
     "saved_picks": True,
@@ -103,6 +111,7 @@ DEFAULT_PROFILE_STAT_ENABLED = {
     "connections": False,
     "places_visited": False,
     "reviews_given": False,
+    "swipe_streak": False,
 }
 PROFILE_STAT_LABELS = {
     "saved_picks": "saved picks",
@@ -113,9 +122,10 @@ PROFILE_STAT_LABELS = {
     "connections": "connections",
     "places_visited": "places visited",
     "reviews_given": "reviews given",
+    "swipe_streak": "swipe streak",
 }
 DEFAULT_PROFILE_STAT_KEYS = ("saved_picks", "cravings", "allergy_signals", "interests")
-OPTIONAL_PROFILE_STAT_KEYS = ("join_date", "connections", "places_visited", "reviews_given")
+OPTIONAL_PROFILE_STAT_KEYS = ("join_date", "connections", "places_visited", "reviews_given", "swipe_streak")
 OSM_AMENITIES = ("restaurant", "fast_food", "cafe", "food_court")
 METERS_PER_MILE = 1609.344
 WALKING_SPEED_METERS_PER_MINUTE = 83
@@ -355,6 +365,25 @@ SCHOOL_THEME_ASSET_OVERRIDES: dict[str, dict[str, str | None]] = {
     "wcupa.edu": {"image_file": "schools/backdrops/west-chester.webp"},
 }
 
+CAMPUS_DINING_FEEDS: dict[str, list[dict[str, Any]]] = {
+    "drexel.edu": [
+        {
+            "name": "Urban Eatery",
+            "place": "campus:dining:drexel:urban-eatery",
+            "address": "Drexel University",
+            "cuisine": "dining hall breakfast salads grill",
+            "menu": "Today's menu: breakfast bar, salad station, grill, vegetarian option",
+        },
+        {
+            "name": "Hans Dining Hall",
+            "place": "campus:dining:drexel:hans",
+            "address": "Drexel University",
+            "cuisine": "dining hall comfort food",
+            "menu": "Today's menu: hot line, deli, soup, dessert",
+        },
+    ],
+}
+
 BADGE_DESCRIPTIONS: dict[str, str] = {
     "Co-Founder": "One of the original minds behind BiteSwipe. A true OG.",
     "BiteBot": "The official BiteSwipe bot account. Beep boop.",
@@ -378,8 +407,14 @@ BADGE_DESCRIPTIONS: dict[str, str] = {
     "Squad goals": "Deep in the group swipe scene. Always eating with the crew.",
     "'Yo soy fiesta'": "Has hosted a group swipe session. The life of the party.",
     "Founder party": "Has shared a BiteSwipe party with one of the founders.",
+    "Daredevil": "Accepted a Dare Mode pick outside their usual lane.",
     "Taste setter": "Has food preferences set. Knows exactly what they want.",
+    "Verified foodie": "Ambassador status earned through 500+ saves or 50+ followers.",
 }
+
+AMBASSADOR_MIN_SAVES = 500
+AMBASSADOR_MIN_FOLLOWERS = 50
+AMBASSADOR_TOP_PICK_LIMIT = 3
 
 def build_school_theme_map() -> dict[str, dict[str, str | None]]:
     themes: dict[str, dict[str, str | None]] = {}
@@ -421,6 +456,7 @@ DEFAULT_FILTERS: dict[str, Any] = {
     "outdoorSeating": False,
     "takeoutOnly": False,
     "dineIn": False,
+    "studentDealsOnly": False,
     "foodPreferences": [],
     "cuisineExclusions": [],
     "hobbyInterests": [],
@@ -438,6 +474,8 @@ def create_app(config_object: type[Config] = Config, config_overrides: dict[str,
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
 
     db.init_app(app)
+    app.extensions.setdefault("restaurant_search_cache", {})
+    app.extensions.setdefault("biteswipe_rate_limits", {})
     if migrate is not None:
         migrate.init_app(app, db)
     app.jinja_env.globals["uploaded_file_url"] = uploaded_file_url
@@ -483,8 +521,11 @@ def register_shell_context(app: Flask) -> None:
             "GroupSwipeMessage": GroupSwipeMessage,
             "GroupSwipeSession": GroupSwipeSession,
             "GroupSwipeVote": GroupSwipeVote,
+            "AvoidedRestaurant": AvoidedRestaurant,
             "SavedRestaurant": SavedRestaurant,
             "UserActivity": UserActivity,
+            "UserDeckEvent": UserDeckEvent,
+            "UserFilterUsage": UserFilterUsage,
             "UserFollow": UserFollow,
             "UserInterest": UserInterest,
             "UserNotification": UserNotification,
@@ -512,6 +553,9 @@ def ensure_user_interest_columns() -> None:
         "transportation_mode": "VARCHAR(16)",
         "pronouns": "VARCHAR(64)",
         "last_active_at": "VARCHAR(40)",
+        "deck_streak_count": "INTEGER DEFAULT 0",
+        "deck_last_opened_on": "VARCHAR(10)",
+        "dare_points": "INTEGER DEFAULT 0",
         "allergen_interests_json": "TEXT DEFAULT '[]'",
         "food_preferences_json": "TEXT DEFAULT '[]'",
         "hobby_interests_json": "TEXT DEFAULT '[]'",
@@ -581,6 +625,7 @@ def ensure_saved_restaurant_detail_columns() -> None:
         "rating": "FLOAT",
         "review_count": "INTEGER",
         "website": "VARCHAR(512)",
+        "student_discount": "BOOLEAN DEFAULT 0",
     }
 
     for column_name, column_type in required_columns.items():
@@ -653,6 +698,7 @@ def register_routes(app: Flask) -> None:
             touch_user_activity(user)
         return {
             "template_user": user,
+            "template_is_admin": is_admin_user(user),
             "school_theme": build_school_theme_payload(user),
             "unread_notifications": unread_notifications_for_user(user),
             "profile_completion": build_profile_completion(user) if user is not None else None,
@@ -680,6 +726,7 @@ def register_routes(app: Flask) -> None:
 
             return redirect(url_for("home"))
 
+        record_deck_open(user)
         join_group_from_invite(user)
         return render_template("cards.html")
 
@@ -999,6 +1046,15 @@ def register_routes(app: Flask) -> None:
         if user is None:
             abort(404)
 
+        limit_response = enforce_endpoint_rate_limit(
+            user.id,
+            "restaurant_search",
+            int(current_app.config.get("RESTAURANT_SEARCH_RATE_LIMIT_COUNT", 20)),
+            int(current_app.config.get("RESTAURANT_SEARCH_RATE_LIMIT_WINDOW_SECONDS", 60)),
+        )
+        if limit_response is not None:
+            return limit_response
+
         if user.latitude is None or user.longitude is None:
             return jsonify({"places": [], "error": "Save your location before loading restaurants."}), 400
 
@@ -1006,33 +1062,30 @@ def register_routes(app: Flask) -> None:
         radius_meters = int(filters["distance"] * METERS_PER_MILE)
         provider = str(current_app.config.get("RESTAURANT_PROVIDER", "auto")).lower()
         api_key = current_app.config.get("GOOGLE_PLACES_API_KEY")
+        if provider == "google" and not api_key:
+            return jsonify({"places": [], "error": "Google Places API key is not configured."}), 503
 
         try:
-            if provider == "google":
-                if not api_key:
-                    return jsonify({"places": [], "error": "Google Places API key is not configured."}), 503
-                places = search_restaurants_with_google(user, api_key, filters, radius_meters)
-                source = "google"
-            elif provider == "openstreetmap":
-                places = search_restaurants_with_openstreetmap(user.latitude, user.longitude, radius_meters)
-                source = "openstreetmap"
-            else:
-                places, source = search_restaurants_hybrid(user, api_key, filters, radius_meters)
+            places, source, cache_hit = get_cached_restaurant_search(user, provider, api_key, filters, radius_meters)
         except Exception:
             current_app.logger.exception("Restaurant search failed.")
             return jsonify({"places": [], "error": "Restaurant search failed. Please try again."}), 502
 
+        record_deck_event(user, "open")
+        places.extend(build_campus_dining_cards(user))
+        places = merge_ambassador_picks_with_places(user, places)
         filtered_places = apply_restaurant_filters(places, filters)
+        filtered_places = hide_avoided_restaurants(user, filtered_places)
         message = None
 
-        if places and not filtered_places:
+        if places and not filtered_places and not filters.get("studentDealsOnly"):
             filtered_places = apply_distance_filter(places, filters)
             message = "No exact filter matches found, so showing nearby restaurants instead."
 
         annotate_travel_times(filtered_places, user.transportation_mode)
         annotate_restaurant_confidence(filtered_places, filters)
         sort_restaurants_by_availability(filtered_places)
-        return jsonify({"places": filtered_places, "source": source, "message": message})
+        return jsonify({"places": filtered_places, "source": source, "message": message, "cache_hit": cache_hit})
 
     @app.post("/save_restaurant")
     @login_required
@@ -1041,9 +1094,67 @@ def register_routes(app: Flask) -> None:
         if user is None:
             abort(404)
 
+        limit_response = enforce_endpoint_rate_limit(
+            user.id,
+            "restaurant_save",
+            int(current_app.config.get("RESTAURANT_SAVE_RATE_LIMIT_COUNT", 30)),
+            int(current_app.config.get("RESTAURANT_SAVE_RATE_LIMIT_WINDOW_SECONDS", 60)),
+        )
+        if limit_response is not None:
+            return limit_response
+
         payload = request.get_json(silent=True) or {}
         ok, message, saved = save_selected_restaurant(user, payload)
         return jsonify({"ok": ok, "message": message, "saved": saved}), 200 if ok else 400
+
+    @app.post("/deck/complete")
+    @login_required
+    def complete_deck() -> Any:
+        user = current_user()
+        if user is None:
+            abort(404)
+        record_deck_event(user, "complete")
+        return jsonify({"ok": True})
+
+    @app.post("/avoid_restaurant")
+    @login_required
+    def avoid_restaurant() -> Any:
+        user = current_user()
+        if user is None:
+            abort(404)
+        payload = request.get_json(silent=True) or {}
+        place_id = str(payload.get("place") or "").strip()
+        name = str(payload.get("name") or "Restaurant").strip()
+        if not place_id:
+            return jsonify({"ok": False, "message": "Unable to hide that restaurant."}), 400
+        avoided = AvoidedRestaurant.query.filter_by(user_id=user.id, place_id=place_id).first()
+        if avoided is None:
+            db.session.add(AvoidedRestaurant(user_id=user.id, place_id=place_id, name=name))
+            db.session.commit()
+        return jsonify({"ok": True, "message": f"{name} will stay out of future decks."})
+
+    @app.post("/dare/accept")
+    @login_required
+    def accept_dare() -> Any:
+        user = current_user()
+        if user is None:
+            abort(404)
+        user.dare_points = int(getattr(user, "dare_points", 0) or 0) + 2
+        db.session.commit()
+        return jsonify({"ok": True, "dare_points": user.dare_points})
+
+    @app.get("/leaderboard")
+    @login_required
+    def leaderboard() -> Any:
+        user = current_user()
+        if user is None:
+            abort(404)
+        return render_template("leaderboard.html", **build_leaderboard_context(user))
+
+    @app.get("/admin/analytics")
+    @admin_required
+    def admin_analytics() -> Any:
+        return render_template("admin_dashboard.html", **build_admin_dashboard_context())
 
     @app.post("/group_session/create")
     @login_required
@@ -1162,6 +1273,35 @@ def register_routes(app: Flask) -> None:
         db.session.commit()
         flash(f"Removed {saved.name} from My Stuff.")
         return redirect(url_for("credits"))
+
+    @app.get("/saved/export.kml")
+    @login_required
+    def export_saved_kml() -> Response:
+        user = current_user()
+        if user is None:
+            abort(404)
+        body = build_saved_kml(user.saved_restaurants)
+        return Response(
+            body,
+            mimetype="application/vnd.google-earth.kml+xml",
+            headers={"Content-Disposition": "attachment; filename=biteswipe-saved-picks.kml"},
+        )
+
+    @app.get("/saved/<int:restaurant_id>/calendar.ics")
+    @login_required
+    def export_saved_calendar(restaurant_id: int) -> Response:
+        user = current_user()
+        if user is None:
+            abort(404)
+        restaurant = SavedRestaurant.query.filter_by(id=restaurant_id, user_id=user.id).first_or_404()
+        date_value = str(request.args.get("date") or "").strip()
+        time_value = str(request.args.get("time") or "18:00").strip()
+        body = build_saved_ics(restaurant, date_value, time_value)
+        return Response(
+            body,
+            mimetype="text/calendar",
+            headers={"Content-Disposition": f"attachment; filename=dinner-{restaurant.id}.ics"},
+        )
 
     @app.get("/user_ratings")
     @login_required
@@ -1310,6 +1450,7 @@ def register_routes(app: Flask) -> None:
         user = current_user()
         if user is not None:
             sync_user_interests_from_filters(user, filters)
+            record_filter_usage(user, filters)
 
         return jsonify({"ok": True, "filters": filters})
 
@@ -1331,6 +1472,19 @@ def login_required(view: Any) -> Any:
     def wrapped_view(*args: Any, **kwargs: Any) -> Any:
         if "email" not in session:
             return redirect(url_for("login"))
+        return view(*args, **kwargs)
+
+    return wrapped_view
+
+
+def admin_required(view: Any) -> Any:
+    @wraps(view)
+    def wrapped_view(*args: Any, **kwargs: Any) -> Any:
+        user = current_user()
+        if user is None:
+            return redirect(url_for("login"))
+        if not is_admin_user(user):
+            abort(403)
         return view(*args, **kwargs)
 
     return wrapped_view
@@ -1654,6 +1808,7 @@ def build_profile_stats(user: Users, include_hidden: bool = False) -> list[dict[
         "connections": connections,
         "places_visited": len(user.saved_restaurants),
         "reviews_given": reviews_given,
+        "swipe_streak": getattr(user, "deck_streak_count", 0) or 0,
     }
 
     stats = []
@@ -1799,11 +1954,19 @@ def find_user_by_public_handle_or_404(handle: str) -> Users:
     abort(404)
 
 
+def is_admin_user(user: Users | None) -> bool:
+    if user is None:
+        return False
+    admin_emails = {str(email).strip().lower() for email in current_app.config.get("ADMIN_EMAILS", [])}
+    return user.email.lower() in admin_emails
+
+
 def build_profile_template_context(user: Users, is_public_profile: bool = False) -> dict[str, Any]:
     profile_handle = public_handle_for_user(user)
     profile_completion = build_profile_completion(user)
     profile_stats = build_profile_stats(user, include_hidden=not is_public_profile)
     profile_stat_enabled = profile_stat_enabled_for_user(user)
+    ambassador_profile = is_ambassador_user(user)
     return {
         "u": user,
         "profile_handle": profile_handle,
@@ -1832,6 +1995,8 @@ def build_profile_template_context(user: Users, is_public_profile: bool = False)
         "selected_campus_theme_domain": str(user.campus_theme_domain or ""),
         "detected_school_theme": get_school_theme_for_email(user.email),
         "favorite_cuisine": favorite_cuisine_for_user(user),
+        "ambassador_profile": ambassador_profile,
+        "ambassador_top_picks": top_saved_restaurants_for_user(user) if ambassador_profile else [],
         "profile_badges": build_profile_badges(user, include_hidden=not is_public_profile),
         "badge_descriptions": BADGE_DESCRIPTIONS,
         "foodies_you_might_know": suggest_school_users(user) if not is_public_profile else [],
@@ -1903,6 +2068,116 @@ def unread_notifications_for_user(user: Users | None) -> list[UserNotification]:
     )
 
 
+def enforce_endpoint_rate_limit(user_id: int, action: str, limit: int, window_seconds: int) -> Response | None:
+    if limit <= 0 or window_seconds <= 0:
+        return None
+
+    now = time.time()
+    storage = current_app.extensions.setdefault("biteswipe_rate_limits", {})
+    key = f"{action}:{user_id}"
+    timestamps = [
+        timestamp
+        for timestamp in storage.get(key, [])
+        if now - timestamp < window_seconds
+    ]
+
+    if len(timestamps) >= limit:
+        retry_after = max(1, int(window_seconds - (now - timestamps[0])))
+        response = jsonify(
+            {
+                "ok": False,
+                "error": "Too many requests. Please wait a moment and try again.",
+                "retry_after": retry_after,
+            }
+        )
+        response.status_code = 429
+        response.headers["Retry-After"] = str(retry_after)
+        storage[key] = timestamps
+        return response
+
+    timestamps.append(now)
+    storage[key] = timestamps
+    return None
+
+
+def record_filter_usage(user: Users, filters: dict[str, Any]) -> None:
+    db.session.add(UserFilterUsage(user_id=user.id, filters=filters))
+    db.session.commit()
+
+
+def record_deck_event(user: Users, event_type: str) -> None:
+    db.session.add(UserDeckEvent(user_id=user.id, event_type=event_type))
+    db.session.commit()
+
+
+def build_admin_dashboard_context() -> dict[str, Any]:
+    today = datetime.now(timezone.utc).date()
+    window_start = today - timedelta(days=6)
+    day_keys = [(window_start + timedelta(days=offset)).isoformat() for offset in range(7)]
+    active_users_by_day: dict[str, set[int]] = {day: set() for day in day_keys}
+
+    for event in UserDeckEvent.query.filter(UserDeckEvent.event_type == "open").all():
+        day = str(event.created_at or "")[:10]
+        if day in active_users_by_day:
+            active_users_by_day[day].add(event.user_id)
+
+    open_count = UserDeckEvent.query.filter_by(event_type="open").count()
+    complete_count = UserDeckEvent.query.filter_by(event_type="complete").count()
+    filter_counter: Counter[str] = Counter()
+    for row in UserFilterUsage.query.order_by(UserFilterUsage.created_at.desc()).all():
+        filter_counter.update(active_filter_labels(row.filters_payload()))
+
+    top_saved_rows = (
+        db.session.query(
+            SavedRestaurant.place_id,
+            SavedRestaurant.name,
+            func.count(SavedRestaurant.id).label("save_count"),
+        )
+        .group_by(SavedRestaurant.place_id, SavedRestaurant.name)
+        .order_by(func.count(SavedRestaurant.id).desc(), SavedRestaurant.name.asc())
+        .limit(10)
+        .all()
+    )
+
+    return {
+        "daily_active_users": [
+            {"day": day, "count": len(active_users_by_day[day])}
+            for day in day_keys
+        ],
+        "today_active_users": len(active_users_by_day[today.isoformat()]),
+        "top_saved_restaurants": top_saved_rows,
+        "most_used_filters": filter_counter.most_common(10),
+        "deck_open_count": open_count,
+        "deck_complete_count": complete_count,
+        "deck_completion_rate": round((complete_count / open_count) * 100, 1) if open_count else 0.0,
+    }
+
+
+def active_filter_labels(filters: dict[str, Any]) -> list[str]:
+    labels = [
+        str(config["label"])
+        for key, config in ALLERGEN_FILTERS.items()
+        if filters.get(key)
+    ]
+    labels.extend(
+        str(config["label"])
+        for key, config in PRICE_FILTERS.items()
+        if filters.get(key)
+    )
+    if filters.get("openNow"):
+        labels.append("Open now")
+    if filters.get("outdoorSeating"):
+        labels.append("Outdoor seating")
+    if filters.get("takeoutOnly"):
+        labels.append("Takeout")
+    if filters.get("dineIn"):
+        labels.append("Dine-in")
+    if filters.get("studentDealsOnly"):
+        labels.append("Student deals")
+    labels.extend(f"Craving: {item}" for item in sanitize_quick_interest_values(filters.get("foodPreferences", [])))
+    return labels
+
+
 def create_notification(
     user_id: int,
     kind: str,
@@ -1935,6 +2210,164 @@ def touch_user_activity(user: Users) -> None:
 def favorite_cuisine_for_user(user: Users) -> str | None:
     preferences = user.get_interest_list("food_preferences_json")
     return preferences[0] if preferences else None
+
+
+def follower_count_for_user(user: Users) -> int:
+    return UserFollow.query.filter_by(following_id=user.id, status="approved").count()
+
+
+def is_ambassador_user(user: Users) -> bool:
+    return len(user.saved_restaurants) >= AMBASSADOR_MIN_SAVES or follower_count_for_user(user) >= AMBASSADOR_MIN_FOLLOWERS
+
+
+def top_saved_restaurants_for_user(user: Users, limit: int = AMBASSADOR_TOP_PICK_LIMIT) -> list[SavedRestaurant]:
+    return sorted(
+        user.saved_restaurants,
+        key=lambda saved: (
+            normalize_optional_float(saved.rating) is not None,
+            normalize_optional_float(saved.rating) or -1,
+            saved.created_at or "",
+        ),
+        reverse=True,
+    )[:limit]
+
+
+def build_ambassador_deck_cards(user: Users) -> list[dict[str, Any]]:
+    follows = UserFollow.query.filter_by(follower_id=user.id, status="approved").all()
+    cards: list[dict[str, Any]] = []
+    seen_places: set[str] = set()
+
+    for follow in follows:
+        ambassador = follow.following
+        if ambassador is None or not is_ambassador_user(ambassador):
+            continue
+
+        for saved in top_saved_restaurants_for_user(ambassador):
+            if saved.place_id in seen_places:
+                continue
+            seen_places.add(saved.place_id)
+            card = serialize_saved_restaurant(saved)
+            card["photo"] = card.get("photo") or restaurant_fallback_image_url("general")
+            card.update(
+                {
+                    "ambassador_pick": True,
+                    "recommended_by": ambassador.name,
+                    "recommended_by_handle": public_handle_for_user(ambassador),
+                }
+            )
+            cards.append(card)
+
+    return cards
+
+
+def merge_ambassador_picks_with_places(user: Users, places: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ambassador_cards = build_ambassador_deck_cards(user)
+    if not ambassador_cards:
+        return places
+
+    places_by_id = {
+        str(place.get("place") or ""): place
+        for place in places
+        if str(place.get("place") or "")
+    }
+    merged: list[dict[str, Any]] = []
+    used_places: set[str] = set()
+
+    for pick in ambassador_cards:
+        place_id = str(pick.get("place") or "")
+        current_place = places_by_id.get(place_id)
+        merged.append((current_place or pick) | {
+            "ambassador_pick": True,
+            "recommended_by": pick.get("recommended_by"),
+            "recommended_by_handle": pick.get("recommended_by_handle"),
+        })
+        if place_id:
+            used_places.add(place_id)
+
+    merged.extend(
+        place
+        for place in places
+        if str(place.get("place") or "") not in used_places
+    )
+    return merged
+
+
+def record_deck_open(user: Users) -> None:
+    today = datetime.now(timezone.utc).date()
+    last_opened = getattr(user, "deck_last_opened_on", None)
+    if last_opened == today.isoformat():
+        return
+    yesterday = (today - timedelta(days=1)).isoformat()
+    user.deck_streak_count = (int(getattr(user, "deck_streak_count", 0) or 0) + 1) if last_opened == yesterday else 1
+    user.deck_last_opened_on = today.isoformat()
+    db.session.commit()
+
+
+def build_campus_dining_cards(user: Users) -> list[dict[str, Any]]:
+    domain = get_user_school_theme_domain(user)
+    cards = []
+    for item in CAMPUS_DINING_FEEDS.get(domain or "", []):
+        cards.append(
+            {
+                "name": item["name"],
+                "place": item["place"],
+                "source": "campus_dining",
+                "address": item.get("address"),
+                "cuisine": item.get("cuisine"),
+                "menu_text": item.get("menu"),
+                "menu_preview": normalize_menu_items(item.get("menu")),
+                "photo": restaurant_fallback_image_url("general"),
+                "photo_source": "biteswipe_fallback",
+                "price_level": 1,
+                "price_text": "$",
+                "rating": None,
+                "review_count": None,
+                "website": None,
+                "is_open": True,
+                "student_discount": True,
+                "distance_meters": None,
+            }
+        )
+    return cards
+
+
+def hide_avoided_restaurants(user: Users, places: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    hidden_ids = {row.place_id for row in user.avoided_restaurants}
+    return [place for place in places if str(place.get("place") or "") not in hidden_ids]
+
+
+def build_leaderboard_context(user: Users) -> dict[str, Any]:
+    domain = user.email.split("@", 1)[1].lower() if "@" in user.email else ""
+    campus_users = Users.query.filter(Users.email.ilike(f"%@{domain}")).all() if domain else [user]
+    friend_ids = {
+        row.following_id if row.follower_id == user.id else row.follower_id
+        for row in UserFollow.query.filter(
+            ((UserFollow.follower_id == user.id) | (UserFollow.following_id == user.id)),
+            UserFollow.status == "approved",
+        ).all()
+    }
+    friend_users = Users.query.filter(Users.id.in_(friend_ids | {user.id})).all()
+    return {
+        "campus_rows": rank_foodies(campus_users),
+        "friend_rows": rank_foodies(friend_users),
+    }
+
+
+def rank_foodies(users: list[Users]) -> list[dict[str, Any]]:
+    month_prefix = datetime.now(timezone.utc).strftime("%Y-%m")
+    rows = []
+    for user in users:
+        cuisines = {str(item.cuisine or "").strip().lower() for item in user.saved_restaurants if item.cuisine}
+        monthly_saves = sum(1 for item in user.saved_restaurants if str(item.created_at or "").startswith(month_prefix))
+        rows.append(
+            {
+                "user": user,
+                "unique_cuisines": len(cuisines),
+                "monthly_saves": monthly_saves,
+            }
+        )
+    rows.sort(key=lambda item: (-item["unique_cuisines"], -item["monthly_saves"], item["user"].id))
+    return rows[:25]
 
 
 def configured_founder_user_ids() -> set[int]:
@@ -2090,9 +2523,15 @@ def build_user_badges(user: Users) -> list[str]:
     if has_partied_with_biteswipe_founder(user):
         badges.append("Founder party")
 
+    if int(getattr(user, "dare_points", 0) or 0) >= 2:
+        badges.append("Daredevil")
+
     # --- Taste setter ---
     if favorite_cuisine_for_user(user):
         badges.append("Taste setter")
+
+    if is_ambassador_user(user):
+        badges.append("Verified foodie")
 
     return badges
 
@@ -2526,6 +2965,7 @@ def save_selected_restaurant(user: Users, payload: dict[str, Any]) -> tuple[bool
     rating = normalize_optional_float(payload.get("rating"))
     review_count = normalize_optional_int(payload.get("review_count"))
     website = normalize_website_url(payload.get("website"))
+    student_discount = bool(payload.get("student_discount"))
 
     saved = SavedRestaurant.query.filter_by(user_id=user.id, place_id=place_id).first()
     created = saved is None
@@ -2544,6 +2984,7 @@ def save_selected_restaurant(user: Users, payload: dict[str, Any]) -> tuple[bool
             rating=rating,
             review_count=review_count,
             website=website,
+            student_discount=student_discount,
         )
         db.session.add(saved)
         db.session.flush()
@@ -2559,6 +3000,7 @@ def save_selected_restaurant(user: Users, payload: dict[str, Any]) -> tuple[bool
         saved.rating = rating
         saved.review_count = review_count
         saved.website = website
+        saved.student_discount = student_discount
 
     db.session.commit()
 
@@ -2647,6 +3089,9 @@ def sanitize_group_restaurant_payload(payload: dict[str, Any]) -> dict[str, Any]
         "website",
         "is_open",
         "next_open_time",
+        "student_discount",
+        "menu_text",
+        "menu_preview",
     }
     return {key: payload.get(key) for key in allowed_keys if key in payload}
 
@@ -2756,8 +3201,68 @@ def serialize_saved_restaurant(saved: SavedRestaurant) -> dict[str, Any]:
         "rating": saved.rating,
         "review_count": saved.review_count,
         "website": saved.website,
+        "student_discount": bool(saved.student_discount),
         "created_at": saved.created_at,
     }
+
+
+def escape_ical_text(value: Any) -> str:
+    return str(value or "").replace("\\", "\\\\").replace("\n", "\\n").replace(",", "\\,").replace(";", "\\;")
+
+
+def build_saved_ics(restaurant: SavedRestaurant, date_value: str, time_value: str) -> str:
+    try:
+        start = datetime.fromisoformat(f"{date_value}T{time_value}")
+    except ValueError:
+        start = datetime.now().replace(hour=18, minute=0, second=0, microsecond=0)
+    end = start + timedelta(hours=1)
+    uid = f"biteswipe-{restaurant.id}-{start.strftime('%Y%m%dT%H%M%S')}"
+    return "\r\n".join(
+        [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//BiteSwipe//Dinner Planner//EN",
+            "BEGIN:VEVENT",
+            f"UID:{uid}",
+            f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
+            f"DTSTART:{start.strftime('%Y%m%dT%H%M%S')}",
+            f"DTEND:{end.strftime('%Y%m%dT%H%M%S')}",
+            f"SUMMARY:Dinner at {escape_ical_text(restaurant.name)}",
+            f"LOCATION:{escape_ical_text(restaurant.address)}",
+            f"DESCRIPTION:{escape_ical_text(restaurant.cuisine or 'Saved BiteSwipe pick')}",
+            "END:VEVENT",
+            "END:VCALENDAR",
+            "",
+        ]
+    )
+
+
+def build_saved_kml(restaurants: list[SavedRestaurant]) -> str:
+    placemarks = []
+    for restaurant in restaurants:
+        placemarks.append(
+            "<Placemark>"
+            f"<name>{escape_xml(restaurant.name)}</name>"
+            f"<description>{escape_xml(restaurant.address or '')}</description>"
+            "</Placemark>"
+        )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'
+        "<name>BiteSwipe Saved Picks</name>"
+        + "".join(placemarks)
+        + "</Document></kml>"
+    )
+
+
+def escape_xml(value: Any) -> str:
+    return (
+        str(value or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
 
 
 def post_json(
@@ -2812,7 +3317,7 @@ def apply_distance_filter(places: list[dict[str, Any]], filters: dict[str, Any])
 
 
 def sort_restaurants_by_availability(places: list[dict[str, Any]]) -> None:
-    def sort_key(place: dict[str, Any]) -> tuple[int, float, str]:
+    def sort_key(place: dict[str, Any]) -> tuple[int, int, float, str]:
         is_open = place.get("is_open")
         distance = normalize_optional_float(place.get("distance_meters"))
         if is_open is True:
@@ -2824,6 +3329,7 @@ def sort_restaurants_by_availability(places: list[dict[str, Any]]) -> None:
 
         return (
             availability_rank,
+            0 if place.get("ambassador_pick") else 1,
             distance if distance is not None else float("inf"),
             str(place.get("name") or ""),
         )
@@ -2853,6 +3359,9 @@ def restaurant_matches_filters(place: dict[str, Any], filters: dict[str, Any]) -
         return False
 
     if filters.get("openNow") and place.get("is_open") is False:
+        return False
+
+    if filters.get("studentDealsOnly") and not place.get("student_discount"):
         return False
 
     if not restaurant_matches_allergens(place, filters):
@@ -3244,6 +3753,70 @@ def search_restaurants_with_google(
     return [format_google_place(result, api_key) for result in results]
 
 
+def get_cached_restaurant_search(
+    user: Users,
+    provider: str,
+    api_key: str | None,
+    filters: dict[str, Any],
+    radius_meters: int,
+) -> tuple[list[dict[str, Any]], str, bool]:
+    cache = current_app.extensions.setdefault("restaurant_search_cache", {})
+    ttl_seconds = int(current_app.config.get("RESTAURANT_CACHE_TTL_SECONDS", 300))
+    cache_key = restaurant_search_cache_key(user, provider, filters, radius_meters)
+    now = time.time()
+    cached = cache.get(cache_key)
+
+    if cached and now - cached["created_at"] < ttl_seconds:
+        return clone_place_payload(cached["places"]), cached["source"], True
+
+    if provider == "google":
+        places = search_restaurants_with_google(user, str(api_key or ""), filters, radius_meters)
+        source = "google"
+    elif provider == "openstreetmap":
+        places = search_restaurants_with_openstreetmap(user.latitude, user.longitude, radius_meters)
+        source = "openstreetmap"
+    else:
+        places, source = search_restaurants_hybrid(user, api_key, filters, radius_meters)
+
+    cache[cache_key] = {
+        "created_at": now,
+        "places": clone_place_payload(places),
+        "source": source,
+    }
+    prune_restaurant_search_cache(cache, now)
+    return places, source, False
+
+
+def restaurant_search_cache_key(user: Users, provider: str, filters: dict[str, Any], radius_meters: int) -> tuple[Any, ...]:
+    latitude = round(float(user.latitude or 0), 4)
+    longitude = round(float(user.longitude or 0), 4)
+    google_query = build_google_restaurant_query(filters) if provider in {"google", "auto"} else ""
+    return provider, latitude, longitude, int(radius_meters), google_query
+
+
+def clone_place_payload(places: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return json.loads(json.dumps(places))
+
+
+def prune_restaurant_search_cache(cache: dict[Any, Any], now: float) -> None:
+    ttl_seconds = int(current_app.config.get("RESTAURANT_CACHE_TTL_SECONDS", 300))
+    max_entries = int(current_app.config.get("RESTAURANT_CACHE_MAX_ENTRIES", 250))
+    expired_keys = [
+        key
+        for key, value in cache.items()
+        if now - float(value.get("created_at", 0)) >= ttl_seconds
+    ]
+    for key in expired_keys:
+        cache.pop(key, None)
+
+    if len(cache) <= max_entries:
+        return
+
+    oldest_keys = sorted(cache, key=lambda key: cache[key].get("created_at", 0))[: len(cache) - max_entries]
+    for key in oldest_keys:
+        cache.pop(key, None)
+
+
 def search_restaurants_hybrid(
     user: Users,
     api_key: str | None,
@@ -3301,7 +3874,17 @@ def merge_osm_places_with_google_enrichment(
             merged_place["photo_source"] = google_place.get("photo_source") or "google_places"
             merged_place["photo_category"] = google_place.get("photo_category") or "google_places"
 
-        for key in ("price_level", "price_text", "rating", "review_count", "website", "is_open", "next_open_time", "opening_hours_text"):
+        for key in (
+            "price_level",
+            "price_text",
+            "rating",
+            "review_count",
+            "website",
+            "is_open",
+            "next_open_time",
+            "opening_hours_text",
+            "menu_preview",
+        ):
             if google_place.get(key) is not None:
                 merged_place[key] = google_place[key]
 
@@ -3444,6 +4027,7 @@ def format_osm_place(
         "review_count": None,
         "website": normalize_website_url(tags.get("website") or tags.get("contact:website")),
         "is_open": None,
+        "student_discount": False,
         "opening_hours_text": tags.get("opening_hours"),
         "distance_meters": distance,
         "walking_minutes": walking_minutes_from_meters(distance),
@@ -3536,11 +4120,57 @@ def format_google_place(place: dict[str, Any], api_key: str) -> dict[str, Any]:
         "website": place.get("websiteUri") or place.get("googleMapsUri"),
         "is_open": opening_hours.get("openNow"),
         "next_open_time": opening_hours.get("nextOpenTime"),
+        "student_discount": False,
         "opening_hours_text": "; ".join(weekday_descriptions[:2]) if weekday_descriptions else None,
+        "menu_preview": extract_menu_preview(place),
         "distance_meters": None,
         "walking_minutes": None,
         "driving_minutes": None,
     }
+
+
+def extract_menu_preview(place: dict[str, Any]) -> list[str]:
+    candidates = (
+        place.get("popularDishes"),
+        place.get("popular_dishes"),
+        place.get("menuHighlights"),
+        place.get("menu_highlights"),
+        place.get("menu"),
+    )
+
+    for candidate in candidates:
+        items = normalize_menu_items(candidate)
+        if items:
+            return items[:MAX_MENU_PREVIEW_ITEMS]
+
+    return []
+
+
+def normalize_menu_items(value: Any) -> list[str]:
+    raw_items: list[Any]
+    if isinstance(value, str):
+        raw_items = re.split(r"[\n,;]", value)
+    elif isinstance(value, list):
+        raw_items = value
+    elif isinstance(value, dict):
+        raw_items = value.get("items") or value.get("dishes") or []
+    else:
+        raw_items = []
+
+    items: list[str] = []
+    seen: set[str] = set()
+    for raw_item in raw_items:
+        if isinstance(raw_item, dict):
+            label = raw_item.get("name") or raw_item.get("title") or raw_item.get("text")
+        else:
+            label = raw_item
+        text = " ".join(str(label or "").split())[:48]
+        key = text.lower()
+        if not text or key in seen:
+            continue
+        items.append(text)
+        seen.add(key)
+    return items
 
 
 app = create_app()

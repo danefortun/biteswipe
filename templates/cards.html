@@ -550,6 +550,32 @@ function sortRemainingDeck(mode = "best") {
     showBiteToast(mode === "nearby" ? "Nearest spots moved up" : mode === "rating" ? "Top-rated spots moved up" : "Best matches moved up", "success");
 }
 
+function startDareMode() {
+    const restaurants = window.currentRestaurantCards || [];
+    if (!restaurants.length || typeof currentIndex !== "number" || currentIndex >= restaurants.length) {
+        setRestaurantStatus("Load a deck before starting Dare Mode.");
+        return;
+    }
+    const remaining = restaurants.slice(currentIndex);
+    const comfort = new Set(getCheckedValues?.("foodPreferences") || []);
+    const candidates = remaining.filter((restaurant) => {
+        const cuisine = String(restaurant.cuisine || "").toLowerCase();
+        return !Array.from(comfort).some((value) => cuisine.includes(String(value).toLowerCase()));
+    });
+    const pool = candidates.length ? candidates : remaining;
+    const darePick = pool[Math.floor(Math.random() * pool.length)];
+    const dareIndex = restaurants.indexOf(darePick);
+    if (dareIndex < 0) return;
+    [restaurants[currentIndex], restaurants[dareIndex]] = [restaurants[dareIndex], restaurants[currentIndex]];
+    window.activeDarePlace = darePick.place;
+    document.body.classList.add("dare-mode-active");
+    document.querySelectorAll(".dropup-content input, .dropup-content button").forEach((control) => {
+        control.disabled = true;
+    });
+    renderRestaurantCards(restaurants, { currentIndex, persist: true });
+    showBiteToast("Dare Mode locked. Save this pick to accept the dare.", "success");
+}
+
 function getRestaurantShareText(result) {
     const lines = [result?.name, result?.address, buildMapsUrl(result || {})].filter(Boolean);
     return lines.join("\n");
@@ -1473,6 +1499,25 @@ async function refreshRestaurantCards() {
     await get_restaurant({ autoLocate: true });
 }
 
+async function avoidCurrentRestaurant() {
+    const restaurant = getCurrentRestaurant?.();
+    if (!restaurant) {
+        return;
+    }
+    const response = await fetch("/avoid_restaurant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(restaurant),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+        setRestaurantStatus(data.message || "Unable to hide that restaurant.");
+        return;
+    }
+    setRestaurantStatus(data.message);
+    moveToNextCard();
+}
+
 async function clearRestaurantFilters() {
     const filters = {
         celiac: false,
@@ -1652,6 +1697,7 @@ function renderRestaurantCards(places, options = {}) {
     }
 
     window.currentRestaurantCards = cards;
+    window.deckCompletionRecorded = false;
     container.innerHTML = "";
     currentIndex = Math.min(
         Math.max(Number(options.currentIndex) || 0, 0),
@@ -1717,6 +1763,11 @@ function renderRestaurantCards(places, options = {}) {
         const chips = buildCardChips(result);
         if (chips.children.length > 0) {
             front.appendChild(chips);
+        }
+
+        const menuPreview = buildMenuPreview(result);
+        if (menuPreview) {
+            front.appendChild(menuPreview);
         }
 
         const memoryText = buildRestaurantMemoryText(result);
@@ -1790,10 +1841,12 @@ function buildCardChips(result) {
 
     [
         formatBiteConfidence(result),
+        result.ambassador_pick ? "Ambassador pick" : "",
         formatAllergyConfidence(result),
         formatWalkingTime(result),
         getRestaurantPrice(result),
         formatOpenStatus(result),
+        result.student_discount ? "Student deal" : "",
         formatCuisine(result.cuisine),
         formatShortRating(result),
     ].filter(Boolean).slice(0, 5).forEach((value) => {
@@ -1803,6 +1856,22 @@ function buildCardChips(result) {
     });
 
     return chips;
+}
+
+function buildMenuPreview(result) {
+    const items = Array.isArray(result.menu_preview) ? result.menu_preview.filter(Boolean).slice(0, 5) : [];
+    if (!items.length) {
+        return null;
+    }
+
+    const preview = document.createElement("div");
+    preview.classList.add("card-menu-preview");
+    items.forEach((item) => {
+        const chip = document.createElement("span");
+        chip.textContent = item;
+        preview.appendChild(chip);
+    });
+    return preview;
 }
 
 function buildCardBack(result) {
@@ -1820,8 +1889,14 @@ function buildCardBack(result) {
     addDetail(detailList, "Food", formatCuisine(result.cuisine));
     addDetail(detailList, "Cost", getRestaurantPrice(result));
     addDetail(detailList, "Hours", result.opening_hours_text || formatOpenStatus(result));
+    addDetail(detailList, "Menu", result.menu_text);
     addDetail(detailList, "Address", result.address);
     addDetail(detailList, "Travel", formatWalkingTime(result));
+    addDetail(
+        detailList,
+        "Recommended by",
+        result.recommended_by_handle ? `@${result.recommended_by_handle}` : result.recommended_by
+    );
     addDetail(detailList, "BiteSwipe score", formatBiteConfidence(result, true));
     addDetail(detailList, "Your history", buildRestaurantMemoryText(result));
     addDetail(detailList, "Allergy confidence", formatAllergyConfidence(result, true));
@@ -2658,10 +2733,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       </div>
     {% endif %}
 
-    <div class="deck-sort-row" aria-label="Deck sorting tools">
+      <div class="deck-sort-row" aria-label="Deck sorting tools">
       <button type="button" onclick="sortRemainingDeck('best')">Best match</button>
       <button type="button" onclick="sortRemainingDeck('nearby')">Nearest</button>
       <button type="button" onclick="sortRemainingDeck('rating')">Top rated</button>
+      <button type="button" onclick="startDareMode()">Dare me</button>
     </div>
 
     <div class="card-container" aria-live="polite">
@@ -2701,30 +2777,38 @@ document.addEventListener("DOMContentLoaded", async () => {
     </div>
 
     <div class="deck-secondary-actions" aria-label="Deck utilities">
-      <button
+     <span></span>
+     <button
         type="button"
         class="card-action-button card-action-location"
         onclick="saveBrowserLocation()">
-        Use my location
+        📍
       </button>
       <button
         type="button"
         class="card-action-button card-action-refresh"
         onclick="refreshRestaurantCards()">
-        Refresh deck
+        ⭮
       </button>
       <button
         type="button"
         class="card-action-button card-action-shuffle"
         onclick="shuffleRemainingDeck()">
-        Shuffle
+        🔀
       </button>
       <button
         type="button"
         class="card-action-button card-action-share"
         id="shareCardButton"
         onclick="shareRestaurant()">
-        Share
+        ᯓ➤
+      </button>
+      <span></span><span></span>
+      <button
+        type="button"
+        class="card-action-button card-action-clear"
+        onclick="avoidCurrentRestaurant()">
+        Avoid
       </button>
       <button
         type="button"

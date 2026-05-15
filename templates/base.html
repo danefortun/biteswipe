@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#178f79">
   <title>{% block title %}BiteSwipe{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,6 +14,7 @@
   <script src="{{ url_for('static', filename='filterjavascript.js') }}" defer></script>
   <script src="{{ url_for('static', filename='themetoggle.js') }}" defer></script>
   <script src="{{ url_for('static', filename='app-ui.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='pwa.js') }}" defer></script>
 </head>
 {% set active_school_theme = school_theme if request.endpoint == 'home' else none %}
 <body
@@ -60,7 +62,11 @@
           <a role="menuitem" href="{{ url_for('settings') }}">Settings</a>
           <a role="menuitem" href="{{ url_for('profile') }}">Profile</a>
           <a role="menuitem" href="{{ url_for('friend_requests') }}">Friend requests</a>
+          <a role="menuitem" href="{{ url_for('leaderboard') }}">Leaderboard</a>
           <a role="menuitem" href="{{ url_for('credits') }}">Saved picks</a>
+          {% if template_is_admin %}
+            <a role="menuitem" href="{{ url_for('admin_analytics') }}">Analytics</a>
+          {% endif %}
           {% if unread_notifications %}
             <div class="header-notification-list" role="group" aria-label="Notifications">
               {% for notification in unread_notifications %}
@@ -75,6 +81,7 @@
           {% endif %}
           <button type="button" role="menuitem" onclick="toggleFooterPanel('filters', event)">Filters</button>
           <button type="button" role="menuitem" onclick="toggleFooterPanel('interests', event)">Interests</button>
+          <button type="button" role="menuitem" data-install-app hidden>Install app</button>
           <a role="menuitem" class="header-settings-logout" href="{{ url_for('logout') }}">Log out</a>
         </div>
       </details>
@@ -188,6 +195,7 @@
               <label class="filter-option" for="outdoorSeating"><input type="checkbox" id="outdoorSeating"> Outdoor seating</label>
               <label class="filter-option" for="takeoutOnly"><input type="checkbox" id="takeoutOnly"> Takeout</label>
               <label class="filter-option" for="dineIn"><input type="checkbox" id="dineIn"> Dine-in</label>
+              <label class="filter-option" for="studentDealsOnly"><input type="checkbox" id="studentDealsOnly"> Student deals only</label>
             </div>
           </section>
 

@@ -68,6 +68,8 @@
           <option value="rating">Top rated</option>
         </select>
         <button type="button" class="saved-decide-button" onclick="decideForMeSavedRestaurant()">Decide for me</button>
+        <a href="{{ url_for('export_saved_kml') }}">Export KML</a>
+        <button type="button" onclick="openGoogleMapsExport()">Google Maps</button>
         <button type="button" onclick="pickRandomSavedRestaurant()" hidden data-feature-parked="random-saved-picker">Pick for me</button>
         <button type="button" onclick="copySavedShortlist()" hidden data-feature-parked="copy-visible-saved">Copy visible</button>
       </div>
@@ -152,6 +154,12 @@
                 Directions
               </a>
               <button type="button" onclick="copySingleSavedRestaurant(this)">Copy</button>
+              <button type="button" onclick="downloadShareablePickCard(this)">Share card</button>
+              <form class="saved-calendar-form" onsubmit="return exportDinnerPlan(this)" data-calendar-url="{{ url_for('export_saved_calendar', restaurant_id=restaurant.id) }}">
+                <input type="date" name="date" required aria-label="Dinner date for {{ restaurant.name }}">
+                <input type="time" name="time" value="18:00" required aria-label="Dinner time for {{ restaurant.name }}">
+                <button type="submit">iCal</button>
+              </form>
               <form method="POST" action="{{ url_for('remove_restaurant', restaurant_id=restaurant.id) }}" onsubmit="return confirmRemoveSavedRestaurant(this)" data-restaurant-name="{{ restaurant.name }}">
                 <button type="submit" class="saved-remove">Remove</button>
               </form>
@@ -191,6 +199,66 @@ function getSavedNoteStorageKey(card) {
 function confirmRemoveSavedRestaurant(form) {
   const name = form?.dataset.restaurantName || "this saved pick";
   return window.confirm(`Remove ${name} from Saved picks?`);
+}
+
+function openGoogleMapsExport() {
+  const cards = getVisibleSavedCards();
+  if (!cards.length) return;
+  const points = cards.slice(0, 10).map((card) => {
+    const name = card.querySelector("h2")?.textContent.trim() || "";
+    const address = card.querySelector(".saved-address")?.textContent.trim() || "";
+    return [name, address].filter(Boolean).join(" ");
+  }).filter(Boolean);
+  if (!points.length) return;
+  window.open(`https://www.google.com/maps/dir/${points.map((point) => encodeURIComponent(point)).join("/")}`, "_blank", "noopener");
+}
+
+function exportDinnerPlan(form) {
+  const params = new URLSearchParams(new FormData(form));
+  window.location.href = `${form.dataset.calendarUrl}?${params.toString()}`;
+  return false;
+}
+
+function downloadShareablePickCard(button) {
+  const card = button.closest(".saved-card");
+  const title = card?.querySelector("h2")?.textContent.trim() || "BiteSwipe pick";
+  const meta = Array.from(card?.querySelectorAll(".saved-meta span") || []).map((item) => item.textContent.trim()).slice(0, 3);
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1920;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#f7fbfa";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#178f79";
+  ctx.fillRect(0, 0, canvas.width, 180);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "700 54px sans-serif";
+  ctx.fillText("BiteSwipe pick", 72, 112);
+  ctx.fillStyle = "#13211d";
+  ctx.font = "900 72px sans-serif";
+  wrapCanvasText(ctx, title, 72, 360, 936, 88);
+  ctx.font = "600 38px sans-serif";
+  meta.forEach((line, index) => ctx.fillText(line, 72, 640 + (index * 58)));
+  const link = document.createElement("a");
+  link.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "biteswipe-pick"}.png`;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+
+function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(/\s+/);
+  let line = "";
+  words.forEach((word) => {
+    const next = line ? `${line} ${word}` : word;
+    if (ctx.measureText(next).width > maxWidth && line) {
+      ctx.fillText(line, x, y);
+      line = word;
+      y += lineHeight;
+    } else {
+      line = next;
+    }
+  });
+  if (line) ctx.fillText(line, x, y);
 }
 
 function updateSavedResultCount() {

@@ -14,6 +14,7 @@ const checkboxFilterIds = [
   "outdoorSeating",
   "takeoutOnly",
   "dineIn",
+  "studentDealsOnly",
 ];
 const quickInterestMaxLength = 16;
 const blockedQuickInterestTerms = new Set([

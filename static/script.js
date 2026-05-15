@@ -16,6 +16,13 @@ function swipeLeft() {
   }
 
   recordRestaurantDecision("pass", currentRestaurant, currentIndex);
+  if (window.activeDarePlace && window.activeDarePlace === currentRestaurant.place) {
+    window.activeDarePlace = null;
+    document.body.classList.remove("dare-mode-active");
+    document.querySelectorAll(".dropup-content input, .dropup-content button").forEach((control) => {
+      control.disabled = false;
+    });
+  }
   moveToNextCard(`Passed ${currentRestaurant.name || "that spot"}.`);
 }
 
@@ -32,6 +39,14 @@ async function swipeRight() {
   }
 
   recordRestaurantDecision("save", currentRestaurant, currentIndex);
+  if (window.activeDarePlace && window.activeDarePlace === currentRestaurant.place) {
+    await fetch("/dare/accept", { method: "POST" });
+    window.activeDarePlace = null;
+    document.body.classList.remove("dare-mode-active");
+    document.querySelectorAll(".dropup-content input, .dropup-content button").forEach((control) => {
+      control.disabled = false;
+    });
+  }
   moveToNextCard(`Saved ${currentRestaurant.name || "that spot"} to My Stuff.`);
 }
 
@@ -159,7 +174,23 @@ function moveToNextCard(statusMessage = "") {
 
   if (typeof setRestaurantStatus === "function") {
     const atEnd = currentIndex >= totalCards;
+    if (atEnd) {
+      recordDeckCompletion();
+    }
     setRestaurantStatus(atEnd ? "Deck complete. Refresh for more restaurants or open My Stuff." : statusMessage);
+  }
+}
+
+async function recordDeckCompletion() {
+  if (window.deckCompletionRecorded) {
+    return;
+  }
+
+  window.deckCompletionRecorded = true;
+  try {
+    await fetch("/deck/complete", { method: "POST" });
+  } catch (error) {
+    window.deckCompletionRecorded = false;
   }
 }
 
