@@ -50,15 +50,29 @@
               src="{{ uploaded_file_url(template_user.pfp_file_path if template_user else None, 'transparentnewdefaultpicture.png') }}"
               alt="">
           </span>
-          <span class="header-settings-label">Settings</span>
+          <span class="header-settings-label">{{ header_account_label(template_user) }}</span>
         </summary>
         <div class="header-settings-dropdown" role="menu" aria-label="Account settings">
           <div class="header-settings-user">
             <strong>{{ template_user.name if template_user else 'BiteSwipe user' }}</strong>
             <span>{{ template_user.email if template_user else 'Account settings' }}</span>
           </div>
+          <a role="menuitem" href="{{ url_for('settings') }}">Settings</a>
           <a role="menuitem" href="{{ url_for('profile') }}">Profile</a>
+          <a role="menuitem" href="{{ url_for('friend_requests') }}">Friend requests</a>
           <a role="menuitem" href="{{ url_for('credits') }}">Saved picks</a>
+          {% if unread_notifications %}
+            <div class="header-notification-list" role="group" aria-label="Notifications">
+              {% for notification in unread_notifications %}
+                <form method="POST" action="{{ url_for('mark_notification_read', notification_id=notification.id) }}">
+                  <button type="submit" role="menuitem">
+                    <strong>Notification</strong>
+                    <span>{{ notification.message }}</span>
+                  </button>
+                </form>
+              {% endfor %}
+            </div>
+          {% endif %}
           <button type="button" role="menuitem" onclick="toggleFooterPanel('filters', event)">Filters</button>
           <button type="button" role="menuitem" onclick="toggleFooterPanel('interests', event)">Interests</button>
           <a role="menuitem" class="header-settings-logout" href="{{ url_for('logout') }}">Log out</a>
@@ -77,6 +91,11 @@
         </div>
       {% endif %}
     {% endwith %}
+    {% if template_user and not template_user.email_verified %}
+      <div class="flash-messages profile-nudge-banner" role="status">
+        <div class="flash-message">Verify your email when delivery is configured so your BiteSwipe account is recoverable.</div>
+      </div>
+    {% endif %}
     {% block content %}{% endblock %}
   </main>
 
@@ -204,6 +223,23 @@
                 </label>
               {% endfor %}
             </div>
+            <form class="quick-interest-form" id="quickInterestForm">
+              <label for="customQuickInterest">Custom quick interest</label>
+              <div>
+                <input
+                  type="text"
+                  id="customQuickInterest"
+                  maxlength="16"
+                  pattern="[A-Za-z0-9 ]{1,16}"
+                  autocomplete="off"
+                  placeholder="ex. Tacos"
+                  aria-describedby="quickInterestHelp">
+                <button type="submit">Add</button>
+              </div>
+              <small id="quickInterestHelp">16 characters max. Letters, numbers, and spaces only.</small>
+              <small class="quick-interest-error" id="quickInterestError" role="status"></small>
+              <div class="filter-options custom-quick-interest-list" id="customQuickInterestList"></div>
+            </form>
           </details>
 
           <details class="filter-section filter-disclosure" id="exclusionFilterGroup">
@@ -260,7 +296,7 @@
             <h2 id="hobby-interest-title">Interests</h2>
             <p class="filter-help">These show on your profile and help the app feel more social. Restaurant matching still comes from your deck filters.</p>
             <div class="filter-options">
-              {% for interest in ["Gaming", "Music", "Drawing", "Computers", "Math", "Science", "Sports", "Reading", "Movies", "Fitness", "Study Spots", "Coffee Runs"] %}
+              {% for interest in ["Gaming", "Music", "Drawing", "Computers", "Math", "Science", "Sports", "Reading", "Movies", "Fitness", "Gym", "Study Spots", "Coffee Runs"] %}
                 <label class="filter-option" for="hobbyInterest{{ loop.index }}">
                   <input
                     type="checkbox"

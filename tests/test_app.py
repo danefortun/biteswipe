@@ -7,6 +7,7 @@ from unittest.mock import patch
 from uuid import uuid4
 from pathlib import Path
 
+from blog_db import BlogPosts
 from db import db
 from main import (
     SCHOOL_THEMES,
@@ -19,8 +20,18 @@ from main import (
     merge_osm_places_with_google_enrichment,
     normalize_google_price_level,
     normalize_price_level,
+    sort_restaurants_by_availability,
 )
-from users_db import SavedRestaurant, UserInterest, UserRestaurantRating, Users
+from users_db import (
+    GroupSwipeMember,
+    GroupSwipeSession,
+    SavedRestaurant,
+    UserFollow,
+    UserInterest,
+    UserNotification,
+    UserRestaurantRating,
+    Users,
+)
 
 
 class LifeSwipeAppTestCase(unittest.TestCase):
@@ -108,6 +119,20 @@ class LifeSwipeAppTestCase(unittest.TestCase):
             data={"email": "new@example.com", "pass": "password123", "confirm_pass": "different"},
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_signup_rejects_invalid_email_and_creates_verification_token(self) -> None:
+        response = self.client.post(
+            "/signup",
+            data={"email": "not-an-email", "pass": "password123", "confirm_pass": "password123"},
+        )
+        self.assertEqual(response.status_code, 400)
+
+        self.login(email="verify@example.com")
+        with self.app.app_context():
+            user = Users.query.filter_by(email="verify@example.com").first()
+            self.assertIsNotNone(user)
+            self.assertFalse(user.email_verified)
+            self.assertTrue(user.email_verification_token)
 
     def test_forgot_password_route_exists(self) -> None:
         response = self.client.get("/forgot-password")
@@ -214,6 +239,40 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         self.assertIn(b"Celiac safe", response.data)
         self.assertIn(b"Italian", response.data)
         self.assertIn(b"Gaming", response.data)
+
+    def test_custom_quick_interests_are_limited_and_moderated(self) -> None:
+        self.login()
+
+        response = self.client.post(
+            "/save_filters",
+            json={
+                "foodPreferences": [
+                    "Tacos",
+                    "Post Gym",
+                    "too-many-characters-here",
+                    "bad!",
+                    "shit",
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["filters"]["foodPreferences"], ["Tacos", "Post Gym"])
+
+        response = self.client.post(
+            "/profile",
+            data={"action": "add_food_preference", "food_preference": "bad!"},
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"letters, numbers, and spaces", response.data)
+
+        response = self.client.post(
+            "/profile",
+            data={"action": "add_food_preference", "food_preference": "Tacos"},
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Added Tacos to your quick interests.", response.data)
 
     def test_default_distance_filter_is_campus_sized(self) -> None:
         self.login()
@@ -327,10 +386,202 @@ class LifeSwipeAppTestCase(unittest.TestCase):
             user_id = user.id
 
         response = self.client.get(f"/userID={user_id}")
+        self.assertEqual(response.status_code, 301)
+        self.assertIn(f"/user/{user_id}".encode(), response.headers["Location"].encode())
+
+        response = self.client.get(f"/user/{user_id}")
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"User ID", response.data)
+        self.assertIn(b"(@person)", response.data)
+        self.assertIn(b"biteswipe.lol/@person", response.data)
         self.assertIn(b"Pizza", response.data)
         self.assertNotIn(b"Edit filters", response.data)
+
+    def test_public_profile_uses_at_handle_route(self) -> None:
+        self.login(email="dane@example.com")
+
+        response = self.client.get("/dane")
+        self.assertEqual(response.status_code, 404)
+
+        response = self.client.get("/@dane")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"(@dane)", response.data)
+        self.assertIn(b"biteswipe.lol/@dane", response.data)
+
+    def test_profile_page_shows_handle_and_copies_handle_link(self) -> None:
+        self.login(email="dane@example.com")
+
+        response = self.client.get("/profile")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"(@dane)", response.data)
+        self.assertIn(b"/@dane", response.data)
+        self.assertIn(b"Bio, 256 characters max", response.data)
+        self.assertIn(b"setup steps", response.data)
+        self.assertIn(b'class="header-settings-label">Dane</span>', response.data)
+        self.assertIn(b"/settings", response.data)
+        self.assertIn(b"/friends/requests", response.data)
+
+    def test_profile_stat_visibility_controls_public_stats(self) -> None:
+        self.login(email="dane@example.com")
+
+        response = self.client.get("/profile")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"profile-stat-visibility-form", response.data)
+        self.assertIn(b"+ join date", response.data)
+
+        response = self.client.post(
+            "/profile",
+            data={"action": "update_profile_stat", "stat_key": "saved_picks", "visible": "false"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+
+        response = self.client.get("/profile")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"is-hidden-stat", response.data)
+
+        response = self.client.get("/@dane")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"saved picks", response.data)
+
+    def test_profile_can_add_optional_public_stats(self) -> None:
+        self.login(email="dane@example.com")
+
+        response = self.client.post(
+            "/profile",
+            data={"action": "update_profile_stat", "stat_key": "join_date", "visible": "true"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+
+        response = self.client.get("/@dane")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"join date", response.data)
+
+    def test_profile_badges_can_be_hidden_and_ordered_with_stats(self) -> None:
+        self.login(email="dane@example.com")
+        self.client.post(
+            "/profile",
+            data={"action": "update_pronouns", "pronouns": "they/them"},
+            follow_redirects=False,
+        )
+        self.client.post(
+            "/profile",
+            data={"action": "add_food_preference", "food_preference": "Pizza"},
+            follow_redirects=False,
+        )
+
+        response = self.client.post(
+            "/profile",
+            data={"action": "update_profile_badge", "badge_key": "pronouns", "visible": "false"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+
+        response = self.client.get("/@dane")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"they/them", response.data)
+
+        response = self.client.get("/profile")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"profile-badge-visibility-form", response.data)
+        self.assertIn(b"they/them", response.data)
+        self.assertIn(b"profile-sortable-item", response.data)
+        self.assertNotIn(b"profile-drag-handle", response.data)
+
+        response = self.client.post("/profile/order", json={"kind": "stats", "order": ["interests", "saved_picks"]})
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post("/profile/order", json={"kind": "badges", "order": ["favorite-cuisine", "pronouns"]})
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.get("/profile")
+        body = response.data.decode()
+        self.assertLess(body.index("interests"), body.index("saved picks"))
+        self.assertLess(body.index("Favorite: Pizza"), body.index("they/them"))
+
+    def test_public_handle_uses_selected_username_not_display_name(self) -> None:
+        self.login(email="dane@example.com")
+
+        response = self.client.post(
+            "/profile",
+            data={"action": "update_name", "name": "Dane Display", "username": "taste-dane"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+
+        response = self.client.get("/dane")
+        self.assertEqual(response.status_code, 404)
+
+        response = self.client.get("/@taste-dane")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Dane Display", response.data)
+        self.assertIn(b"(@taste-dane)", response.data)
+        self.assertIn(b"biteswipe.lol/@taste-dane", response.data)
+
+    def test_numeric_public_username_only_loads_with_at_route(self) -> None:
+        self.login(email="dane@example.com")
+
+        response = self.client.post(
+            "/profile",
+            data={"action": "update_name", "name": "Dane Display", "username": "1000"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+
+        response = self.client.get("/1000")
+        self.assertEqual(response.status_code, 404)
+
+        response = self.client.get("/@1000")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"(@1000)", response.data)
+        self.assertIn(b"biteswipe.lol/@1000", response.data)
+
+    def test_founder_party_badge_uses_configured_founder_ids(self) -> None:
+        with self.app.app_context():
+            founder = Users(
+                name="Founder",
+                email="founder@example.com",
+                password="password",
+                username="founder",
+            )
+            filler = Users(
+                name="Filler",
+                email="filler@example.com",
+                password="password",
+                username="filler",
+            )
+            party_guest = Users(
+                name="Party Guest",
+                email="party@example.com",
+                password="password",
+                username="party",
+            )
+            db.session.add_all([founder, filler, party_guest])
+            db.session.commit()
+            self.app.config["BITESWIPE_FOUNDER_USER_IDS"] = f"{founder.id},9,{filler.id + 20}"
+
+            group_session = GroupSwipeSession(code="PARTY1", host_user_id=founder.id)
+            db.session.add(group_session)
+            db.session.commit()
+            db.session.add(GroupSwipeMember(session_id=group_session.id, user_id=founder.id))
+            db.session.add(GroupSwipeMember(session_id=group_session.id, user_id=party_guest.id))
+            db.session.commit()
+
+        response = self.client.get("/@party")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Founder party", response.data)
+
+    def test_public_username_must_be_unique(self) -> None:
+        self.login(email="dane@example.com")
+        self.client.get("/logout")
+        self.login(email="other@example.com")
+
+        response = self.client.post(
+            "/profile",
+            data={"action": "update_name", "name": "Other Person", "username": "dane"},
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"@dane is already taken.", response.data)
 
     def test_chat_posts_return_user_names(self) -> None:
         self.login()
@@ -342,6 +593,101 @@ class LifeSwipeAppTestCase(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(payload["posts"][0]["message"], "hello")
         self.assertEqual(payload["posts"][0]["user_name"], "Person")
+        self.assertIn("has_more", payload)
+        self.assertIn("next_before", payload)
+
+    def test_chat_posts_are_paginated_and_rate_limited(self) -> None:
+        self.login()
+        for index in range(6):
+            response = self.client.post("/chat", data={"message": f"message {index}"}, follow_redirects=False)
+            if index < 5:
+                self.assertEqual(response.status_code, 302)
+            else:
+                self.assertEqual(response.status_code, 302)
+
+        response = self.client.get("/get_posts?limit=3")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(len(payload["posts"]), 3)
+        self.assertTrue(payload["has_more"])
+
+        with self.app.app_context():
+            self.assertEqual(BlogPosts.query.count(), 5)
+
+    def test_follow_approval_creates_notification(self) -> None:
+        self.login(email="requester@example.com")
+        self.client.get("/logout")
+        self.login(email="approver@example.com")
+
+        with self.app.app_context():
+            requester = Users.query.filter_by(email="requester@example.com").first()
+            approver = Users.query.filter_by(email="approver@example.com").first()
+            requester_id = requester.id
+            approver_id = approver.id
+
+        self.client.get("/logout")
+        self.client.post("/login", data={"email": "requester@example.com", "pass": "password123"})
+        self.client.post(f"/follow/{approver_id}", follow_redirects=False)
+        self.client.get("/logout")
+        self.client.post("/login", data={"email": "approver@example.com", "pass": "password123"})
+        response = self.client.post(f"/follow/{requester_id}/approve", follow_redirects=False)
+        self.assertEqual(response.status_code, 302)
+
+        with self.app.app_context():
+            notification = UserNotification.query.filter_by(user_id=requester_id, kind="follow_accepted").first()
+            self.assertIsNotNone(notification)
+            self.assertIn("accepted your follow request", notification.message)
+
+    def test_friend_requests_page_and_public_profile_accept_decline(self) -> None:
+        self.login(email="requester@example.com")
+        self.client.get("/logout")
+        self.login(email="approver@example.com")
+
+        with self.app.app_context():
+            requester = Users.query.filter_by(email="requester@example.com").first()
+            approver = Users.query.filter_by(email="approver@example.com").first()
+            requester_id = requester.id
+            approver_id = approver.id
+
+        self.client.get("/logout")
+        self.client.post("/login", data={"email": "requester@example.com", "pass": "password123"})
+        self.client.post(f"/follow/{approver_id}", follow_redirects=False)
+
+        self.client.get("/logout")
+        self.client.post("/login", data={"email": "approver@example.com", "pass": "password123"})
+        response = self.client.get("/friends/requests")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Requests to you", response.data)
+        self.assertIn(b"Requester", response.data)
+
+        response = self.client.get("/requester")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"has sent you a request", response.data)
+        self.assertIn(b"Accept", response.data)
+        self.assertIn(b"Decline", response.data)
+
+        response = self.client.post(
+            f"/follow/{requester_id}/decline",
+            data={"next": "/friends/requests"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+
+        with self.app.app_context():
+            self.assertIsNone(UserFollow.query.filter_by(follower_id=requester_id, following_id=approver_id).first())
+
+        self.client.get("/logout")
+        self.client.post("/login", data={"email": "requester@example.com", "pass": "password123"})
+        self.client.post(f"/follow/{approver_id}", follow_redirects=False)
+        self.client.get("/logout")
+        self.client.post("/login", data={"email": "approver@example.com", "pass": "password123"})
+        response = self.client.post(
+            f"/follow/{requester_id}/approve",
+            data={"next": "/requester"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith("/requester"))
 
     def test_restaurant_route_requires_location(self) -> None:
         self.login()
@@ -750,6 +1096,10 @@ class LifeSwipeAppTestCase(unittest.TestCase):
                     "displayName": {"text": "Real Photo Cafe"},
                     "photos": [{"name": "places/photo-name"}],
                     "types": ["cafe"],
+                    "currentOpeningHours": {
+                        "openNow": False,
+                        "nextOpenTime": "2026-05-14T18:00:00Z",
+                    },
                 },
                 "test-key",
             )
@@ -764,9 +1114,22 @@ class LifeSwipeAppTestCase(unittest.TestCase):
 
         self.assertEqual(live_photo["photo_source"], "google_places")
         self.assertIn("places.googleapis.com", live_photo["photo"])
+        self.assertFalse(live_photo["is_open"])
+        self.assertEqual(live_photo["next_open_time"], "2026-05-14T18:00:00Z")
         self.assertEqual(fallback_photo["photo_source"], "biteswipe_fallback")
         self.assertIn("restaurant-fallbacks/mexican.webp", fallback_photo["photo"])
         self.assertIsNone(fallback_photo["walking_minutes"])
+
+    def test_availability_sort_de_ranks_closed_restaurants(self) -> None:
+        places = [
+            {"name": "Closed Cafe", "is_open": False, "distance_meters": 10},
+            {"name": "Mystery Diner", "is_open": None, "distance_meters": 5},
+            {"name": "Open Grill", "is_open": True, "distance_meters": 40},
+        ]
+
+        sort_restaurants_by_availability(places)
+
+        self.assertEqual([place["name"] for place in places], ["Open Grill", "Mystery Diner", "Closed Cafe"])
 
     def test_hybrid_merge_keeps_osm_distance_and_google_price_photo(self) -> None:
         merged = merge_osm_places_with_google_enrichment(

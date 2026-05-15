@@ -42,6 +42,11 @@ def env_float(name: str, default: float) -> float:
         return default
 
 
+def env_csv(name: str, default: str = "") -> list[str]:
+    raw_value = os.environ.get(name, default)
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-change-me")
     SQLALCHEMY_DATABASE_URI = normalize_database_url(
@@ -75,5 +80,7 @@ class Config:
     OSM_OVERPASS_URL = os.environ.get("OSM_OVERPASS_URL", "https://overpass-api.de/api/interpreter")
     OSM_OVERPASS_TIMEOUT = int(os.environ.get("OSM_OVERPASS_TIMEOUT", 12))
     OSM_MAX_RESULTS = int(os.environ.get("OSM_MAX_RESULTS", 25))
+    BITESWIPE_FOUNDER_USER_IDS = env_csv("BITESWIPE_FOUNDER_USER_IDS", "1")
+    BITESWIPE_FOUNDER_HANDLES = env_csv("BITESWIPE_FOUNDER_HANDLES")
     AUTO_CREATE_DB = env_bool("AUTO_CREATE_DB", True)
     DEBUG = env_bool("FLASK_DEBUG", False)

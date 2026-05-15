@@ -43,6 +43,7 @@ from users_db import (
     UserActivity,
     UserFollow,
     UserInterest,
+    UserNotification,
     UserRestaurantRating,
     Users,
 )
@@ -50,8 +51,71 @@ from users_db import (
 
 ALLOWED_UPLOAD_EXTENSIONS = {"gif", "jpeg", "jpg", "png", "webp"}
 MAX_CHAT_MESSAGE_LENGTH = 500
+CHAT_PAGE_SIZE = 20
+CHAT_RATE_LIMIT_COUNT = 5
+CHAT_RATE_LIMIT_WINDOW_SECONDS = 60
 MAX_NAME_LENGTH = 32
+MAX_HANDLE_LENGTH = 32
+MIN_HANDLE_LENGTH = 2
 MAX_BIO_LENGTH = 256
+MAX_QUICK_INTEREST_LENGTH = 16
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+QUICK_INTEREST_RE = re.compile(r"^[A-Za-z0-9 ]+$")
+BLOCKED_QUICK_INTEREST_TERMS = {
+    "bastard",
+    "bitch",
+    "bullshit",
+    "chink",
+    "cunt",
+    "dick",
+    "dyke",
+    "fag",
+    "fuck",
+    "gook",
+    "kike",
+    "nazi",
+    "nigga",
+    "nigger",
+    "paki",
+    "prick",
+    "retard",
+    "shit",
+    "slut",
+    "tranny",
+    "whore",
+}
+DEFAULT_PROFILE_STAT_VISIBILITY = {
+    "saved_picks": True,
+    "cravings": True,
+    "allergy_signals": True,
+    "interests": True,
+    "join_date": False,
+    "connections": False,
+    "places_visited": False,
+    "reviews_given": False,
+}
+DEFAULT_PROFILE_STAT_ENABLED = {
+    "saved_picks": True,
+    "cravings": True,
+    "allergy_signals": True,
+    "interests": True,
+    "join_date": False,
+    "connections": False,
+    "places_visited": False,
+    "reviews_given": False,
+}
+PROFILE_STAT_LABELS = {
+    "saved_picks": "saved picks",
+    "cravings": "cravings",
+    "allergy_signals": "allergy signals",
+    "interests": "interests",
+    "join_date": "join date",
+    "connections": "connections",
+    "places_visited": "places visited",
+    "reviews_given": "reviews given",
+}
+DEFAULT_PROFILE_STAT_KEYS = ("saved_picks", "cravings", "allergy_signals", "interests")
+OPTIONAL_PROFILE_STAT_KEYS = ("join_date", "connections", "places_visited", "reviews_given")
 OSM_AMENITIES = ("restaurant", "fast_food", "cafe", "food_court")
 METERS_PER_MILE = 1609.344
 WALKING_SPEED_METERS_PER_MINUTE = 83
@@ -136,6 +200,7 @@ HOBBY_INTEREST_PRESETS = [
     "Reading",
     "Movies",
     "Fitness",
+    "Gym",
     "Study Spots",
     "Coffee Runs",
 ]
@@ -290,6 +355,31 @@ SCHOOL_THEME_ASSET_OVERRIDES: dict[str, dict[str, str | None]] = {
     "wcupa.edu": {"image_file": "schools/backdrops/west-chester.webp"},
 }
 
+BADGE_DESCRIPTIONS: dict[str, str] = {
+    "Co-Founder": "One of the original minds behind BiteSwipe. A true OG.",
+    "BiteBot": "The official BiteSwipe bot account. Beep boop.",
+    "First save": "Saved their first restaurant. The journey begins!",
+    "10 saves": "Saved 10 restaurants. Building quite the foodie list.",
+    "25 saves": "Saved 25 restaurants. A seasoned BiteSwiper.",
+    "Power user": "An absolute BiteSwipe machine. 25+ saves and counting.",
+    "World traveler": "Saved restaurants across 5+ different cuisines. Globally curious.",
+    "Adventurous": "Explored 3+ different cuisines. Always down to try something new.",
+    "Safe eater": "Has allergen filters set. Eating smart and staying safe.",
+    "Plant based": "Keeps it green. Vegan or vegetarian at heart.",
+    "Critic": "Rated 5+ restaurants. Their opinion matters around here.",
+    "On a streak": "Active within the last 24 hours. Truly committed to the cause.",
+    "Face reveal": "Uploaded a profile picture. We see you!",
+    "Camera shy": "Still rocking the default avatar. Mysterious vibes only.",
+    "Storyteller": "Wrote a bio. Letting the world know who they are.",
+    "People Watcher": "No bio yet. Observing from the shadows.",
+    "Fully loaded": "Complete profile — photo, bio, pronouns, and food preferences all set.",
+    "Social butterfly": "Following 5+ people. Spreading the foodie love.",
+    "Popular": "Has 5+ followers. People want to know what they're eating.",
+    "Squad goals": "Deep in the group swipe scene. Always eating with the crew.",
+    "'Yo soy fiesta'": "Has hosted a group swipe session. The life of the party.",
+    "Founder party": "Has shared a BiteSwipe party with one of the founders.",
+    "Taste setter": "Has food preferences set. Knows exactly what they want.",
+}
 
 def build_school_theme_map() -> dict[str, dict[str, str | None]]:
     themes: dict[str, dict[str, str | None]] = {}
@@ -351,13 +441,19 @@ def create_app(config_object: type[Config] = Config, config_overrides: dict[str,
     if migrate is not None:
         migrate.init_app(app, db)
     app.jinja_env.globals["uploaded_file_url"] = uploaded_file_url
+    app.jinja_env.globals["profile_picture_is_custom"] = profile_picture_is_custom
+    app.jinja_env.globals["public_handle_for_user"] = public_handle_for_user
+    app.jinja_env.globals["header_account_label"] = header_account_label
     register_routes(app)
     register_cli(app)
+    register_shell_context(app)
 
     if app.config.get("AUTO_CREATE_DB", True):
         with app.app_context():
             db.create_all()
             ensure_user_interest_columns()
+            ensure_usernames()
+            ensure_user_profile_stat_defaults()
             ensure_saved_restaurant_detail_columns()
             ensure_user_interest_rows()
 
@@ -370,14 +466,46 @@ def register_cli(app: Flask) -> None:
         """Create configured database tables."""
         db.create_all()
         ensure_user_interest_columns()
+        ensure_usernames()
+        ensure_user_profile_stat_defaults()
         ensure_saved_restaurant_detail_columns()
         ensure_user_interest_rows()
         print("Initialized the database.")
 
 
+def register_shell_context(app: Flask) -> None:
+    @app.shell_context_processor
+    def make_shell_context() -> dict[str, Any]:
+        return {
+            "db": db,
+            "BlogPosts": BlogPosts,
+            "GroupSwipeMember": GroupSwipeMember,
+            "GroupSwipeMessage": GroupSwipeMessage,
+            "GroupSwipeSession": GroupSwipeSession,
+            "GroupSwipeVote": GroupSwipeVote,
+            "SavedRestaurant": SavedRestaurant,
+            "UserActivity": UserActivity,
+            "UserFollow": UserFollow,
+            "UserInterest": UserInterest,
+            "UserNotification": UserNotification,
+            "UserRestaurantRating": UserRestaurantRating,
+            "Users": Users,
+        }
+
+
 def ensure_user_interest_columns() -> None:
     column_names = get_table_column_names("users")
     required_columns = {
+        "username": "VARCHAR(32)",
+        "email_verified": "BOOLEAN DEFAULT 0 NOT NULL",
+        "email_verification_token": "VARCHAR(128)",
+        "email_verification_sent_at": "VARCHAR(40)",
+        "joined_at": "VARCHAR(40)",
+        "profile_stat_visibility_json": "TEXT DEFAULT '{}'",
+        "profile_stat_enabled_json": "TEXT DEFAULT '{}'",
+        "profile_stat_order_json": "TEXT DEFAULT '[]'",
+        "profile_badge_visibility_json": "TEXT DEFAULT '{}'",
+        "profile_badge_order_json": "TEXT DEFAULT '[]'",
         "profile_banner_file_path": "VARCHAR(255)",
         "profile_showcase_file_path": "VARCHAR(255)",
         "campus_theme_domain": "VARCHAR(255)",
@@ -398,6 +526,51 @@ def ensure_user_interest_columns() -> None:
         db.session.execute(text("ALTER TABLE group_swipe_sessions ADD COLUMN expires_at VARCHAR(40)"))
 
     db.session.commit()
+
+
+def ensure_usernames() -> None:
+    if "username" not in get_table_column_names("users"):
+        return
+
+    for user in Users.query.order_by(Users.id.asc()).all():
+        username = normalize_user_handle(getattr(user, "username", None))
+        if username and username == getattr(user, "username", None):
+            continue
+
+        seed = username or default_username_from_email(user.email)
+        user.username = unique_public_username(seed, user.id)
+
+    db.session.commit()
+
+
+def ensure_user_profile_stat_defaults() -> None:
+    column_names = get_table_column_names("users")
+    if (
+        "joined_at" not in column_names
+        and "profile_stat_visibility_json" not in column_names
+        and "profile_stat_enabled_json" not in column_names
+    ):
+        return
+
+    changed = False
+    now = datetime.now(timezone.utc).isoformat()
+    for user in Users.query.order_by(Users.id.asc()).all():
+        if "joined_at" in column_names and not getattr(user, "joined_at", None):
+            user.joined_at = now
+            changed = True
+        if "profile_stat_visibility_json" in column_names:
+            visibility = profile_stat_visibility_for_user(user)
+            if visibility != parse_profile_stat_visibility(getattr(user, "profile_stat_visibility_json", None)):
+                user.profile_stat_visibility_json = json.dumps(visibility)
+                changed = True
+        if "profile_stat_enabled_json" in column_names:
+            enabled = profile_stat_enabled_for_user(user)
+            if enabled != parse_profile_stat_enabled(getattr(user, "profile_stat_enabled_json", None)):
+                user.profile_stat_enabled_json = json.dumps(enabled)
+                changed = True
+
+    if changed:
+        db.session.commit()
 
 
 def ensure_saved_restaurant_detail_columns() -> None:
@@ -481,6 +654,8 @@ def register_routes(app: Flask) -> None:
         return {
             "template_user": user,
             "school_theme": build_school_theme_payload(user),
+            "unread_notifications": unread_notifications_for_user(user),
+            "profile_completion": build_profile_completion(user) if user is not None else None,
         }
 
     @app.get("/health")
@@ -538,6 +713,10 @@ def register_routes(app: Flask) -> None:
                 remove_user_interest(user)
             elif action == "update_campus_theme":
                 update_user_campus_theme(user)
+            elif action == "update_profile_stat":
+                update_user_profile_stat(user)
+            elif action == "update_profile_badge":
+                update_user_profile_badge(user)
             else:
                 flash("Unknown profile action.")
 
@@ -545,10 +724,69 @@ def register_routes(app: Flask) -> None:
 
         return render_template("public.html", **build_profile_template_context(user))
 
+    @app.post("/profile/order")
+    @login_required
+    def update_profile_order() -> Any:
+        user = current_user()
+        if user is None:
+            abort(401)
+
+        payload = request.get_json(silent=True) or {}
+        kind = str(payload.get("kind", "")).strip()
+        order = [str(item).strip() for item in payload.get("order", []) if str(item).strip()]
+
+        if kind == "stats":
+            valid_keys = set(DEFAULT_PROFILE_STAT_VISIBILITY)
+            user.profile_stat_order_json = json.dumps([key for key in order if key in valid_keys])
+        elif kind == "badges":
+            valid_keys = {badge["key"] for badge in build_profile_badges(user, include_hidden=True)}
+            user.profile_badge_order_json = json.dumps([key for key in order if key in valid_keys])
+        else:
+            return jsonify({"ok": False, "message": "Unknown profile order type."}), 400
+
+        db.session.commit()
+        return jsonify({"ok": True})
+
+    @app.get("/settings")
+    @login_required
+    def settings() -> Any:
+        user = current_user()
+        if user is None:
+            abort(404)
+        return render_template(
+            "settings.html",
+            **build_profile_template_context(user),
+            incoming_follow_requests=pending_follow_requests(user),
+            outgoing_follow_requests=outgoing_follow_requests(user),
+        )
+
+    @app.get("/friends/requests")
+    @login_required
+    def friend_requests() -> Any:
+        user = current_user()
+        if user is None:
+            abort(404)
+        return render_template(
+            "follow_requests.html",
+            incoming_follow_requests=pending_follow_requests(user),
+            outgoing_follow_requests=outgoing_follow_requests(user),
+        )
+
     @app.get("/userID=<int:user_id>")
+    def legacy_public_user_profile(user_id: int) -> Any:
+        return redirect(url_for("public_user_profile", user_id=user_id), code=301)
+
     @app.get("/user/<int:user_id>")
     def public_user_profile(user_id: int) -> Any:
         user = Users.query.get_or_404(user_id)
+        return render_template(
+            "public_user.html",
+            **build_profile_template_context(user, is_public_profile=True),
+        )
+
+    @app.get("/@<handle>")
+    def public_user_handle_profile(handle: str) -> Any:
+        user = find_user_by_public_handle_or_404(handle)
         return render_template(
             "public_user.html",
             **build_profile_template_context(user, is_public_profile=True),
@@ -599,6 +837,7 @@ def register_routes(app: Flask) -> None:
         session.permanent = False
         session["email"] = user.email
         session["id"] = user.id
+        session["needs_campus_prompt"] = bool(get_school_theme_for_email(user.email) and not user.campus_theme_domain)
 
         flash("Login successful.")
         return redirect(url_for("home"))
@@ -618,6 +857,10 @@ def register_routes(app: Flask) -> None:
             flash("Email, password, and password confirmation are required.")
             return render_template("signup.html"), 400
 
+        if not is_valid_email(email):
+            flash("Enter a valid email address.")
+            return render_template("signup.html"), 400
+
         if password != confirm_password:
             flash("Passwords do not match.")
             return render_template("signup.html"), 400
@@ -628,9 +871,11 @@ def register_routes(app: Flask) -> None:
 
         user = Users(
             name=default_name_from_email(email),
+            username=unique_public_username(default_username_from_email(email)),
             email=email,
             password=generate_password_hash(password),
         )
+        issue_email_verification(user)
         db.session.add(user)
         db.session.commit()
 
@@ -638,9 +883,19 @@ def register_routes(app: Flask) -> None:
         session.permanent = False
         session["email"] = user.email
         session["id"] = user.id
+        session["needs_campus_prompt"] = bool(get_school_theme_for_email(user.email))
 
-        flash("Account created. Welcome to BiteSwipe.")
+        flash("Account created. Check your email verification link when delivery is configured.")
         return redirect(url_for("home"))
+
+    @app.get("/verify-email/<token>")
+    def verify_email(token: str) -> Any:
+        user = Users.query.filter_by(email_verification_token=token).first_or_404()
+        user.email_verified = True
+        user.email_verification_token = None
+        db.session.commit()
+        flash("Email verified.")
+        return redirect(url_for("login"))
 
     @app.route("/forgot-password", methods=["POST", "GET"])
     def forgot_password() -> Any:
@@ -669,6 +924,11 @@ def register_routes(app: Flask) -> None:
                 flash(f"Message must be {MAX_CHAT_MESSAGE_LENGTH} characters or fewer.")
                 return redirect(url_for("blog"))
 
+            ok, retry_seconds = check_chat_rate_limit()
+            if not ok:
+                flash(f"Slow down a bit before posting again. Try in {retry_seconds} seconds.")
+                return redirect(url_for("blog"))
+
             new_msg = BlogPosts(message, session.get("id"))
             db.session.add(new_msg)
             db.session.commit()
@@ -679,17 +939,24 @@ def register_routes(app: Flask) -> None:
     @app.get("/get_posts")
     @login_required
     def get_posts() -> Any:
-        posts = BlogPosts.query.order_by(BlogPosts.id.desc()).limit(20).all()
+        limit = clamp_int(request.args.get("limit"), 1, CHAT_PAGE_SIZE, CHAT_PAGE_SIZE)
+        before_id = clamp_int(request.args.get("before"), 1, 10**12, None)
+        query = BlogPosts.query.order_by(BlogPosts.id.desc())
+        if before_id:
+            query = query.filter(BlogPosts.id < before_id)
+        posts = query.limit(limit).all()
         user_ids = {post.user_id for post in posts if post.user_id is not None}
         users_by_id = {
             user.id: user
             for user in Users.query.filter(Users.id.in_(user_ids)).all()
         } if user_ids else {}
+        ordered_posts = list(reversed(posts))
 
         return jsonify(
             {
                 "posts": [
                     {
+                        "id": post.id,
                         "message": post.message,
                         "user_id": post.user_id,
                         "user_name": users_by_id.get(post.user_id).name
@@ -697,8 +964,10 @@ def register_routes(app: Flask) -> None:
                         else "Unknown",
                         "created_at": post.time,
                     }
-                    for post in reversed(posts)
-                ]
+                    for post in ordered_posts
+                ],
+                "has_more": len(posts) == limit,
+                "next_before": min((post.id for post in posts), default=None),
             }
         )
 
@@ -762,6 +1031,7 @@ def register_routes(app: Flask) -> None:
 
         annotate_travel_times(filtered_places, user.transportation_mode)
         annotate_restaurant_confidence(filtered_places, filters)
+        sort_restaurants_by_availability(filtered_places)
         return jsonify({"places": filtered_places, "source": source, "message": message})
 
     @app.post("/save_restaurant")
@@ -948,6 +1218,35 @@ def register_routes(app: Flask) -> None:
 
         return jsonify({"ok": True, "mode": mode, "filters": filters})
 
+    @app.post("/save_campus_theme")
+    @login_required
+    def save_campus_theme() -> Any:
+        user = current_user()
+        if user is None:
+            abort(401)
+
+        payload = request.get_json(silent=True) or request.form
+        domain = str(payload.get("campus_theme_domain", "")).strip().lower()
+        if domain and get_school_theme_for_domain(domain) is None:
+            return jsonify({"ok": False, "message": "That campus theme is not available yet."}), 400
+
+        user.campus_theme_domain = domain or None
+        session["needs_campus_prompt"] = False
+        db.session.commit()
+        theme = build_school_theme_payload(user)
+        return jsonify({"ok": True, "theme": theme, "message": "Campus mode updated."})
+
+    @app.post("/notifications/<int:notification_id>/read")
+    @login_required
+    def mark_notification_read(notification_id: int) -> Any:
+        user = current_user()
+        if user is None:
+            abort(401)
+        notification = UserNotification.query.filter_by(id=notification_id, user_id=user.id).first_or_404()
+        notification.is_read = True
+        db.session.commit()
+        return redirect(notification.link_url or url_for("profile"))
+
     @app.post("/follow/<int:user_id>")
     @login_required
     def follow_user(user_id: int) -> Any:
@@ -979,9 +1278,28 @@ def register_routes(app: Flask) -> None:
             db.session.add(UserFollow(follower_id=viewer.id, following_id=user_id, status="approved"))
         else:
             reciprocal.status = "approved"
+        create_notification(
+            user_id=user_id,
+            actor_user_id=viewer.id,
+            kind="follow_accepted",
+            message=f"{viewer.name} accepted your follow request.",
+            link_url=url_for("public_user_handle_profile", handle=public_handle_for_user(viewer)),
+        )
         db.session.commit()
         flash("Friend approved.")
-        return redirect(url_for("profile"))
+        return redirect(safe_redirect_target(request.form.get("next")) or url_for("friend_requests"))
+
+    @app.post("/follow/<int:user_id>/decline")
+    @login_required
+    def decline_follow_user(user_id: int) -> Any:
+        viewer = current_user()
+        if viewer is None:
+            abort(401)
+        follow = UserFollow.query.filter_by(follower_id=user_id, following_id=viewer.id, status="pending").first_or_404()
+        db.session.delete(follow)
+        db.session.commit()
+        flash("Follow request declined.")
+        return redirect(safe_redirect_target(request.form.get("next")) or url_for("friend_requests"))
 
     @app.post("/save_filters")
     def save_filters() -> Any:
@@ -1177,15 +1495,332 @@ def is_password_hash(value: str | None) -> bool:
     return value.startswith(("pbkdf2:", "scrypt:"))
 
 
+def is_valid_email(email: str) -> bool:
+    return bool(EMAIL_RE.match(email))
+
+
+def issue_email_verification(user: Users) -> None:
+    user.email_verified = False
+    user.email_verification_token = secrets.token_urlsafe(32)
+    user.email_verification_sent_at = datetime.now(timezone.utc).isoformat()
+
+
+def clamp_int(value: Any, minimum: int, maximum: int, default: int | None) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return min(max(parsed, minimum), maximum)
+
+
+def check_chat_rate_limit() -> tuple[bool, int]:
+    now = datetime.now(timezone.utc)
+    raw_events = session.get("chat_post_times", [])
+    events: list[datetime] = []
+    event_values = raw_events if isinstance(raw_events, list) else []
+    for value in event_values:
+        try:
+            event_time = datetime.fromisoformat(str(value))
+        except ValueError:
+            continue
+        if event_time.tzinfo is None:
+            event_time = event_time.replace(tzinfo=timezone.utc)
+        if now - event_time < timedelta(seconds=CHAT_RATE_LIMIT_WINDOW_SECONDS):
+            events.append(event_time)
+
+    if len(events) >= CHAT_RATE_LIMIT_COUNT:
+        oldest = min(events)
+        retry_seconds = CHAT_RATE_LIMIT_WINDOW_SECONDS - int((now - oldest).total_seconds())
+        return False, max(retry_seconds, 1)
+
+    events.append(now)
+    session["chat_post_times"] = [event.isoformat() for event in events]
+    return True, 0
+
+
 def default_name_from_email(email: str) -> str:
     name = email.split("@", 1)[0].replace(".", " ").replace("_", " ").strip()
     return (name.title() or "New User")[:MAX_NAME_LENGTH]
 
 
+def parse_profile_stat_visibility(value: Any) -> dict[str, bool]:
+    visibility = dict(DEFAULT_PROFILE_STAT_VISIBILITY)
+    try:
+        parsed = json.loads(value or "{}")
+    except (TypeError, json.JSONDecodeError):
+        parsed = {}
+    if isinstance(parsed, dict):
+        for key in DEFAULT_PROFILE_STAT_VISIBILITY:
+            if key in parsed:
+                visibility[key] = bool(parsed[key])
+    return visibility
+
+
+def parse_profile_stat_enabled(value: Any) -> dict[str, bool]:
+    enabled = dict(DEFAULT_PROFILE_STAT_ENABLED)
+    try:
+        parsed = json.loads(value or "{}")
+    except (TypeError, json.JSONDecodeError):
+        parsed = {}
+    if isinstance(parsed, dict):
+        for key in DEFAULT_PROFILE_STAT_ENABLED:
+            if key in parsed:
+                enabled[key] = bool(parsed[key])
+    return enabled
+
+
+def parse_profile_order(value: Any, valid_keys: set[str]) -> list[str]:
+    try:
+        parsed = json.loads(value or "[]")
+    except (TypeError, json.JSONDecodeError):
+        parsed = []
+    if not isinstance(parsed, list):
+        return []
+
+    order: list[str] = []
+    seen: set[str] = set()
+    for item in parsed:
+        key = str(item).strip()
+        if key in valid_keys and key not in seen:
+            order.append(key)
+            seen.add(key)
+    return order
+
+
+def ordered_items(items: list[dict[str, Any]], order: list[str]) -> list[dict[str, Any]]:
+    positions = {key: index for index, key in enumerate(order)}
+    return sorted(
+        enumerate(items),
+        key=lambda pair: (positions.get(str(pair[1].get("key")), len(positions) + pair[0])),
+    )
+
+
+def profile_stat_visibility_for_user(user: Users) -> dict[str, bool]:
+    return parse_profile_stat_visibility(getattr(user, "profile_stat_visibility_json", None))
+
+
+def profile_stat_enabled_for_user(user: Users) -> dict[str, bool]:
+    return parse_profile_stat_enabled(getattr(user, "profile_stat_enabled_json", None))
+
+
+def save_profile_stat_visibility(user: Users, visibility: dict[str, bool]) -> None:
+    cleaned = {
+        key: bool(visibility.get(key, DEFAULT_PROFILE_STAT_VISIBILITY[key]))
+        for key in DEFAULT_PROFILE_STAT_VISIBILITY
+    }
+    user.profile_stat_visibility_json = json.dumps(cleaned)
+
+
+def save_profile_stat_enabled(user: Users, enabled: dict[str, bool]) -> None:
+    cleaned = {
+        key: bool(enabled.get(key, DEFAULT_PROFILE_STAT_ENABLED[key]))
+        for key in DEFAULT_PROFILE_STAT_ENABLED
+    }
+    user.profile_stat_enabled_json = json.dumps(cleaned)
+
+
+def format_join_date(value: str | None) -> str:
+    if not value:
+        return "New"
+    try:
+        joined_at = datetime.fromisoformat(value)
+    except ValueError:
+        return "New"
+    return joined_at.strftime("%b %Y")
+
+
+def build_profile_stats(user: Users, include_hidden: bool = False) -> list[dict[str, Any]]:
+    visibility = profile_stat_visibility_for_user(user)
+    enabled = profile_stat_enabled_for_user(user)
+    food_preferences = user.get_interest_list("food_preferences_json")
+    allergen_interests = user.get_interest_list("allergen_interests_json")
+    hobby_interests = user.get_interest_list("hobby_interests_json")
+    connection_rows = UserFollow.query.filter(
+        ((UserFollow.follower_id == user.id) | (UserFollow.following_id == user.id)),
+        UserFollow.status == "approved",
+    ).all()
+    connection_ids = {
+        row.following_id if row.follower_id == user.id else row.follower_id
+        for row in connection_rows
+    }
+    connections = len(connection_ids)
+    reviews_given = UserRestaurantRating.query.filter_by(user_id=user.id).count()
+    values: dict[str, str | int] = {
+        "saved_picks": len(user.saved_restaurants),
+        "cravings": len(food_preferences),
+        "allergy_signals": len(allergen_interests),
+        "interests": len(hobby_interests),
+        "join_date": format_join_date(getattr(user, "joined_at", None)),
+        "connections": connections,
+        "places_visited": len(user.saved_restaurants),
+        "reviews_given": reviews_given,
+    }
+
+    stats = []
+    for key in (*DEFAULT_PROFILE_STAT_KEYS, *OPTIONAL_PROFILE_STAT_KEYS):
+        visible = visibility.get(key, False)
+        is_enabled = enabled.get(key, key in DEFAULT_PROFILE_STAT_KEYS)
+        is_default = key in DEFAULT_PROFILE_STAT_KEYS
+        if (include_hidden and is_enabled) or visible:
+            stats.append(
+                {
+                    "key": key,
+                    "label": PROFILE_STAT_LABELS[key],
+                    "value": values[key],
+                    "visible": visible,
+                    "enabled": is_enabled,
+                    "is_default": is_default,
+                }
+            )
+    ordered = ordered_items(
+        stats,
+        parse_profile_order(getattr(user, "profile_stat_order_json", None), set(DEFAULT_PROFILE_STAT_VISIBILITY)),
+    )
+    return [item for _, item in ordered]
+
+
+def badge_key_for_label(label: str) -> str:
+    return "badge-" + re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
+
+
+def profile_badge_visibility_for_user(user: Users, badge_keys: set[str]) -> dict[str, bool]:
+    visibility = {key: True for key in badge_keys}
+    try:
+        parsed = json.loads(getattr(user, "profile_badge_visibility_json", None) or "{}")
+    except (TypeError, json.JSONDecodeError):
+        parsed = {}
+    if isinstance(parsed, dict):
+        for key in badge_keys:
+            if key in parsed:
+                visibility[key] = bool(parsed[key])
+    return visibility
+
+
+def build_profile_badges(user: Users, include_hidden: bool = False) -> list[dict[str, Any]]:
+    raw_badges: list[dict[str, Any]] = []
+    if user.pronouns:
+        raw_badges.append({"key": "pronouns", "label": user.pronouns, "description": "Profile pronouns"})
+
+    favorite_cuisine = favorite_cuisine_for_user(user)
+    if favorite_cuisine:
+        raw_badges.append({
+            "key": "favorite-cuisine",
+            "label": f"Favorite: {favorite_cuisine}",
+            "description": "Favorite cuisine from profile preferences",
+        })
+
+    for badge in build_user_badges(user):
+        raw_badges.append({
+            "key": badge_key_for_label(badge),
+            "label": badge,
+            "description": BADGE_DESCRIPTIONS.get(badge, ""),
+        })
+
+    badge_keys = {badge["key"] for badge in raw_badges}
+    visibility = profile_badge_visibility_for_user(user, badge_keys)
+    badges = [
+        badge | {"visible": visibility.get(badge["key"], True)}
+        for badge in raw_badges
+        if include_hidden or visibility.get(badge["key"], True)
+    ]
+    ordered = ordered_items(
+        badges,
+        parse_profile_order(getattr(user, "profile_badge_order_json", None), badge_keys),
+    )
+    return [item for _, item in ordered]
+
+
+def default_username_from_email(email: str) -> str:
+    return normalize_user_handle(email.split("@", 1)[0]) or "user"
+
+
+def normalize_user_handle(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if text.startswith("@"):
+        text = text[1:]
+    handle = re.sub(r"[^a-z0-9_]+", "-", text).strip("-_")
+    return handle[:MAX_HANDLE_LENGTH]
+
+
+def is_public_username_available(username: str, current_user_id: int | None = None) -> bool:
+    existing = Users.query.filter_by(username=username).first()
+    return existing is None or existing.id == current_user_id
+
+
+def unique_public_username(seed: Any, current_user_id: int | None = None) -> str:
+    base = normalize_user_handle(seed) or "user"
+    if base.isdigit():
+        base = f"user-{base}"
+    if len(base) < MIN_HANDLE_LENGTH:
+        base = f"{base}user"[:MAX_HANDLE_LENGTH]
+
+    if is_public_username_available(base, current_user_id):
+        return base
+
+    for suffix in range(2, 10000):
+        suffix_text = f"-{suffix}"
+        candidate = f"{base[:MAX_HANDLE_LENGTH - len(suffix_text)]}{suffix_text}"
+        if is_public_username_available(candidate, current_user_id):
+            return candidate
+
+    return f"user-{secrets.token_hex(4)}"
+
+
+def public_handle_for_user(user: Users) -> str:
+    handle = normalize_user_handle(getattr(user, "username", None))
+    return handle or f"user-{user.id}"
+
+
+def header_account_label(user: Users | None) -> str:
+    if user is None:
+        return "Settings"
+    if user.name and user.name.strip():
+        return user.name.strip()
+    return f"@{public_handle_for_user(user)}"
+
+
+def safe_redirect_target(value: str | None) -> str | None:
+    if not value:
+        return None
+    if value.startswith("/") and not value.startswith("//"):
+        return value
+    return None
+
+
+def find_user_by_public_handle_or_404(handle: str) -> Users:
+    normalized_handle = normalize_user_handle(handle)
+    if not normalized_handle:
+        abort(404)
+
+    user = Users.query.filter_by(username=normalized_handle).first()
+    if user is not None:
+        return user
+
+    abort(404)
+
+
 def build_profile_template_context(user: Users, is_public_profile: bool = False) -> dict[str, Any]:
+    profile_handle = public_handle_for_user(user)
+    profile_completion = build_profile_completion(user)
+    profile_stats = build_profile_stats(user, include_hidden=not is_public_profile)
+    profile_stat_enabled = profile_stat_enabled_for_user(user)
     return {
         "u": user,
+        "profile_handle": profile_handle,
+        "profile_handle_label": f"(@{profile_handle})",
+        "public_handle_for_user": public_handle_for_user,
         "is_public_profile": is_public_profile,
+        "profile_completion": profile_completion,
+        "profile_steps": profile_completion["completed_count"],
+        "profile_stats": profile_stats,
+        "available_profile_stats": [
+            {
+                "key": key,
+                "label": PROFILE_STAT_LABELS[key],
+            }
+            for key in OPTIONAL_PROFILE_STAT_KEYS
+            if not profile_stat_enabled.get(key, False)
+        ],
         "saved_restaurant_count": len(user.saved_restaurants),
         "allergen_interests": user.get_interest_list("allergen_interests_json"),
         "food_preferences": user.get_interest_list("food_preferences_json"),
@@ -1197,12 +1832,93 @@ def build_profile_template_context(user: Users, is_public_profile: bool = False)
         "selected_campus_theme_domain": str(user.campus_theme_domain or ""),
         "detected_school_theme": get_school_theme_for_email(user.email),
         "favorite_cuisine": favorite_cuisine_for_user(user),
-        "profile_badges": build_user_badges(user),
+        "profile_badges": build_profile_badges(user, include_hidden=not is_public_profile),
+        "badge_descriptions": BADGE_DESCRIPTIONS,
         "foodies_you_might_know": suggest_school_users(user) if not is_public_profile else [],
         "profile_activity": build_profile_activity(user),
         "follow_status": follow_status_for_viewer(user) if is_public_profile else None,
+        "incoming_follow_request": incoming_follow_request_from_profile(user) if is_public_profile else None,
         "pending_follow_requests": pending_follow_requests(user) if not is_public_profile else [],
     }
+
+
+def profile_picture_is_custom(user: Users | None) -> bool:
+    if user is None:
+        return False
+    value = str(getattr(user, "pfp_file_path", "") or "")
+    return bool(value and value != "transparentnewdefaultpicture.png")
+
+
+def build_profile_completion(user: Users) -> dict[str, Any]:
+    interest_count = (
+        len(user.get_interest_list("allergen_interests_json"))
+        + len(user.get_interest_list("food_preferences_json"))
+        + len(user.get_interest_list("hobby_interests_json"))
+    )
+    steps = [
+        {
+            "key": "bio",
+            "label": "Bio",
+            "href": "#about-title",
+            "complete": bool(user.bio and user.bio != "this is a placeholder!" and user.bio.strip()),
+        },
+        {
+            "key": "photo",
+            "label": "Photo",
+            "href": "#profile-image",
+            "complete": profile_picture_is_custom(user),
+        },
+        {
+            "key": "pronouns",
+            "label": "Pronouns",
+            "href": "#profile-pronouns",
+            "complete": bool(getattr(user, "pronouns", None)),
+        },
+        {
+            "key": "interests",
+            "label": "Interests",
+            "href": "#interests-title",
+            "complete": interest_count > 0,
+        },
+    ]
+    completed = [step for step in steps if step["complete"]]
+    missing = [step for step in steps if not step["complete"]]
+    return {
+        "steps": steps,
+        "completed_count": len(completed),
+        "total_count": len(steps),
+        "percent": int(round(len(completed) / len(steps) * 100)),
+        "missing": missing,
+    }
+
+
+def unread_notifications_for_user(user: Users | None) -> list[UserNotification]:
+    if user is None:
+        return []
+    return (
+        UserNotification.query.filter_by(user_id=user.id, is_read=False)
+        .order_by(UserNotification.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
+
+def create_notification(
+    user_id: int,
+    kind: str,
+    message: str,
+    actor_user_id: int | None = None,
+    link_url: str | None = None,
+) -> None:
+    db.session.add(
+        UserNotification(
+            user_id=user_id,
+            actor_user_id=actor_user_id,
+            kind=kind,
+            message=message,
+            link_url=link_url,
+        )
+    )
 
 
 def touch_user_activity(user: Users) -> None:
@@ -1221,17 +1937,163 @@ def favorite_cuisine_for_user(user: Users) -> str | None:
     return preferences[0] if preferences else None
 
 
+def configured_founder_user_ids() -> set[int]:
+    raw_value = current_app.config.get("BITESWIPE_FOUNDER_USER_IDS", [1])
+    if isinstance(raw_value, str):
+        raw_items = raw_value.split(",")
+    elif isinstance(raw_value, (list, tuple, set)):
+        raw_items = raw_value
+    else:
+        raw_items = [raw_value]
+
+    user_ids: set[int] = set()
+    for item in raw_items:
+        try:
+            user_id = int(str(item).strip())
+        except (TypeError, ValueError):
+            continue
+        if user_id > 0:
+            user_ids.add(user_id)
+    return user_ids
+
+
+def configured_founder_handles() -> set[str]:
+    raw_value = current_app.config.get("BITESWIPE_FOUNDER_HANDLES", [])
+    if isinstance(raw_value, str):
+        raw_items = raw_value.split(",")
+    elif isinstance(raw_value, (list, tuple, set)):
+        raw_items = raw_value
+    else:
+        raw_items = [raw_value]
+    return {handle for item in raw_items if (handle := normalize_user_handle(item))}
+
+
+def is_biteswipe_founder(user: Users) -> bool:
+    return user.id in configured_founder_user_ids() or public_handle_for_user(user) in configured_founder_handles()
+
+
+def has_partied_with_biteswipe_founder(user: Users) -> bool:
+    founder_ids = configured_founder_user_ids()
+    founder_handles = configured_founder_handles()
+    if not founder_ids and not founder_handles:
+        return False
+
+    for membership in user.group_swipe_memberships:
+        for member in membership.session.members:
+            if member.user_id == user.id:
+                continue
+            if member.user_id in founder_ids:
+                return True
+            member_user = member.user
+            if member_user is not None and public_handle_for_user(member_user) in founder_handles:
+                return True
+
+    return False
+
+
 def build_user_badges(user: Users) -> list[str]:
     badges = []
     saved_count = len(user.saved_restaurants)
-    if saved_count >= 1:
-        badges.append("First save")
-    if saved_count >= 10:
+
+    # --- Founder / special accounts ---
+    if is_biteswipe_founder(user):
+        badges.append("Co-Founder")
+    if user.id == 2:
+        badges.append("BiteBot")
+
+    # --- Save milestones ---
+    if saved_count >= 25:
+        badges.append("25 saves")
+    elif saved_count >= 10:
         badges.append("10 saves")
+    elif saved_count >= 1:
+        badges.append("First save")
+
+    # --- Food explorer ---
+    saved_cuisines = {
+        r.cuisine.lower()
+        for r in user.saved_restaurants
+        if r.cuisine
+    }
+    if len(saved_cuisines) >= 5:
+        badges.append("World traveler")
+    elif len(saved_cuisines) >= 3:
+        badges.append("Adventurous")
+
+    # --- Allergen / dietary ---
+    allergen_interests = user.get_interest_list("allergen_interests_json")
+    food_preferences = user.get_interest_list("food_preferences_json")
+
+    if allergen_interests:
+        badges.append("Safe eater")
+
+    plant_based_keywords = {"vegan", "vegetarian", "plant based"}
+    if any(p.lower() in plant_based_keywords for p in food_preferences):
+        badges.append("Plant based")
+
+    # --- Activity ---
+    rated_count = UserRestaurantRating.query.filter_by(user_id=user.id).count()
+    if rated_count >= 5:
+        badges.append("Critic")
+
+    if saved_count >= 25:
+        badges.append("Power user")
+
+    if user.last_active_at:
+        try:
+            last_active = datetime.fromisoformat(user.last_active_at)
+            days_since_active = (datetime.now(timezone.utc) - last_active.replace(tzinfo=timezone.utc)).days
+            if days_since_active <= 1:
+                badges.append("On a streak")
+        except ValueError:
+            pass
+
+    # --- Profile completion ---
+    if getattr(user, "pfp_file_path", None):
+        badges.append("Face reveal")
+
+    if getattr(user, "bio", None) and len(user.bio.strip()) > 0:
+        badges.append("Storyteller")
+
+    fully_loaded = all([
+        getattr(user, "pfp_file_path", None),
+        getattr(user, "bio", None),
+        getattr(user, "pronouns", None),
+        food_preferences,
+    ])
+    if fully_loaded:
+        badges.append("Fully loaded")
+
+    # --- Social ---
+    following_count = UserFollow.query.filter_by(
+        follower_id=user.id, status="approved"
+    ).count()
+    follower_count = UserFollow.query.filter_by(
+        following_id=user.id, status="approved"
+    ).count()
+
+    if following_count >= 5:
+        badges.append("Social butterfly")
+    if follower_count >= 5:
+        badges.append("Popular")
+
+    hosted_count = len(user.hosted_group_sessions)
+    group_member_count = GroupSwipeMember.query.filter_by(user_id=user.id).count()
+
+    if hosted_count >= 5 or group_member_count >= 5:
+        badges.append("Squad goals")
+
+    # --- Group host ---
+    if user.hosted_group_sessions:
+        badges.append("'Yo soy fiesta'")
+
+    if has_partied_with_biteswipe_founder(user):
+        badges.append("Founder party")
+
+    # --- Taste setter ---
     if favorite_cuisine_for_user(user):
         badges.append("Taste setter")
-    if user.hosted_group_sessions:
-        badges.append("Group host")
+
     return badges
 
 
@@ -1246,12 +2108,29 @@ def suggest_school_users(user: Users) -> list[Users]:
     domain = user.email.split("@", 1)[1].lower() if "@" in user.email else ""
     if not domain:
         return []
-    return (
+    my_interests = {
+        value.strip().lower()
+        for field_name in ("allergen_interests_json", "food_preferences_json", "hobby_interests_json")
+        for value in user.get_interest_list(field_name)
+        if value.strip()
+    }
+    candidates = (
         Users.query.filter(Users.email.ilike(f"%@{domain}"), Users.id != user.id)
         .order_by(Users.id.desc())
-        .limit(6)
+        .limit(40)
         .all()
     )
+
+    def score(candidate: Users) -> tuple[int, int]:
+        candidate_interests = {
+            value.strip().lower()
+            for field_name in ("allergen_interests_json", "food_preferences_json", "hobby_interests_json")
+            for value in candidate.get_interest_list(field_name)
+            if value.strip()
+        }
+        return (len(my_interests & candidate_interests), candidate.id)
+
+    return sorted(candidates, key=score, reverse=True)[:6]
 
 
 def follow_status_for_viewer(profile_user: Users) -> str | None:
@@ -1262,9 +2141,25 @@ def follow_status_for_viewer(profile_user: Users) -> str | None:
     return follow.status if follow else "none"
 
 
+def incoming_follow_request_from_profile(profile_user: Users) -> UserFollow | None:
+    viewer = current_user()
+    if viewer is None or viewer.id == profile_user.id:
+        return None
+    return UserFollow.query.filter_by(follower_id=profile_user.id, following_id=viewer.id, status="pending").first()
+
+
 def pending_follow_requests(user: Users) -> list[UserFollow]:
     return (
         UserFollow.query.filter_by(following_id=user.id, status="pending")
+        .order_by(UserFollow.created_at.desc())
+        .limit(8)
+        .all()
+    )
+
+
+def outgoing_follow_requests(user: Users) -> list[UserFollow]:
+    return (
+        UserFollow.query.filter_by(follower_id=user.id, status="pending")
         .order_by(UserFollow.created_at.desc())
         .limit(8)
         .all()
@@ -1364,9 +2259,56 @@ def update_user_name(user: Users) -> None:
         flash(f"Name must be between 2 and {MAX_NAME_LENGTH} characters.")
         return
 
+    if "username" in request.form:
+        new_username = normalize_user_handle(request.form.get("username", ""))
+        if not MIN_HANDLE_LENGTH <= len(new_username) <= MAX_HANDLE_LENGTH:
+            flash(f"Username must be between {MIN_HANDLE_LENGTH} and {MAX_HANDLE_LENGTH} characters.")
+            return
+
+        if not is_public_username_available(new_username, user.id):
+            flash(f"@{new_username} is already taken.")
+            return
+
+        user.username = new_username
+
     user.name = new_name
     db.session.commit()
-    flash("Name updated.")
+    flash("Profile name updated.")
+
+
+def update_user_profile_stat(user: Users) -> None:
+    stat_key = request.form.get("stat_key", "").strip()
+    stat_visible = request.form.get("visible", "true").strip().lower() in {"1", "true", "yes", "on"}
+
+    if stat_key not in DEFAULT_PROFILE_STAT_VISIBILITY:
+        flash("Unknown profile stat.")
+        return
+
+    visibility = profile_stat_visibility_for_user(user)
+    enabled = profile_stat_enabled_for_user(user)
+    enabled[stat_key] = True
+    visibility[stat_key] = stat_visible
+    save_profile_stat_enabled(user, enabled)
+    save_profile_stat_visibility(user, visibility)
+    db.session.commit()
+    flash(f"{PROFILE_STAT_LABELS[stat_key].title()} is now {'public' if stat_visible else 'private'}.")
+
+
+def update_user_profile_badge(user: Users) -> None:
+    badge_key = request.form.get("badge_key", "").strip()
+    badge_visible = request.form.get("visible", "true").strip().lower() in {"1", "true", "yes", "on"}
+    badges = build_profile_badges(user, include_hidden=True)
+    badge_keys = {badge["key"] for badge in badges}
+
+    if badge_key not in badge_keys:
+        flash("Unknown profile badge.")
+        return
+
+    visibility = profile_badge_visibility_for_user(user, badge_keys)
+    visibility[badge_key] = badge_visible
+    user.profile_badge_visibility_json = json.dumps(visibility)
+    db.session.commit()
+    flash(f"Badge is now {'public' if badge_visible else 'private'}.")
 
 
 def update_user_pronouns(user: Users) -> None:
@@ -1377,9 +2319,9 @@ def update_user_pronouns(user: Users) -> None:
 
 
 def add_user_food_preference(user: Users) -> None:
-    preference = normalize_interest_label(request.form.get("food_preference", ""))
+    preference, message = validate_quick_interest(request.form.get("food_preference", ""))
     if not preference:
-        flash("Enter a food preference before adding it.")
+        flash(message or "Enter a quick interest before adding it.")
         return
 
     preferences = user.get_interest_list("food_preferences_json")
@@ -1387,7 +2329,7 @@ def add_user_food_preference(user: Users) -> None:
     user.set_interest_list("food_preferences_json", preferences)
     db.session.commit()
     sync_session_filters_from_user(user)
-    flash(f"Added {preference} to your food preferences.")
+    flash(f"Added {preference} to your quick interests.")
 
 
 def add_user_hobby_interest(user: Users) -> None:
@@ -1412,6 +2354,7 @@ def update_user_campus_theme(user: Users) -> None:
         return
 
     user.campus_theme_domain = domain or None
+    session["needs_campus_prompt"] = False
     db.session.commit()
     flash("Campus mode updated.")
 
@@ -1460,6 +2403,8 @@ def sanitize_filters(payload: dict[str, Any]) -> dict[str, Any]:
                 filters[key] = min(max(float(payload[key]), 0), 5)
             except (TypeError, ValueError):
                 filters[key] = default
+        elif key == "foodPreferences":
+            filters[key] = sanitize_quick_interest_values(payload[key])
         elif isinstance(default, list):
             filters[key] = sanitize_interest_values(payload[key])
 
@@ -1471,6 +2416,45 @@ def sanitize_interest_values(values: Any) -> list[str]:
         return []
 
     return [normalize_interest_label(value) for value in values if normalize_interest_label(value)][:30]
+
+
+def sanitize_quick_interest_values(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        quick_interest, _message = validate_quick_interest(value)
+        if not quick_interest:
+            continue
+
+        key = quick_interest.lower()
+        if key in seen:
+            continue
+
+        cleaned.append(quick_interest)
+        seen.add(key)
+
+    return cleaned[:30]
+
+
+def validate_quick_interest(value: Any) -> tuple[str | None, str | None]:
+    text = normalize_interest_label(value)
+    if not text:
+        return None, "Enter a quick interest before adding it."
+
+    if len(text) > MAX_QUICK_INTEREST_LENGTH:
+        return None, f"Quick interests must be {MAX_QUICK_INTEREST_LENGTH} characters or fewer."
+
+    if not QUICK_INTEREST_RE.fullmatch(text):
+        return None, "Quick interests can only use letters, numbers, and spaces."
+
+    compact = re.sub(r"[^a-z0-9]+", "", text.lower())
+    if any(term in compact for term in BLOCKED_QUICK_INTEREST_TERMS):
+        return None, "That quick interest is not allowed."
+
+    return text, None
 
 
 def normalize_interest_label(value: Any) -> str:
@@ -1501,7 +2485,7 @@ def sync_user_interests_from_filters(user: Users, filters: dict[str, Any]) -> No
         for key, config in ALLERGEN_FILTERS.items()
         if filters.get(key)
     ]
-    food_preferences = sanitize_interest_values(filters.get("foodPreferences", []))
+    food_preferences = sanitize_quick_interest_values(filters.get("foodPreferences", []))
     hobby_interests = sanitize_interest_values(filters.get("hobbyInterests", []))
 
     user.set_interest_list("allergen_interests_json", allergen_interests)
@@ -1662,6 +2646,7 @@ def sanitize_group_restaurant_payload(payload: dict[str, Any]) -> dict[str, Any]
         "review_count",
         "website",
         "is_open",
+        "next_open_time",
     }
     return {key: payload.get(key) for key in allowed_keys if key in payload}
 
@@ -1803,7 +2788,7 @@ def post_json(
 
 def build_google_restaurant_query(filters: dict[str, Any]) -> str:
     terms = ["restaurant"]
-    food_preferences = sanitize_interest_values(filters.get("foodPreferences", []))
+    food_preferences = sanitize_quick_interest_values(filters.get("foodPreferences", []))
 
     if food_preferences:
         terms.insert(0, food_preferences[0])
@@ -1826,6 +2811,26 @@ def apply_distance_filter(places: list[dict[str, Any]], filters: dict[str, Any])
     return [place for place in places if restaurant_matches_distance(place, filters)]
 
 
+def sort_restaurants_by_availability(places: list[dict[str, Any]]) -> None:
+    def sort_key(place: dict[str, Any]) -> tuple[int, float, str]:
+        is_open = place.get("is_open")
+        distance = normalize_optional_float(place.get("distance_meters"))
+        if is_open is True:
+            availability_rank = 0
+        elif is_open is False:
+            availability_rank = 2
+        else:
+            availability_rank = 1
+
+        return (
+            availability_rank,
+            distance if distance is not None else float("inf"),
+            str(place.get("name") or ""),
+        )
+
+    places.sort(key=sort_key)
+
+
 def restaurant_matches_filters(place: dict[str, Any], filters: dict[str, Any]) -> bool:
     if not restaurant_matches_distance(place, filters):
         return False
@@ -1844,7 +2849,7 @@ def restaurant_matches_filters(place: dict[str, Any], filters: dict[str, Any]) -
     if not restaurant_matches_cuisine_exclusions(place, sanitize_interest_values(filters.get("cuisineExclusions", []))):
         return False
 
-    if not restaurant_matches_food_preferences(place, sanitize_interest_values(filters.get("foodPreferences", []))):
+    if not restaurant_matches_food_preferences(place, sanitize_quick_interest_values(filters.get("foodPreferences", []))):
         return False
 
     if filters.get("openNow") and place.get("is_open") is False:
@@ -1978,7 +2983,7 @@ def build_bite_confidence(place: dict[str, Any], filters: dict[str, Any]) -> dic
         score += 10
         reasons.append("price match")
 
-    food_preferences = sanitize_interest_values(filters.get("foodPreferences", []))
+    food_preferences = sanitize_quick_interest_values(filters.get("foodPreferences", []))
     if food_preferences and restaurant_matches_food_preferences(place, food_preferences):
         score += 12
         reasons.append("craving match")
@@ -2296,7 +3301,7 @@ def merge_osm_places_with_google_enrichment(
             merged_place["photo_source"] = google_place.get("photo_source") or "google_places"
             merged_place["photo_category"] = google_place.get("photo_category") or "google_places"
 
-        for key in ("price_level", "price_text", "rating", "review_count", "website", "is_open", "opening_hours_text"):
+        for key in ("price_level", "price_text", "rating", "review_count", "website", "is_open", "next_open_time", "opening_hours_text"):
             if google_place.get(key) is not None:
                 merged_place[key] = google_place[key]
 
@@ -2530,6 +3535,7 @@ def format_google_place(place: dict[str, Any], api_key: str) -> dict[str, Any]:
         "review_count": place.get("userRatingCount"),
         "website": place.get("websiteUri") or place.get("googleMapsUri"),
         "is_open": opening_hours.get("openNow"),
+        "next_open_time": opening_hours.get("nextOpenTime"),
         "opening_hours_text": "; ".join(weekday_descriptions[:2]) if weekday_descriptions else None,
         "distance_meters": None,
         "walking_minutes": None,

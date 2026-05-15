@@ -30,6 +30,7 @@
           <p>Loading recent BiteSwipe messages…</p>
         </article>
       </div>
+      <button type="button" class="chat-load-more" id="loadOlderMessagesButton" hidden>Load older messages</button>
     </section>
 
     <aside class="chat-compose-panel" aria-labelledby="compose-title">
@@ -45,6 +46,7 @@
       <form method="POST" class="chat-form">
         <input type="hidden" name="action" value="send">
         <label for="message">Message</label>
+        <small class="profile-field-limit">500 characters max</small>
         <textarea
           id="message"
           name="message"
@@ -74,7 +76,9 @@ const chatCount = document.getElementById("chatCount");
 const chatRefreshNote = document.getElementById("chatRefreshNote");
 const messageInput = document.getElementById("message");
 const messageCount = document.getElementById("messageCount");
+const loadOlderButton = document.getElementById("loadOlderMessagesButton");
 const chatDraftKey = "biteswipe.chatDraft.{{ session.get('id', 'guest') }}";
+let oldestLoadedPostId = null;
 
 function formatPostTime(value) {
   if (!value) return "just now";
@@ -88,10 +92,12 @@ function formatPostTime(value) {
   }).format(date);
 }
 
-function renderPosts(posts) {
-  postsDiv.innerHTML = "";
+function renderPosts(posts, mode = "replace") {
+  if (mode === "replace") {
+    postsDiv.innerHTML = "";
+  }
 
-  if (!posts.length) {
+  if (!posts.length && mode === "replace") {
     const empty = document.createElement("article");
     empty.className = "chat-message-card chat-message-placeholder";
     empty.innerHTML = "<p>No messages yet. Start the first food debate.</p>";
@@ -117,22 +123,50 @@ function renderPosts(posts) {
 
     meta.append(author, time);
     card.append(meta, body);
-    postsDiv.appendChild(card);
+    if (mode === "prepend") {
+      postsDiv.prepend(card);
+    } else {
+      postsDiv.appendChild(card);
+    }
   });
 }
 
+function applyPostPage(data, mode = "replace") {
+  const posts = Array.isArray(data.posts) ? data.posts : [];
+  if (mode === "replace") {
+    chatCount.textContent = String(posts.length);
+    oldestLoadedPostId = posts.length ? Math.min(...posts.map((post) => post.id).filter(Boolean)) : null;
+  } else if (posts.length) {
+    const currentCount = Number(chatCount.textContent || "0");
+    chatCount.textContent = String(currentCount + posts.length);
+    oldestLoadedPostId = Math.min(oldestLoadedPostId || posts[0].id, ...posts.map((post) => post.id).filter(Boolean));
+  }
+  if (loadOlderButton) {
+    loadOlderButton.hidden = !data.has_more || !oldestLoadedPostId;
+  }
+  renderPosts(posts, mode);
+}
+
 function loadPosts() {
-  fetch("/get_posts")
+  fetch("/get_posts?limit=20")
     .then((response) => response.json())
     .then((data) => {
-      const posts = Array.isArray(data.posts) ? data.posts : [];
-      chatCount.textContent = String(posts.length);
       chatRefreshNote.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-      renderPosts(posts);
+      applyPostPage(data, "replace");
     })
     .catch(() => {
       postsDiv.innerHTML = '<article class="chat-message-card chat-message-placeholder"><p>Unable to load messages right now.</p></article>';
       chatRefreshNote.textContent = "Connection issue";
+    });
+}
+
+function loadOlderPosts() {
+  if (!oldestLoadedPostId) return;
+  fetch(`/get_posts?limit=20&before=${oldestLoadedPostId}`)
+    .then((response) => response.json())
+    .then((data) => applyPostPage(data, "prepend"))
+    .catch(() => {
+      chatRefreshNote.textContent = "Could not load older messages";
     });
 }
 
@@ -155,6 +189,7 @@ document.querySelector(".chat-form")?.addEventListener("submit", () => {
 });
 
 document.getElementById("refreshChatButton")?.addEventListener("click", loadPosts);
+loadOlderButton?.addEventListener("click", loadOlderPosts);
 if (messageInput) {
   messageInput.value = localStorage.getItem(chatDraftKey) || messageInput.value;
   messageCount.textContent = String(messageInput.value.length);

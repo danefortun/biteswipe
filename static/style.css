@@ -369,6 +369,31 @@ body > header.app-header {
   color: #7f1d1d;
 }
 
+.header-notification-list {
+  display: grid;
+  gap: 6px;
+  padding: 6px 0;
+}
+
+.header-notification-list form {
+  margin: 0;
+}
+
+.header-notification-list button {
+  width: 100%;
+  border: 1px solid var(--surface-border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+  color: var(--surface-text-color);
+  text-align: left;
+}
+
+.header-notification-list button span {
+  display: block;
+  color: var(--surface-muted-color);
+  font-size: 12px;
+}
+
 body.profile-page > header.app-header {
   position: static;
 }
@@ -1080,6 +1105,7 @@ span.restaurant-website-link {
 }
 
 .profile-avatar-frame {
+  position: relative;
   width: clamp(154px, 18vw, 220px);
   height: clamp(154px, 18vw, 220px);
   padding: 10px;
@@ -1087,6 +1113,10 @@ span.restaurant-website-link {
   border-radius: 50%;
   background: linear-gradient(145deg, #e9fff9, #ffffff);
   box-shadow: 0 18px 44px rgba(16, 185, 129, 0.16);
+}
+
+.profile-avatar-frame.has-pending-upload {
+  margin-bottom: 46px;
 }
 
 .profile-pic {
@@ -1121,8 +1151,63 @@ span.restaurant-website-link {
   display: none;
 }
 
+.profile-avatar-upload-form {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.profile-hero.is-editing .profile-avatar-upload-form {
+  display: block;
+}
+
+.profile-avatar-edit {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 52%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-color) 86%, transparent);
+  color: var(--accent-color);
+  font-size: 20px;
+  font-weight: 900;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.12);
+}
+
+.profile-avatar-upload-form input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.profile-avatar-upload-form button {
+  display: none;
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  z-index: 2;
+  min-width: 118px;
+  justify-content: center;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.profile-hero.is-editing .profile-avatar-upload-form button:not([hidden]) {
+  display: inline-flex;
+}
+
 .file-upload-label,
 .upload-form button,
+.profile-avatar-upload-form button,
 .profile-small-button,
 .profile-inline-form button,
 .bio-form button,
@@ -1155,6 +1240,7 @@ span.restaurant-website-link {
 }
 
 .upload-form button,
+.profile-avatar-upload-form button,
 .profile-small-button,
 .profile-inline-form button,
 .bio-form button,
@@ -1257,10 +1343,52 @@ span.restaurant-website-link {
   flex: 0 0 auto;
 }
 
-.name-display h1 {
+.profile-avatar-panel .name-display {
+  width: min(340px, 100%);
+  justify-content: center;
+  text-align: center;
+}
+
+.profile-avatar-panel .profile-name-stack {
+  justify-content: center;
+}
+
+.profile-avatar-panel .name-display h1,
+.profile-avatar-panel .profile-name-stack h1 {
+  font-size: clamp(30px, 4vw, 48px);
+}
+
+.profile-avatar-panel .profile-inline-form {
+  width: min(320px, 100%);
+  justify-content: center;
+}
+
+.profile-avatar-panel .profile-inline-form input {
+  width: 100%;
+  min-width: 0;
+  font-size: 16px;
+}
+
+.profile-name-stack {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.name-display h1,
+.profile-name-stack h1 {
   margin: 0;
   font-size: clamp(42px, 6vw, 72px);
   line-height: 0.95;
+  overflow-wrap: anywhere;
+}
+
+.profile-handle {
+  color: var(--surface-muted-color);
+  font-size: clamp(20px, 2vw, 28px);
+  font-weight: 800;
+  line-height: 1;
   overflow-wrap: anywhere;
 }
 
@@ -1310,13 +1438,34 @@ span.restaurant-website-link {
   margin-top: 24px;
 }
 
-.profile-stats div {
+.profile-stats .profile-stat-card {
+  position: relative;
   padding: 14px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface-color) 88%, transparent);
   color: var(--surface-text-color);
   backdrop-filter: blur(10px);
+}
+
+.profile-stat-card.is-private {
+  display: none;
+  border-style: dashed;
+  opacity: 0.72;
+}
+
+.profile-hero.is-editing .profile-stat-card.is-private {
+  display: block;
+}
+
+.profile-badge-tip.is-private {
+  display: none;
+  border-style: dashed;
+  opacity: 0.72;
+}
+
+.profile-hero.is-editing .profile-badge-tip.is-private {
+  display: inline-flex;
 }
 
 .profile-stats strong {
@@ -1686,6 +1835,188 @@ span.restaurant-website-link {
 .dropup:hover .dropup-content,
 .dropup.is-open .dropup-content {
   display: block;
+}
+
+.profile-stat-visibility-form {
+  display: none;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  margin: 0;
+}
+
+.profile-hero.is-editing .profile-stat-visibility-form {
+  display: block;
+}
+
+.profile-badge-visibility-form {
+  display: none;
+  margin: 0 0 0 4px;
+}
+
+.profile-hero.is-editing .profile-badge-visibility-form {
+  display: inline-flex;
+}
+
+.profile-badge-visibility-form .stat-visibility-toggle {
+  width: 24px;
+  height: 24px;
+}
+
+.profile-sortable-item.is-dragging {
+  opacity: 0.45;
+}
+
+.profile-hero.is-editing .profile-sortable-item {
+  cursor: grab;
+}
+
+.profile-hero.is-editing .profile-sortable-item:active {
+  cursor: grabbing;
+}
+
+.profile-unsaved-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(12, 20, 18, 0.48);
+}
+
+.profile-unsaved-modal[hidden] {
+  display: none;
+}
+
+.profile-unsaved-dialog {
+  width: min(420px, 100%);
+  padding: 22px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+  color: var(--surface-text-color);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+.profile-unsaved-dialog h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.profile-unsaved-dialog p {
+  margin: 0 0 10px;
+  color: var(--surface-muted-color);
+}
+
+.profile-unsaved-note {
+  font-weight: 800;
+}
+
+.profile-unsaved-dialog ul {
+  margin: 0 0 18px;
+  padding-left: 20px;
+}
+
+.profile-unsaved-dialog li {
+  margin: 6px 0;
+}
+
+.profile-unsaved-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.profile-unsaved-actions button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--accent-color);
+  border-radius: 8px;
+  background: var(--accent-soft-color);
+  color: var(--accent-color);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.profile-unsaved-actions button:last-child {
+  background: var(--accent-color);
+  color: #ffffff;
+}
+
+.stat-visibility-toggle {
+  position: relative;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-color) 88%, transparent);
+  color: var(--surface-text-color);
+  cursor: pointer;
+}
+
+.stat-eye-icon {
+  position: relative;
+  display: block;
+  width: 16px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-radius: 999px 999px 999px 999px / 720px 720px 720px 720px;
+}
+
+.stat-eye-icon::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+
+.stat-visibility-toggle.is-hidden-stat::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: rotate(-40deg);
+}
+
+.profile-add-stat {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.profile-hero.is-editing .profile-add-stat {
+  display: flex;
+}
+
+.profile-add-stat span {
+  color: var(--surface-muted-color);
+  font-weight: 900;
+}
+
+.profile-add-stat form {
+  margin: 0;
+}
+
+.profile-add-stat button {
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--surface-color);
+  color: var(--surface-text-color);
+  font-weight: 900;
 }
 
 .filter-section {
@@ -2392,7 +2723,7 @@ span.restaurant-website-link {
   margin: 8px 0 12px;
 }
 
-.profile-badge-row span,
+.profile-badge-row > .profile-badge-tip,
 .profile-completion-links a,
 .profile-completion-links button {
   min-height: 30px;
@@ -2407,6 +2738,14 @@ span.restaurant-website-link {
   font-size: 12px;
   font-weight: 800;
   text-decoration: none;
+}
+
+.profile-badge-row > .profile-badge-tip.is-private {
+  display: none;
+}
+
+.profile-hero.is-editing .profile-badge-row > .profile-badge-tip.is-private {
+  display: inline-flex;
 }
 
 .profile-completion-links {
@@ -3965,6 +4304,20 @@ body.deck-focus-mode .card-stage {
   font-weight: 900;
 }
 
+.chat-load-more {
+  width: 100%;
+  margin-top: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+  color: var(--surface-text-color);
+  font-weight: 900;
+}
+
+.chat-load-more[hidden] {
+  display: none;
+}
+
 .chat-scope-note {
   margin: 8px 0 14px;
   padding: 10px 12px;
@@ -4210,6 +4563,92 @@ body.deck-focus-mode .card-stage {
   background: linear-gradient(90deg, var(--accent-color), color-mix(in srgb, var(--accent-color) 55%, #ffffff));
 }
 
+.profile-completion-nudge,
+.profile-field-limit {
+  margin: 8px 0 0;
+  color: var(--surface-muted-color);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.profile-field-limit {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.settings-shell {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 32px 0 96px;
+}
+
+.settings-hero {
+  margin-bottom: 18px;
+}
+
+.settings-hero h1 {
+  margin: 0;
+  font-size: clamp(34px, 6vw, 64px);
+  line-height: 0.98;
+}
+
+.settings-hero p {
+  color: var(--surface-muted-color);
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.settings-actions,
+.profile-request-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.settings-actions a,
+.profile-request-actions a,
+.profile-small-link {
+  color: var(--accent-color);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.profile-request-card,
+.request-card {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--surface-border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-color) 88%, transparent);
+}
+
+.profile-request-card strong,
+.request-card strong,
+.request-card span {
+  display: block;
+}
+
+.request-list {
+  display: grid;
+  gap: 10px;
+}
+
+.request-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.profile-request-actions form {
+  margin: 0;
+}
+
 .profile-action-strip {
   display: flex;
   flex-wrap: wrap;
@@ -4385,6 +4824,15 @@ body.deck-focus-mode .card-stage {
     flex-basis: 100%;
     grid-template-columns: 1fr;
     margin-left: 0;
+  }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .request-card {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 
@@ -4643,6 +5091,83 @@ body.deck-focus-mode .card-stage {
   color: #ffffff;
 }
 
+.quick-interest-form {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.quick-interest-form label {
+  color: var(--surface-text-color);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.quick-interest-form > div:first-of-type {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.quick-interest-form input[type="text"] {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+  color: var(--surface-text-color);
+  font: inherit;
+}
+
+.quick-interest-form button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--accent-color);
+  border-radius: 8px;
+  background: var(--accent-soft-color);
+  color: var(--accent-color);
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.quick-interest-form small {
+  color: var(--surface-muted-color);
+  font-size: 12px;
+}
+
+.quick-interest-error {
+  min-height: 16px;
+  color: #b91c1c;
+  font-weight: 900;
+}
+
+.custom-quick-interest-list {
+  padding-top: 2px;
+}
+
+.biteswipe-mini-about {
+  grid-column: 1 / -1;
+  width: min(820px, 100%);
+  margin: 100px auto 0;
+  padding: 18px 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  color: var(--surface-muted-color);
+  text-align: left;
+}
+
+.biteswipe-mini-about h2 {
+  margin: 4px 0 10px;
+  color: var(--surface-text-color);
+  font-size: clamp(20px, 3vw, 28px);
+}
+
+.biteswipe-mini-about p {
+  max-width: 720px;
+  margin: 8px 0 0;
+  line-height: 1.55;
+}
+
 .saved-plan-panel {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(210px, auto);
@@ -4778,6 +5303,7 @@ body.deck-focus-mode .card-stage {
   min-height: calc(100vh - 210px);
   margin: clamp(12px, 4vh, 42px) auto calc(112px + env(safe-area-inset-bottom));
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
   justify-content: center;
   gap: 0;
@@ -5239,4 +5765,44 @@ body[data-route="home"][data-school-theme] .cards-page-shell .card-stage > * {
   .deck-secondary-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* ============ BADGE TOOLTIPS ============ */
+.profile-badge-row {
+  overflow: visible;
+}
+
+.profile-badge-tip {
+  position: relative;
+  cursor: default;
+  overflow: visible;
+}
+
+.profile-badge-tip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  width: 200px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--footer-panel-color, #ffffff);
+  color: var(--surface-text-color, #1d2522);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  white-space: normal;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 9999;
+}
+
+.profile-badge-tip:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }

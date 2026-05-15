@@ -19,23 +19,35 @@
               alt="{{ u.name or 'Profile' }} picture"
               class="profile-pic">
           </div>
+          <div class="name-display">
+            <h1 id="public-profile-title">{{ u.name or 'BiteSwipe user' }}</h1>
+            <span class="profile-handle">{{ profile_handle_label }}</span>
+          </div>
         </div>
 
         <div class="profile-banner-content">
           <p class="profile-kicker">BiteSwipe profile</p>
-          <div class="name-display">
-            <h1 id="public-profile-title">{{ u.name or 'BiteSwipe user' }}</h1>
-          </div>
-          <p class="profile-email">User ID {{ u.id }}</p>
+          <p class="profile-email">biteswipe.lol/@{{ profile_handle }}</p>
           <div class="profile-badge-row">
-            {% if u.pronouns %}<span>{{ u.pronouns }}</span>{% endif %}
-            {% if favorite_cuisine %}<span>Favorite: {{ favorite_cuisine }}</span>{% endif %}
-            {% if u.last_active_at %}<span>Last active {{ u.last_active_at[:10] }}</span>{% endif %}
             {% for badge in profile_badges %}
-              <span>{{ badge }}</span>
+              <span class="profile-badge-tip" data-tooltip="{{ badge.description }}">{{ badge.label }}</span>
             {% endfor %}
           </div>
-          {% if follow_status == 'none' %}
+          {% if incoming_follow_request %}
+            <div class="profile-request-card">
+              <strong>{{ u.name or profile_handle }} has sent you a request.</strong>
+              <div class="profile-request-actions">
+                <form method="POST" action="{{ url_for('approve_follow_user', user_id=u.id) }}" class="public-follow-form">
+                  <input type="hidden" name="next" value="{{ request.path }}">
+                  <button type="submit">Accept</button>
+                </form>
+                <form method="POST" action="{{ url_for('decline_follow_user', user_id=u.id) }}" class="public-follow-form">
+                  <input type="hidden" name="next" value="{{ request.path }}">
+                  <button type="submit">Decline</button>
+                </form>
+              </div>
+            </div>
+          {% elif follow_status == 'none' %}
             <form method="POST" action="{{ url_for('follow_user', user_id=u.id) }}" class="public-follow-form">
               <button type="submit">Follow</button>
             </form>
@@ -46,22 +58,12 @@
           {% endif %}
 
           <div class="profile-stats" aria-label="Profile stats">
-            <div>
-              <strong>{{ saved_restaurant_count }}</strong>
-              <span>saved pick{% if saved_restaurant_count != 1 %}s{% endif %}</span>
-            </div>
-            <div>
-              <strong>{{ food_preferences|length }}</strong>
-              <span>craving{% if food_preferences|length != 1 %}s{% endif %}</span>
-            </div>
-            <div>
-              <strong>{{ allergen_interests|length }}</strong>
-              <span>allergy signal{% if allergen_interests|length != 1 %}s{% endif %}</span>
-            </div>
-            <div>
-              <strong>{{ hobby_interests|length }}</strong>
-              <span>interest{% if hobby_interests|length != 1 %}s{% endif %}</span>
-            </div>
+            {% for stat in profile_stats %}
+              <div class="profile-stat-card">
+                <strong>{{ stat.value }}</strong>
+                <span>{{ stat.label }}</span>
+              </div>
+            {% endfor %}
           </div>
         </div>
       </div>

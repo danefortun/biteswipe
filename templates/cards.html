@@ -5,6 +5,9 @@
 const RESTAURANT_STACK_STORAGE_VERSION = 3;
 const restaurantCardStorageUser = {{ session.get("id", "guest") | tojson }};
 window.userTransportationMode = {{ (template_user.transportation_mode if template_user else "") | tojson }};
+window.needsCampusPrompt = {{ (session.get('needs_campus_prompt') and school_theme and not template_user.campus_theme_domain) | tojson }};
+window.detectedCampusThemeDomain = {{ (school_theme.domain if school_theme else "") | tojson }};
+window.detectedCampusThemeName = {{ (school_theme.short_name if school_theme else "") | tojson }};
 window.serverRestaurantRatings = {};
 window.restaurantCardStorageKey = `biteswipe.restaurantStack.${restaurantCardStorageUser}`;
 window.restaurantRatingStorageKey = `biteswipe.userRatings.${restaurantCardStorageUser}`;
@@ -392,6 +395,30 @@ async function applyDeckMode(mode) {
             prices: ["cheapPrice", "mediumPrice"],
             cravings: ["Healthy", "Mediterranean", "Vegan"],
         },
+        quick: {
+            label: "Something quick",
+            distance: 2,
+            prices: ["cheapPrice", "mediumPrice"],
+            cravings: ["Pizza", "Mexican", "Coffee", "Healthy"],
+            interests: ["Coffee Runs"],
+            takeoutOnly: true,
+        },
+        date: {
+            label: "Date night vibes",
+            distance: 6,
+            prices: ["mediumPrice", "expensivePrice"],
+            cravings: ["Italian", "Japanese", "Mediterranean", "Dessert"],
+            interests: ["Music", "Movies"],
+            dineIn: true,
+        },
+        gym: {
+            label: "Post-gym protein",
+            distance: 3,
+            prices: ["cheapPrice", "mediumPrice"],
+            cravings: ["Healthy", "Mediterranean", "American", "Halal"],
+            interests: ["Gym", "Fitness"],
+            takeoutOnly: true,
+        },
     };
     const config = modes[mode];
 
@@ -415,10 +442,25 @@ async function applyDeckMode(mode) {
         }
     });
 
+    ["takeoutOnly", "dineIn"].forEach((id) => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.checked = Boolean(config[id]);
+        }
+    });
+
     const selectedCravings = new Set(config.cravings.map((value) => value.toLowerCase()));
     document.querySelectorAll('input[name="foodPreferences"]').forEach((input) => {
         input.checked = selectedCravings.has(String(input.value).toLowerCase());
     });
+
+    const selectedInterests = new Set((config.interests || []).map((value) => value.toLowerCase()));
+    if (selectedInterests.size) {
+        document.querySelectorAll('input[name="hobbyInterests"]').forEach((input) => {
+            const key = String(input.value).toLowerCase();
+            input.checked = input.checked || selectedInterests.has(key);
+        });
+    }
 
     if (typeof updateFooterFilterCounts === "function") {
         updateFooterFilterCounts();
@@ -690,6 +732,17 @@ function addPassedRestaurantToHistory(restaurant) {
     updateDeckHistoryPanel();
 }
 
+function removePassedRestaurantFromHistory(restaurant) {
+    const key = restaurant?.place || restaurant?.name || "";
+    if (!key) {
+        return;
+    }
+
+    const history = readPassedRestaurantHistory().filter((item) => (item.place || item.name || "") !== key);
+    writePassedRestaurantHistory(history);
+    updateDeckHistoryPanel();
+}
+
 function updateDeckHistoryPanel() {
     const list = document.getElementById("deckHistoryList");
     const count = document.getElementById("deckHistoryCount");
@@ -805,6 +858,15 @@ function rememberAvoidedRestaurant(restaurant) {
     writeAvoidedRestaurants(avoided);
 }
 
+function forgetAvoidedRestaurant(restaurant) {
+    const identity = getRestaurantIdentity(restaurant);
+    if (!identity) {
+        return;
+    }
+
+    writeAvoidedRestaurants(readAvoidedRestaurants().filter((item) => item.key !== identity));
+}
+
 function filterAvoidedRestaurants(places) {
     const cards = Array.isArray(places) ? places : [];
     const avoidedKeys = new Set(readAvoidedRestaurants().map((item) => item.key));
@@ -863,6 +925,44 @@ function rememberRestaurantDecision(action, restaurant) {
 
     memory[key] = current;
     writeRestaurantMemory(memory);
+}
+
+function forgetRestaurantDecision(action, restaurant) {
+    const key = getRestaurantIdentity(restaurant);
+    if (!key) {
+        return;
+    }
+
+    const memory = readRestaurantMemory();
+    const current = memory[key];
+    if (!current) {
+        return;
+    }
+
+    if (action === "save") {
+        current.saveCount = Math.max(Number(current.saveCount || 0) - 1, 0);
+    } else if (action === "pass") {
+        current.passCount = Math.max(Number(current.passCount || 0) - 1, 0);
+    }
+
+    if (!current.saveCount && !current.passCount) {
+        delete memory[key];
+    } else {
+        current.lastAction = current.saveCount ? "save" : "pass";
+        current.lastActionAt = new Date().toISOString();
+        memory[key] = current;
+    }
+
+    writeRestaurantMemory(memory);
+}
+
+function undoRestaurantDecisionEffects(action, restaurant) {
+    if (action === "pass") {
+        removePassedRestaurantFromHistory(restaurant);
+    }
+
+    forgetAvoidedRestaurant(restaurant);
+    forgetRestaurantDecision(action, restaurant);
 }
 
 function getRestaurantMemory(result) {
@@ -1673,6 +1773,14 @@ function toggleCardFlip(card) {
         window.cardDragLock = false;
         return;
     }
+
+    const now = Date.now();
+    if (now - Number(window.lastCardTapForUndoAt || 0) < 320 && (window.restaurantDecisionHistory || []).length) {
+        window.lastCardTapForUndoAt = 0;
+        undoLastDecision();
+        return;
+    }
+    window.lastCardTapForUndoAt = now;
     card.classList.toggle("is-flipped");
 }
 
@@ -2097,7 +2205,40 @@ function formatShortRating(result) {
     return Number.isFinite(rating) ? `${rating.toFixed(1)} rated` : null;
 }
 
+function formatOpeningTime(value) {
+    if (!value) {
+        return "";
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+
+    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function opensSoonLabel(result) {
+    if (result?.is_open !== false || !result?.next_open_time) {
+        return "";
+    }
+
+    const nextOpen = new Date(result.next_open_time);
+    const deltaMs = nextOpen.getTime() - Date.now();
+    if (Number.isNaN(nextOpen.getTime()) || deltaMs < 0 || deltaMs > 6 * 60 * 60 * 1000) {
+        return "";
+    }
+
+    const openTime = formatOpeningTime(result.next_open_time);
+    return openTime ? `Opens at ${openTime}` : "";
+}
+
 function formatOpenStatus(result) {
+    const opensSoon = opensSoonLabel(result);
+    if (opensSoon) {
+        return opensSoon;
+    }
+
     if (result?.is_open === true) {
         return "Open now";
     }
@@ -2243,6 +2384,39 @@ function setupTransportationPrompt() {
     prompt.hidden = false;
 }
 
+function setupCampusPrompt() {
+    const prompt = document.getElementById("campusPrompt");
+    if (!prompt || !window.needsCampusPrompt || !window.detectedCampusThemeDomain) {
+        return;
+    }
+
+    prompt.hidden = false;
+}
+
+async function chooseCampusTheme(useDetected) {
+    const prompt = document.getElementById("campusPrompt");
+    const domain = useDetected ? window.detectedCampusThemeDomain : "";
+    try {
+        const response = await fetch("/save_campus_theme", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ campus_theme_domain: domain }),
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            setRestaurantStatus(data.message || "Unable to save campus mode.");
+            return;
+        }
+
+        window.needsCampusPrompt = false;
+        prompt?.setAttribute("hidden", "");
+        showBiteToast(useDetected ? `${window.detectedCampusThemeName} mode set` : "Campus mode skipped", "success");
+    } catch (error) {
+        setRestaurantStatus("Unable to save campus mode right now.");
+    }
+}
+
 async function chooseTransportationMode(mode) {
     try {
         const response = await fetch("/save_transportation", {
@@ -2290,6 +2464,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateActiveFilterSummary();
     updateDeckHistoryPanel();
     setupTransportationPrompt();
+    setupCampusPrompt();
     refreshGroupSession().then(() => {
         if (window.activeGroupSession) {
             startGroupStatusPolling();
@@ -2320,6 +2495,24 @@ document.addEventListener("DOMContentLoaded", async () => {
   </div>
 </aside>
 
+<aside class="transportation-prompt" id="campusPrompt" hidden aria-label="Confirm campus theme">
+  <div class="transportation-card">
+    <p class="cards-kicker">Campus setup</p>
+    <h2>Use {{ school_theme.short_name if school_theme else 'your school' }} mode?</h2>
+    <p>BiteSwipe detected this from your email. Confirm it now, or skip and choose another theme from your profile later.</p>
+    <div class="transportation-actions">
+      <button type="button" onclick="chooseCampusTheme(true)">
+        <strong>Use campus mode</strong>
+        <span>{{ school_theme.short_name if school_theme else 'Detected school' }}</span>
+      </button>
+      <button type="button" onclick="chooseCampusTheme(false)">
+        <strong>Skip</strong>
+        <span>Keep auto mode for now</span>
+      </button>
+    </div>
+  </div>
+</aside>
+
 <section class="cards-page-shell" aria-label="BiteSwipe restaurant card deck">
   <div class="cards-hero">
     <p class="cards-kicker">BiteSwipe deck</p>
@@ -2331,7 +2524,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     <div class="cards-hero-metrics" aria-label="Deck status">
       <span id="cardProgressText">0 of - spots</span>
       <span id="currentCardMeta">Choose filters, use location, then load a deck.</span>
-      <span>Tap cards for details</span>
+      <span>Double-tap or shake to undo</span>
     </div>
 
     <div class="deck-progress-bar" aria-hidden="true">
@@ -2387,9 +2580,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     <div class="deck-mode-panel" aria-label="Smart deck modes">
       <div>
         <strong>Smart starts</strong>
-        <span>One tap adjusts distance, price, and cravings before refreshing the deck.</span>
+        <span>One tap adjusts mood, distance, price, cravings, and profile interests.</span>
       </div>
       <div class="deck-mode-actions">
+        <button type="button" onclick="applyDeckMode('quick')">Something quick</button>
+        <button type="button" onclick="applyDeckMode('date')">Date night</button>
+        <button type="button" onclick="applyDeckMode('gym')">Post-gym</button>
         <button type="button" onclick="applyDeckMode('cheap')">Cheap eats</button>
         <button type="button" onclick="applyDeckMode('study')">Study break</button>
         <button type="button" onclick="applyDeckMode('group')">Group friendly</button>
@@ -2490,7 +2686,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         class="card-action-button card-action-undo"
         id="undoCardButton"
         onclick="undoLastDecision()"
-        disabled>
+        disabled
+        title="Undo the last swipe. Double-tap the card or shake your phone too.">
         Undo
       </button>
       <button
@@ -2562,6 +2759,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     </div>
     <p class="deck-keyboard-hint">Keyboard: left arrow pass - right arrow save - U undo - Enter/Space details. Allergy results are guidance only; confirm with the restaurant before ordering.</p>
   </div>
+
+  <section class="biteswipe-mini-about" aria-labelledby="biteswipe-about-title">
+    <p class="cards-kicker">About BiteSwipe</p>
+    <h2 id="biteswipe-about-title">A quieter way to choose where to eat.</h2>
+    <p>
+      BiteSwipe is built around the tiny decisions that happen before a meal: what sounds good, what is nearby, what fits the budget, and what feels safe enough to try.
+    </p>
+    <p>
+      Placeholder paragraph for the project story, founder notes, campus rollout, or a short explanation of why the deck exists.
+    </p>
+    <p>
+      Placeholder paragraph for allergy-aware design, group decisions, profile signals, and how the app should feel as the community grows.
+    </p>
+  </section>
 </section>
 <script src="{{ url_for('static', filename='deck-state.js') }}"></script>
 <script src="{{ url_for('static', filename='script.js') }}"></script>

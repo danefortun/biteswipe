@@ -17,8 +17,18 @@ INTEREST_FIELD_TO_CATEGORY = {
 class Users(db.Model):
     id = db.Column("id", db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    username = db.Column(db.String(32), unique=True, index=True)
     password = db.Column(db.String(255), nullable=False)
     email = db.Column(db.String(255), nullable=False, unique=True, index=True)
+    email_verified = db.Column(db.Boolean, default=False, nullable=False)
+    email_verification_token = db.Column(db.String(128), index=True)
+    email_verification_sent_at = db.Column(db.String(40))
+    joined_at = db.Column(db.String(40))
+    profile_stat_visibility_json = db.Column(db.Text, default="{}")
+    profile_stat_enabled_json = db.Column(db.Text, default="{}")
+    profile_stat_order_json = db.Column(db.Text, default="[]")
+    profile_badge_visibility_json = db.Column(db.Text, default="{}")
+    profile_badge_order_json = db.Column(db.Text, default="[]")
     bio = db.Column(db.String(256), default="this is a placeholder!")
     pfp_file_path = db.Column(db.String(255), default="transparentnewdefaultpicture.png")
     profile_banner_file_path = db.Column(db.String(255))
@@ -38,14 +48,17 @@ class Users(db.Model):
         name: str,
         password: str,
         email: str,
+        username: str | None = None,
         bio: str = "this is a placeholder!",
         pfp_file_path: str = "transparentnewdefaultpicture.png",
     ) -> None:
         self.bio = bio
         self.name = name
+        self.username = username
         self.email = email
         self.password = password
         self.pfp_file_path = pfp_file_path
+        self.joined_at = datetime.now(timezone.utc).isoformat()
 
     def __repr__(self) -> str:
         return (
@@ -239,6 +252,37 @@ class UserActivity(db.Model):
         self.user_id = user_id
         self.action = action[:32]
         self.summary = summary[:255]
+        self.created_at = datetime.now(timezone.utc).isoformat()
+
+
+class UserNotification(db.Model):
+    __tablename__ = "user_notifications"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    actor_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), index=True)
+    kind = db.Column(db.String(32), nullable=False, index=True)
+    message = db.Column(db.String(255), nullable=False)
+    link_url = db.Column(db.String(255))
+    is_read = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    created_at = db.Column(db.String(40), nullable=False, index=True)
+
+    user = db.relationship("Users", foreign_keys=[user_id], backref=db.backref("notifications", lazy=True))
+    actor = db.relationship("Users", foreign_keys=[actor_user_id])
+
+    def __init__(
+        self,
+        user_id: int,
+        kind: str,
+        message: str,
+        actor_user_id: int | None = None,
+        link_url: str | None = None,
+    ) -> None:
+        self.user_id = user_id
+        self.actor_user_id = actor_user_id
+        self.kind = kind[:32]
+        self.message = message[:255]
+        self.link_url = link_url[:255] if link_url else None
         self.created_at = datetime.now(timezone.utc).isoformat()
 
 

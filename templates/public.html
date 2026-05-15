@@ -3,12 +3,8 @@
 
 {% block content %}
 <script>document.body.classList.add("profile-page");</script>
-
-{% set profile_steps = 1 %}
-{% if u.bio and u.bio != 'this is a placeholder!' %}{% set profile_steps = profile_steps + 1 %}{% endif %}
-{% if food_preferences %}{% set profile_steps = profile_steps + 1 %}{% endif %}
-{% if allergen_interests %}{% set profile_steps = profile_steps + 1 %}{% endif %}
-{% if hobby_interests %}{% set profile_steps = profile_steps + 1 %}{% endif %}
+{% set profile_steps = profile_completion.completed_count %}
+{% set profile_total_steps = profile_completion.total_count %}
 
 <section class="profile-shell profile-shell-upgraded" aria-labelledby="profile-title">
   <header class="profile-hero">
@@ -27,25 +23,25 @@
               alt="{{ u.name or 'Profile' }} picture"
               class="profile-pic"
               id="profilePreview">
+            <form method="POST" enctype="multipart/form-data" class="profile-avatar-upload-form hero-edit-control">
+              <input type="hidden" name="action" value="upload_pic">
+              <label class="profile-avatar-edit" for="profile-image" aria-label="Edit profile picture">✎</label>
+              <input
+                id="profile-image"
+                type="file"
+                name="image"
+                data-unsaved-label="profile picture not uploaded"
+                accept=".gif,.jpeg,.jpg,.png,.webp,image/*"
+                required>
+              <button type="submit" id="profile-image-upload-btn" hidden>Save photo</button>
+            </form>
           </div>
 
-          <form method="POST" enctype="multipart/form-data" class="upload-form hero-edit-control">
-            <input type="hidden" name="action" value="upload_pic">
-            <input
-              id="profile-image"
-              type="file"
-              name="image"
-              accept=".gif,.jpeg,.jpg,.png,.webp,image/*"
-              required>
-            <button type="submit">Upload</button>
-          </form>
-        </div>
-
-        <div class="profile-banner-content">
-          <p class="profile-kicker">BiteSwipe profile</p>
-
           <div class="name-display">
-            <h1 id="username-display">{{ u.name or 'Your Name' }}</h1>
+            <div id="username-display" class="profile-name-stack">
+              <h1>{{ u.name or 'Your Name' }}</h1>
+              <span class="profile-handle">{{ profile_handle_label }}</span>
+            </div>
             <button type="button" id="edit-name-btn" class="profile-small-button profile-name-edit-button hero-edit-control">Edit name</button>
           </div>
 
@@ -59,37 +55,80 @@
               maxlength="32"
               required
               aria-label="Profile name">
+            <input
+              type="text"
+              name="username"
+              value="{{ profile_handle }}"
+              minlength="2"
+              maxlength="32"
+              required
+              aria-label="Profile username">
             <button type="submit">Save</button>
             <button type="button" id="cancel-name-btn">Cancel</button>
           </form>
+        </div>
+
+        <div class="profile-banner-content">
+          <p class="profile-kicker">BiteSwipe profile</p>
 
           <p class="profile-email">{{ u.email }}</p>
-          <div class="profile-badge-row">
-            {% if u.pronouns %}<span>{{ u.pronouns }}</span>{% endif %}
-            {% if favorite_cuisine %}<span>Favorite: {{ favorite_cuisine }}</span>{% endif %}
+          <div class="profile-badge-row profile-sortable-row" data-profile-sortable="badges">
             {% for badge in profile_badges %}
-              <span>{{ badge }}</span>
+              <span
+                class="profile-badge-tip profile-sortable-item{% if not badge.visible %} is-private{% endif %}"
+                data-profile-key="{{ badge.key }}"
+                data-tooltip="{{ badge.description }}"
+                draggable="true">
+                <span>{{ badge.label }}</span>
+                <form method="POST" class="profile-badge-visibility-form">
+                  <input type="hidden" name="action" value="update_profile_badge">
+                  <input type="hidden" name="badge_key" value="{{ badge.key }}">
+                  <input type="hidden" name="visible" value="{{ 'false' if badge.visible else 'true' }}">
+                  <button
+                    type="submit"
+                    class="stat-visibility-toggle{% if not badge.visible %} is-hidden-stat{% endif %}"
+                    aria-label="{{ 'Hide' if badge.visible else 'Show' }} {{ badge.label }} on public profile"
+                    title="{{ 'Public' if badge.visible else 'Private' }}">
+                    <span class="stat-eye-icon" aria-hidden="true"></span>
+                  </button>
+                </form>
+              </span>
             {% endfor %}
           </div>
 
-          <div class="profile-stats" aria-label="Profile stats">
-            <div>
-              <strong>{{ saved_restaurant_count }}</strong>
-              <span>saved pick{% if saved_restaurant_count != 1 %}s{% endif %}</span>
-            </div>
-            <div>
-              <strong>{{ food_preferences|length }}</strong>
-              <span>craving{% if food_preferences|length != 1 %}s{% endif %}</span>
-            </div>
-            <div>
-              <strong>{{ allergen_interests|length }}</strong>
-              <span>allergy signal{% if allergen_interests|length != 1 %}s{% endif %}</span>
-            </div>
-            <div>
-              <strong>{{ hobby_interests|length }}</strong>
-              <span>interest{% if hobby_interests|length != 1 %}s{% endif %}</span>
-            </div>
+          <div class="profile-stats profile-sortable-row" aria-label="Profile stats" data-profile-sortable="stats">
+            {% for stat in profile_stats %}
+              <div class="profile-stat-card profile-sortable-item{% if not stat.visible %} is-private{% endif %}" data-profile-key="{{ stat.key }}" draggable="true">
+                <strong>{{ stat.value }}</strong>
+                <span>{{ stat.label }}</span>
+                <form method="POST" class="profile-stat-visibility-form">
+                  <input type="hidden" name="action" value="update_profile_stat">
+                  <input type="hidden" name="stat_key" value="{{ stat.key }}">
+                  <input type="hidden" name="visible" value="{{ 'false' if stat.visible else 'true' }}">
+                  <button
+                    type="submit"
+                    class="stat-visibility-toggle{% if not stat.visible %} is-hidden-stat{% endif %}"
+                    aria-label="{{ 'Hide' if stat.visible else 'Show' }} {{ stat.label }} on public profile"
+                    title="{{ 'Public' if stat.visible else 'Private' }}">
+                    <span class="stat-eye-icon" aria-hidden="true"></span>
+                  </button>
+                </form>
+              </div>
+            {% endfor %}
           </div>
+          {% if available_profile_stats %}
+            <div class="profile-add-stat">
+              <span>+ Add stat</span>
+              {% for stat in available_profile_stats %}
+                <form method="POST">
+                  <input type="hidden" name="action" value="update_profile_stat">
+                  <input type="hidden" name="stat_key" value="{{ stat.key }}">
+                  <input type="hidden" name="visible" value="true">
+                  <button type="submit">+ {{ stat.label }}</button>
+                </form>
+              {% endfor %}
+            </div>
+          {% endif %}
 
           <form method="POST" enctype="multipart/form-data" class="profile-banner-upload hero-edit-control">
             <input type="hidden" name="action" value="upload_banner">
@@ -98,9 +137,10 @@
               id="profile-banner-image"
               type="file"
               name="banner_image"
+              data-unsaved-label="banner not saved"
               accept=".gif,.jpeg,.jpg,.png,.webp,image/*"
               required>
-            <button type="submit">Upload</button>
+            <button type="submit" id="profile-banner-upload-btn" hidden>Save banner</button>
           </form>
         </div>
       </div>
@@ -110,19 +150,28 @@
         aria-label="Profile completion"
         data-profile-completion
         data-profile-steps="{{ profile_steps }}"
+        data-profile-total-steps="{{ profile_total_steps }}"
         data-profile-user="{{ u.id }}">
         <div>
-          <span>{{ profile_steps }}/5 setup steps</span>
-          <strong>{% if profile_steps >= 5 %}Profile ready{% elif profile_steps >= 3 %}Almost ready{% else %}Keep building{% endif %}</strong>
+          <span>{{ profile_steps }}/{{ profile_total_steps }} setup steps</span>
+          <strong>{% if profile_steps >= profile_total_steps %}Profile ready{% elif profile_steps >= 2 %}Almost ready{% else %}Keep building{% endif %}</strong>
         </div>
         <div class="profile-completion-bar" aria-hidden="true">
-          <span style="width: {{ (profile_steps / 5 * 100)|round|int }}%"></span>
+          <span style="width: {{ profile_completion.percent }}%"></span>
         </div>
+        {% if profile_completion.missing %}
+          <p class="profile-completion-nudge">
+            Add {{ profile_completion.missing|map(attribute='label')|join(', ') }} to finish your BiteSwipe profile.
+          </p>
+        {% endif %}
         <div class="profile-completion-links">
-          <a href="#about-title" class="{% if u.bio and u.bio != 'this is a placeholder!' %}is-complete{% endif %}">Bio</a>
-          <button type="button" onclick="toggleFooterPanel('filters', event)" class="{% if allergen_interests %}is-complete{% endif %}">Allergies</button>
-          <a href="#interests-title" class="{% if food_preferences %}is-complete{% endif %}">Cravings</a>
-          <a href="{{ url_for('home') }}" class="{% if saved_restaurant_count %}is-complete{% endif %}">First save</a>
+          {% for step in profile_completion.steps %}
+            {% if step.key == 'interests' %}
+              <button type="button" onclick="toggleFooterPanel('interests', event)" class="{% if step.complete %}is-complete{% endif %}">{{ step.label }}</button>
+            {% else %}
+              <a href="{{ step.href }}" class="{% if step.complete %}is-complete{% endif %}">{{ step.label }}</a>
+            {% endif %}
+          {% endfor %}
         </div>
       </div>
     </div>
@@ -130,11 +179,11 @@
 
   <div class="profile-layout">
     <div class="profile-action-strip" aria-label="Profile quick actions">
-      <a href="{{ url_for('home') }}">Open card deck</a>
-      <a href="{{ url_for('credits') }}">Review saved picks</a>
+      <a href="{{ url_for('home') }}">Open cards</a>
+      <a href="{{ url_for('credits') }}">Review picks</a>
       <button type="button" onclick="toggleFooterPanel('filters', event)">Edit filters</button>
       <button type="button" onclick="toggleFooterPanel('interests', event)">Edit interests</button>
-      <button type="button" onclick="copyPublicProfileLink()" data-public-profile-url="{{ url_for('public_user_profile', user_id=u.id, _external=True) }}">Copy public profile</button>
+      <button type="button" onclick="copyPublicProfileLink()" data-public-profile-url="{{ url_for('public_user_handle_profile', handle=profile_handle, _external=True) }}">Copy public profile</button>
       <form method="POST" class="campus-mode-form">
         <input type="hidden" name="action" value="update_campus_theme">
         <label for="campus-theme-domain">
@@ -172,6 +221,7 @@
         id="profile-showcase-image"
         type="file"
         name="showcase_image"
+        data-unsaved-label="showcase image not uploaded"
         accept=".gif,.jpeg,.jpg,.png,.webp,image/*">
       <button type="submit" id="profile-showcase-upload-btn" hidden>Upload</button>
     </form>
@@ -189,7 +239,9 @@
 
       <form id="bio-form" method="POST" class="bio-form" hidden>
         <input type="hidden" name="action" value="update_bio">
+        <label class="profile-field-limit" for="profile-bio">Bio, 256 characters max</label>
         <textarea
+          id="profile-bio"
           name="bio"
           maxlength="256"
           aria-label="Profile bio">{{ '' if u.bio == 'this is a placeholder!' else (u.bio or '') }}</textarea>
@@ -202,7 +254,7 @@
 
       <form method="POST" class="profile-inline-form profile-pronouns-form">
         <input type="hidden" name="action" value="update_pronouns">
-        <input type="text" name="pronouns" value="{{ u.pronouns or '' }}" maxlength="64" placeholder="Pronouns" aria-label="Profile pronouns">
+        <input id="profile-pronouns" type="text" name="pronouns" value="{{ u.pronouns or '' }}" maxlength="64" placeholder="Pronouns" aria-label="Profile pronouns">
         <button type="submit">Save pronouns</button>
       </form>
     </section>
@@ -213,7 +265,7 @@
       {% if foodies_you_might_know %}
         <div class="foodie-list">
           {% for foodie in foodies_you_might_know %}
-            <a href="{{ url_for('public_user_profile', user_id=foodie.id) }}">
+            <a href="{{ url_for('public_user_handle_profile', handle=public_handle_for_user(foodie)) }}">
               <img src="{{ uploaded_file_url(foodie.pfp_file_path, 'transparentnewdefaultpicture.png') }}" alt="">
               <span>{{ foodie.name }}</span>
             </a>
@@ -234,9 +286,11 @@
 
       {% if pending_follow_requests %}
         <h3>Follow requests</h3>
+        <a class="profile-small-link" href="{{ url_for('friend_requests') }}">Review all requests</a>
         <div class="foodie-list">
           {% for request_row in pending_follow_requests %}
             <form method="POST" action="{{ url_for('approve_follow_user', user_id=request_row.follower_id) }}" class="public-follow-form">
+              <input type="hidden" name="next" value="{{ url_for('profile') }}">
               <button type="submit">Approve {{ request_row.follower.name }}</button>
             </form>
           {% endfor %}
@@ -270,10 +324,11 @@
         <input
           type="text"
           name="food_preference"
-          placeholder="Add food preference"
-          maxlength="64"
+          placeholder="Add quick interest"
+          maxlength="16"
+          pattern="[A-Za-z0-9 ]{1,16}"
           list="food-preference-options"
-          aria-label="Add food preference">
+          aria-label="Add quick interest">
         <datalist id="food-preference-options">
           {% for preference in food_preference_presets %}
             <option value="{{ preference }}"></option>
@@ -285,7 +340,7 @@
 
     <div class="profile-signal-builder" aria-label="Quick profile signal buttons">
       <section>
-        <h3>Quick cravings</h3>
+        <h3>Quick interests</h3>
         <div class="profile-preset-actions">
           {% for preference in food_preference_presets %}
             <form method="POST">
@@ -372,6 +427,19 @@
   </section>
 </section>
 
+<div class="profile-unsaved-modal" id="profile-unsaved-modal" role="dialog" aria-modal="true" aria-labelledby="profile-unsaved-title" hidden>
+  <div class="profile-unsaved-dialog">
+    <h2 id="profile-unsaved-title">Are you sure you want to leave?</h2>
+    <p>You have unsaved changes.</p>
+    <p class="profile-unsaved-note">Save or submit these first:</p>
+    <ul id="profile-unsaved-list"></ul>
+    <div class="profile-unsaved-actions">
+      <button type="button" id="profile-unsaved-stay">Keep editing</button>
+      <button type="button" id="profile-unsaved-leave">Leave anyway</button>
+    </div>
+  </div>
+</div>
+
 <script>
 function bindToggle(editButton, cancelButton, displayElement, formElement, focusSelector) {
   editButton?.addEventListener("click", () => {
@@ -393,17 +461,63 @@ const displayName = document.getElementById("username-display");
 const profileHero = document.querySelector(".profile-hero");
 const heroEditButton = document.getElementById("hero-edit-btn");
 const nameEditButton = document.getElementById("edit-name-btn");
+const pendingProfileUploads = new Map();
+const unsavedModal = document.getElementById("profile-unsaved-modal");
+const unsavedList = document.getElementById("profile-unsaved-list");
+const unsavedStayButton = document.getElementById("profile-unsaved-stay");
+const unsavedLeaveButton = document.getElementById("profile-unsaved-leave");
 
-heroEditButton?.addEventListener("click", () => {
-  const isEditing = profileHero?.classList.toggle("is-editing");
-  heroEditButton.textContent = isEditing ? "Done" : "Edit";
-  heroEditButton.setAttribute("aria-expanded", String(Boolean(isEditing)));
+function closeProfileEditor() {
+  profileHero?.classList.remove("is-editing");
+  if (heroEditButton) {
+    heroEditButton.textContent = "Edit";
+    heroEditButton.setAttribute("aria-expanded", "false");
+  }
 
-  if (!isEditing && nameForm && displayName && nameEditButton) {
+  if (nameForm && displayName && nameEditButton) {
     nameForm.hidden = true;
     displayName.hidden = false;
     nameEditButton.hidden = false;
   }
+}
+
+function openProfileUnsavedModal() {
+  if (!unsavedModal || !unsavedList) return;
+  unsavedList.innerHTML = "";
+  pendingProfileUploads.forEach((label) => {
+    const item = document.createElement("li");
+    item.textContent = label;
+    unsavedList.appendChild(item);
+  });
+  unsavedModal.hidden = false;
+  unsavedStayButton?.focus();
+}
+
+function closeProfileUnsavedModal() {
+  if (unsavedModal) unsavedModal.hidden = true;
+}
+
+heroEditButton?.addEventListener("click", () => {
+  const isEditing = profileHero?.classList.contains("is-editing");
+  if (isEditing && pendingProfileUploads.size) {
+    openProfileUnsavedModal();
+    return;
+  }
+
+  if (isEditing) {
+    closeProfileEditor();
+    return;
+  }
+
+  profileHero?.classList.add("is-editing");
+  heroEditButton.textContent = "Done";
+  heroEditButton.setAttribute("aria-expanded", "true");
+});
+
+unsavedStayButton?.addEventListener("click", closeProfileUnsavedModal);
+unsavedLeaveButton?.addEventListener("click", () => {
+  closeProfileUnsavedModal();
+  window.location.reload();
 });
 
 bindToggle(
@@ -432,19 +546,98 @@ function updateBioCount() {
 bioTextarea?.addEventListener("input", updateBioCount);
 updateBioCount();
 
+function setupProfileSortableRows() {
+  document.querySelectorAll("[data-profile-sortable]").forEach((row) => {
+    let draggedItem = null;
+
+    row.addEventListener("dragstart", (event) => {
+      const item = event.target.closest("[data-profile-key]");
+      if (!item || !document.querySelector(".profile-hero")?.classList.contains("is-editing")) {
+        event.preventDefault();
+        return;
+      }
+      draggedItem = item;
+      item.classList.add("is-dragging");
+      event.dataTransfer.effectAllowed = "move";
+    });
+
+    row.addEventListener("dragover", (event) => {
+      if (!draggedItem) return;
+      event.preventDefault();
+      const afterElement = Array.from(row.querySelectorAll("[data-profile-key]:not(.is-dragging)"))
+        .find((item) => event.clientY < item.getBoundingClientRect().top + item.getBoundingClientRect().height / 2);
+      if (afterElement) {
+        row.insertBefore(draggedItem, afterElement);
+      } else {
+        row.appendChild(draggedItem);
+      }
+    });
+
+    row.addEventListener("dragend", async () => {
+      if (!draggedItem) return;
+      draggedItem.classList.remove("is-dragging");
+      draggedItem = null;
+      const order = Array.from(row.querySelectorAll("[data-profile-key]")).map((item) => item.dataset.profileKey);
+      try {
+        await fetch("{{ url_for('update_profile_order') }}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind: row.dataset.profileSortable, order }),
+        });
+      } catch {
+        // The visual reorder remains; a refresh restores the last saved order if saving fails.
+      }
+    });
+  });
+}
+
+setupProfileSortableRows();
+
+function setPendingProfileUpload(input, button) {
+  if (!input?.id) return;
+  const label = input.dataset.unsavedLabel || "upload not saved";
+  pendingProfileUploads.set(input.id, label);
+  if (button) button.hidden = false;
+}
+
+function clearPendingProfileUpload(input, button) {
+  if (!input?.id) return;
+  pendingProfileUploads.delete(input.id);
+  if (button) button.hidden = true;
+}
+
+document.querySelectorAll("input[type='file'][data-unsaved-label]").forEach((input) => {
+  input.closest("form")?.addEventListener("submit", () => {
+    pendingProfileUploads.delete(input.id);
+  });
+});
+
 document.getElementById("profile-image")?.addEventListener("change", (event) => {
   const file = event.target.files?.[0];
   const preview = document.getElementById("profilePreview");
-  if (!file || !preview) return;
+  const uploadButton = document.getElementById("profile-image-upload-btn");
+  const avatarFrame = event.target.closest(".profile-avatar-frame");
+  if (!file || !preview) {
+    clearPendingProfileUpload(event.target, uploadButton);
+    avatarFrame?.classList.remove("has-pending-upload");
+    return;
+  }
   preview.src = URL.createObjectURL(file);
+  avatarFrame?.classList.add("has-pending-upload");
+  setPendingProfileUpload(event.target, uploadButton);
 });
 
 document.getElementById("profile-banner-image")?.addEventListener("change", (event) => {
   const file = event.target.files?.[0];
   const banner = document.querySelector(".profile-identity-banner");
-  if (!file || !banner) return;
+  const uploadButton = document.getElementById("profile-banner-upload-btn");
+  if (!file || !banner) {
+    clearPendingProfileUpload(event.target, uploadButton);
+    return;
+  }
   banner.style.setProperty("--profile-banner-image", `url("${URL.createObjectURL(file)}")`);
   banner.classList.add("has-banner-image");
+  setPendingProfileUpload(event.target, uploadButton);
 });
 
 document.getElementById("profile-showcase-image")?.addEventListener("change", (event) => {
@@ -453,11 +646,11 @@ document.getElementById("profile-showcase-image")?.addEventListener("change", (e
   const preview = document.getElementById("profileShowcasePreview");
 
   if (!file) {
-    if (uploadButton) uploadButton.hidden = true;
+    clearPendingProfileUpload(event.target, uploadButton);
     return;
   }
 
-  if (uploadButton) uploadButton.hidden = false;
+  setPendingProfileUpload(event.target, uploadButton);
 
   if (preview) {
     const src = URL.createObjectURL(file);
@@ -515,7 +708,7 @@ function settleProfileCompletionCard() {
 
 async function copyPublicProfileLink() {
   const button = document.querySelector("[data-public-profile-url]");
-  const url = button?.dataset.publicProfileUrl || `${window.location.origin}/user/{{ u.id }}`;
+  const url = button?.dataset.publicProfileUrl || `${window.location.origin}/@{{ profile_handle }}`;
 
   try {
     await navigator.clipboard.writeText(url);

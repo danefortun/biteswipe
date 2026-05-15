@@ -6,6 +6,7 @@ let pointerStartY = 0;
 let isDraggingCard = false;
 let touchStartX = 0;
 let touchStartY = 0;
+let lastShakeUndoAt = 0;
 
 function swipeLeft() {
   const currentRestaurant = getCurrentRestaurant();
@@ -130,9 +131,17 @@ function undoLastDecision() {
     decrementSessionStat(decision.action);
   }
 
+  if (typeof undoRestaurantDecisionEffects === "function") {
+    undoRestaurantDecisionEffects(decision.action, decision.restaurant);
+  }
+
   if (typeof setRestaurantStatus === "function") {
     const label = decision.action === "save" ? "save" : "pass";
     setRestaurantStatus(`Undid your ${label} on ${decision.restaurant?.name || "that spot"}.`);
+  }
+
+  if (typeof showBiteToast === "function") {
+    showBiteToast("Last swipe undone", "success");
   }
 }
 
@@ -409,6 +418,24 @@ function handleDeckKeyboard(event) {
   }
 }
 
+function handleShakeUndo(event) {
+  const acceleration = event.accelerationIncludingGravity || event.acceleration;
+  if (!acceleration || !(window.restaurantDecisionHistory || []).length) {
+    return;
+  }
+
+  const x = Number(acceleration.x) || 0;
+  const y = Number(acceleration.y) || 0;
+  const z = Number(acceleration.z) || 0;
+  const magnitude = Math.sqrt((x * x) + (y * y) + (z * z));
+  const now = Date.now();
+
+  if (magnitude > 24 && now - lastShakeUndoAt > 1200) {
+    lastShakeUndoAt = now;
+    undoLastDecision();
+  }
+}
+
 if (cards) {
   cards.addEventListener("pointerdown", handleCardPointerDown);
   cards.addEventListener("pointermove", handleCardPointerMove);
@@ -420,3 +447,4 @@ if (cards) {
 }
 
 document.addEventListener("keydown", handleDeckKeyboard);
+window.addEventListener("devicemotion", handleShakeUndo);

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}BiteSwipe Settings{% endblock %}
+
+{% block content %}
+<section class="settings-shell" aria-labelledby="settings-title">
+  <header class="settings-hero">
+    <p class="profile-section-kicker">Account</p>
+    <h1 id="settings-title">Settings</h1>
+    <p>{{ u.email }}</p>
+  </header>
+
+  <div class="settings-grid">
+    <section class="profile-panel">
+      <p class="profile-section-kicker">Identity</p>
+      <h2>{{ u.name or 'BiteSwipe user' }} <span class="profile-handle">{{ profile_handle_label }}</span></h2>
+      <p class="interest-empty">Edit your display name, username, bio, photos, pronouns, and campus theme from your profile.</p>
+      <div class="settings-actions">
+        <a href="{{ url_for('profile') }}">Edit profile</a>
+        <a href="{{ url_for('public_user_handle_profile', handle=profile_handle) }}">View public profile</a>
+      </div>
+    </section>
+
+    <section class="profile-panel">
+      <p class="profile-section-kicker">Profile readiness</p>
+      <h2>{{ profile_completion.completed_count }}/{{ profile_completion.total_count }} complete</h2>
+      <div class="profile-completion-bar" aria-hidden="true">
+        <span style="width: {{ profile_completion.percent }}%"></span>
+      </div>
+      {% if profile_completion.missing %}
+        <p class="profile-completion-nudge">Missing {{ profile_completion.missing|map(attribute='label')|join(', ') }}.</p>
+      {% else %}
+        <p class="interest-empty">Your profile is ready.</p>
+      {% endif %}
+    </section>
+
+    <section class="profile-panel">
+      <p class="profile-section-kicker">Friends</p>
+      <h2>Requests</h2>
+      <p class="interest-empty">{{ incoming_follow_requests|length }} incoming, {{ outgoing_follow_requests|length }} sent.</p>
+      <div class="settings-actions">
+        <a href="{{ url_for('friend_requests') }}">Review friend requests</a>
+      </div>
+    </section>
+
+    <section class="profile-panel">
+      <p class="profile-section-kicker">Account status</p>
+      <h2>{% if u.email_verified %}Email verified{% else %}Email not verified{% endif %}</h2>
+      <p class="interest-empty">Verification links are generated on signup. Email delivery can be connected when the production mail provider is ready.</p>
+    </section>
+  </div>
+</section>
+{% endblock %}

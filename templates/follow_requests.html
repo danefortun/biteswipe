@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}BiteSwipe Friend Requests{% endblock %}
+
+{% block content %}
+<section class="settings-shell" aria-labelledby="requests-title">
+  <header class="settings-hero">
+    <p class="profile-section-kicker">Friends</p>
+    <h1 id="requests-title">Friend requests</h1>
+    <p>Accept or decline incoming requests, and check who you have requested.</p>
+  </header>
+
+  <div class="settings-grid">
+    <section class="profile-panel">
+      <p class="profile-section-kicker">Incoming</p>
+      <h2>Requests to you</h2>
+      {% if incoming_follow_requests %}
+        <div class="request-list">
+          {% for request_row in incoming_follow_requests %}
+            <article class="request-card">
+              <div>
+                <strong>{{ request_row.follower.name }}</strong>
+                <span>@{{ public_handle_for_user(request_row.follower) }}</span>
+              </div>
+              <div class="profile-request-actions">
+                <a href="{{ url_for('public_user_handle_profile', handle=public_handle_for_user(request_row.follower)) }}">View</a>
+                <form method="POST" action="{{ url_for('approve_follow_user', user_id=request_row.follower_id) }}">
+                  <input type="hidden" name="next" value="{{ url_for('friend_requests') }}">
+                  <button type="submit">Accept</button>
+                </form>
+                <form method="POST" action="{{ url_for('decline_follow_user', user_id=request_row.follower_id) }}">
+                  <input type="hidden" name="next" value="{{ url_for('friend_requests') }}">
+                  <button type="submit">Decline</button>
+                </form>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="interest-empty">No incoming requests right now.</p>
+      {% endif %}
+    </section>
+
+    <section class="profile-panel">
+      <p class="profile-section-kicker">Sent</p>
+      <h2>Your pending requests</h2>
+      {% if outgoing_follow_requests %}
+        <div class="request-list">
+          {% for request_row in outgoing_follow_requests %}
+            <article class="request-card">
+              <div>
+                <strong>{{ request_row.following.name }}</strong>
+                <span>@{{ public_handle_for_user(request_row.following) }}</span>
+              </div>
+              <a href="{{ url_for('public_user_handle_profile', handle=public_handle_for_user(request_row.following)) }}">View</a>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="interest-empty">You have no pending sent requests.</p>
+      {% endif %}
+    </section>
+  </div>
+</section>
+{% endblock %}
